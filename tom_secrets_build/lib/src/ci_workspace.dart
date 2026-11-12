@@ -60,7 +60,7 @@ class SecretsCiWorkspace {
   SecretsCiWorkspace({required this.repoRoot, required this.workspaceRoot});
 
   /// Finds this repository from [from] (default: the current directory) by
-  /// its `tom_repository.yaml`, and the workspace by `.tom_metadata`; a
+  /// its `tom_repository.yaml`, and the workspace by `buildkit_master.yaml`; a
   /// repository checked out on its own takes its parent as the workspace.
   /// [workspaceRoot] names the workspace instead (a fixture inside a real
   /// workspace).
