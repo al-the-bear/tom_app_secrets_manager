@@ -1,0 +1,63 @@
+/// The stage list and the command surface. The run, the lock, the logs and
+/// the summary line are `package:tom_build_base/ci.dart`'s, tested there.
+library;
+
+import 'dart:io';
+
+import 'package:test/test.dart';
+import 'package:tom_build_base/ci.dart';
+import 'package:tom_secrets_build/tom_secrets_build.dart';
+import 'package:tom_secrets_testkit/tom_secrets_testkit.dart';
+
+void main() {
+  group('stages', () {
+    test('all expands to every stage in order; repeats are dropped', () {
+      List<String> resolve(List<String> names) =>
+          resolveCiStages(names, stages: secretsCiStages);
+      expect(resolve(['all']), ['analyze', 'test', 'licences']);
+      expect(resolve(['licences', 'analyze', 'licences']), [
+        'licences',
+        'analyze',
+      ]);
+      expect(() => resolve(['nope']), throwsArgumentError);
+    });
+
+    test('every stage is a command with a description', () {
+      for (final stage in [...secretsCiStages, 'all']) {
+        expect(
+          secretsCiTool.findCommand(stage)?.requiresTraversal,
+          isFalse,
+          reason: ':$stage',
+        );
+        expect(secretsCiStageDescriptions[stage], isNotEmpty, reason: stage);
+      }
+      expect(secretsCiTool.findCommand('lic')?.name, 'licences');
+    });
+
+    test('the tool version is the pubspec version', () {
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      expect(pubspec, contains('\nversion: $secretsCiVersion\n'));
+    });
+
+    test('the licence-boundary test exists and carries its tag', () {
+      final file = File(secretsCiBoundaryTest);
+      expect(file.existsSync(), isTrue);
+      expect(ciTestTagsOf(Directory.current.path, [secretsCiBoundaryTag]), [
+        secretsCiBoundaryTag,
+      ]);
+      expect(
+        File('dart_test.yaml').readAsStringSync(),
+        contains('$secretsCiBoundaryTag:'),
+      );
+    });
+
+    test('a package without test files has no suite, and says why', () {
+      final root = secretsScratchDir('no_suite');
+      expect(secretsCiNoSuiteReason(root.path), 'no test/ directory');
+      secretsWriteFile(root, 'test/helper.dart', '');
+      expect(secretsCiNoSuiteReason(root.path), 'no *_test.dart under test/');
+      secretsWriteFile(root, 'test/a/b_test.dart', 'void main() {}');
+      expect(secretsCiNoSuiteReason(root.path), isNull);
+    });
+  });
+}

@@ -15,14 +15,23 @@ In the workspace this repository is the submodule `app_secrets_manager`
 | `tom_secrets_ui` | A | the shell, screens and widgets both apps use |
 | `tom_secrets_desktop` | A | the desktop host capabilities: the service, tray and menu bar, the platform secret store, notifications |
 | `tom_secrets_app` | A | the desktop composition root (macOS, Linux, Windows), shipping the service binary beside itself |
-| `tom_secrets_build` | A | the manual CI: analyze, test, audit and build every package, started by a person |
-| `tom_secrets_testkit` | A | test fixtures more than one package needs; a dev dependency only |
+| [`tom_secrets_build`](tom_secrets_build/) | A | the manual CI: analyze, test and the licence-boundary check over every package of the three repositories, started by a person (`ci.sh`, `ci.ps1`, `ci.cmd`) |
+| [`tom_secrets_testkit`](tom_secrets_testkit/) | A | test fixtures more than one package needs (the scratch folder so far); a dev dependency only |
 | `tom_secrets_mobile` | B | the mobile composition root (iOS/iPadOS, Android) |
 | `tom_secrets_browser` | B | the WebExtension and its native-messaging host |
 | `tom_secrets_relay` | C | the optional relay server |
 
-The packages are created by the quest's todos of their phase; until then the
-repository holds only its frame.
+`tom_secrets_build` and `tom_secrets_testkit` exist; the other packages are
+created by the quest's todos of their phase.
+
+## Checking it
+
+```bash
+tom_secrets_build/ci.sh :all
+```
+
+analyzes and tests every package of the three repositories and runs the
+licence-boundary check; see [`tom_secrets_build/README.md`](tom_secrets_build/README.md).
 
 ## Licence
 

@@ -1,0 +1,30 @@
+name: tom_secrets_build
+description: >-
+  Manually driven CI for the Tom Secrets Manager: analyze, test and the
+  licence-boundary check over every package of its three repositories,
+  strictly serially, every log kept, started by a person. Tooling; nothing
+  shipped depends on it. License: BSD-3-Clause.
+publish_to: none
+version: 0.1.0
+repository: https://github.com/al-the-bear/tom_app_secrets_manager
+
+environment:
+  sdk: ^3.10.8
+
+dependencies:
+  # The workspace rule for CLI tools: argument parsing, --help/--version and
+  # command resolution come from tom_build_base, and so do the CI run, the
+  # lock, the logs and the summary line (ci.dart).
+  tom_build_base: ^2.22.1
+  # The dependency-closure walk and the licence classification the
+  # licence-boundary check is built on (licence_audit.dart).
+  tom_test_support:
+    path: ../../tom_ai/basics/tom_test_support
+  path: ^1.9.0
+  yaml: ^3.1.3
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
+  tom_secrets_testkit:
+    path: ../tom_secrets_testkit
