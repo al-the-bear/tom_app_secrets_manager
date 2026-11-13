@@ -59,12 +59,9 @@ linked):
   `kpasslib`, `tom_kdbx`, `kdbx`); the packages of `tom_ai/secrets_clients`,
   `tom_secrets_relay` and this package link neither the store nor the core.
 
-An exception is named in `secretsLicenceExceptions`, by package, with its
-reason. The check prints each one on every run and turns red when one is no
-longer needed. The one in force: this package links `ini` (LGPL-3.0) through
-`tom_build_base` → `dcli`, tolerated because the CI is never distributed.
-It goes when `tom_build_base` takes the workspace fork of `dcli` without `ini`
-(webwork `kpass4`); the quest's todo `tsm_a_lic2` then removes the exception.
+An exception would be named in `secretsLicenceExceptions`, by package, with
+its reason; the check prints each one on every run and turns red when one is
+no longer needed. None is in force: every package's closure is permissive.
 
 ## Licence
 

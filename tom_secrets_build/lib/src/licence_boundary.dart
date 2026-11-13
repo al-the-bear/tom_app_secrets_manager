@@ -55,15 +55,7 @@ const Set<TomLicence> secretsAdmittedLicences = TomLicence.permissive;
 /// same, by package, each with why. Every one is a decision on record: the
 /// boundary test prints each on every run and turns red when one is no
 /// longer needed, so the list cannot outlive its reasons.
-const Map<String, Map<String, String>> secretsLicenceExceptions = {
-  'tom_secrets_build': {
-    'ini':
-        'LGPL-3.0, linked through tom_build_base -> dcli; tolerated in the CI '
-        'only, which is run from the clone and never distributed, until '
-        'tom_build_base takes the dcli fork without ini (webwork kpass4); '
-        'tom_secrets_manager todo tsm_a_lic2 removes this exception',
-  },
-};
+const Map<String, Map<String, String>> secretsLicenceExceptions = {};
 
 /// The KDBX rule for the package [package] of [repository], which declares
 /// the dependencies [declared] and links [linked] (itself included).
@@ -138,7 +130,13 @@ Map<String, Directory> secretsResolvedPackages(String packageDir) {
 
 /// Every problem of the package in [packageDir], a package of [repository]:
 /// the licences of its closure and the KDBX rule. Empty when it passes.
-List<String> secretsBoundaryProblems(String packageDir, String repository) {
+/// [exceptions] are the named exceptions, by package (default
+/// [secretsLicenceExceptions]).
+List<String> secretsBoundaryProblems(
+  String packageDir,
+  String repository, {
+  Map<String, Map<String, String>> exceptions = secretsLicenceExceptions,
+}) {
   final pubspec = loadYaml(
     File(p.join(packageDir, 'pubspec.yaml')).readAsStringSync(),
   );
@@ -151,7 +149,7 @@ List<String> secretsBoundaryProblems(String packageDir, String repository) {
     if (dependencies is YamlMap) ...dependencies.keys.cast<String>(),
   };
   final linked = tomLinkedPackages(name, secretsResolvedPackages(packageDir));
-  final excepted = secretsLicenceExceptions[name] ?? const {};
+  final excepted = exceptions[name] ?? const {};
   return [
     ...tomAuditLicences([
       for (final l in linked)

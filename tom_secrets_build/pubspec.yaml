@@ -15,7 +15,7 @@ dependencies:
   # The workspace rule for CLI tools: argument parsing, --help/--version and
   # command resolution come from tom_build_base, and so do the CI run, the
   # lock, the logs and the summary line (ci.dart).
-  tom_build_base: ^2.22.1
+  tom_build_base: ^2.27.0
   # The dependency-closure walk and the licence classification the
   # licence-boundary check is built on (licence_audit.dart).
   tom_test_support:

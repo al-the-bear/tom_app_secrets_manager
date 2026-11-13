@@ -189,10 +189,14 @@ void main() {
       package('ini', _gpl);
       resolve('tom_secrets_build', ['tom_secrets_build', 'ini']);
       resolve('tom_secrets_ui', ['tom_secrets_ui', 'ini']);
+      const exceptions = {
+        'tom_secrets_build': {'ini': 'demo exception'},
+      };
       expect(
         secretsBoundaryProblems(
           p.join(root.path, 'tom_secrets_build'),
           'app_secrets_manager',
+          exceptions: exceptions,
         ),
         isEmpty,
       );
@@ -200,6 +204,7 @@ void main() {
         secretsBoundaryProblems(
           p.join(root.path, 'tom_secrets_ui'),
           'app_secrets_manager',
+          exceptions: exceptions,
         ),
         [startsWith('ini: ')],
       );
