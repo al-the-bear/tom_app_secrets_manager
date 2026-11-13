@@ -60,7 +60,8 @@ const Map<String, Map<String, String>> secretsLicenceExceptions = {
     'ini':
         'LGPL-3.0, linked through tom_build_base -> dcli; tolerated in the CI '
         'only, which is run from the clone and never distributed, until '
-        'tom_secrets_manager todo tsm_a_lic1 is decided',
+        'tom_build_base takes the dcli fork without ini (webwork kpass4); '
+        'tom_secrets_manager todo tsm_a_lic2 removes this exception',
   },
 };
 

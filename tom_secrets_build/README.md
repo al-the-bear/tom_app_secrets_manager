@@ -61,8 +61,9 @@ linked):
 An exception is named in `secretsLicenceExceptions`, by package, with its
 reason. The check prints each one on every run and turns red when one is no
 longer needed. The one in force: this package links `ini` (LGPL-3.0) through
-`tom_build_base` → `dcli`, tolerated because the CI is never distributed,
-until the quest's todo `tsm_a_lic1` is decided.
+`tom_build_base` → `dcli`, tolerated because the CI is never distributed.
+It goes when `tom_build_base` takes the workspace fork of `dcli` without `ini`
+(webwork `kpass4`); the quest's todo `tsm_a_lic2` then removes the exception.
 
 ## Licence
 
