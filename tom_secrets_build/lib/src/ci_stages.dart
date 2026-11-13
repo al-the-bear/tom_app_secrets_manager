@@ -12,7 +12,12 @@ import 'ci_workspace.dart';
 
 /// The stages, in the order `:all` runs them. The build stages of the desktop
 /// app join when `tom_secrets_app` exists.
-const List<String> secretsCiStages = ['analyze', 'test', 'licences'];
+const List<String> secretsCiStages = [
+  'analyze',
+  'test',
+  'licences',
+  'conformance',
+];
 
 /// One-line descriptions, shared by `--help` and the README.
 const Map<String, String> secretsCiStageDescriptions = {
@@ -26,6 +31,10 @@ const Map<String, String> secretsCiStageDescriptions = {
       'pub get in every package, then the licence-boundary check: no '
       'copyleft licence in any closure, KDBX only through tom_secrets_core; '
       'every non-Dart manifest is red until its closure is checked',
+  'conformance':
+      'the client conformance suite (tom_secrets_clients/conformance): the '
+      'reference table current, the coverage gate, every runner against every '
+      'case table, a runner without its toolchain red',
   'all': 'every stage above, in that order, continuing past a red',
 };
 
@@ -130,6 +139,28 @@ class SecretsCiStages {
             secretsCiBoundaryTest,
           ]),
         ], counts: true);
+      case 'conformance':
+        final clients = workspace.repositoryDir('tom_ai/secrets_clients');
+        await run.step(stage, 'conformance', 'conformance.log', [
+          CiCommand(
+            Platform.isWindows ? 'py' : 'python3',
+            [
+              if (Platform.isWindows) '-3',
+              p.join('conformance', 'tool', 'conformance.py'),
+              'all',
+            ],
+            workingDirectory: clients,
+            // The suite builds the fake service and the runners with the
+            // same dart the other stages use.
+            environment: {
+              if (p.isAbsolute(run.dart))
+                'PATH':
+                    '${p.dirname(run.dart)}'
+                    '${Platform.isWindows ? ';' : ':'}'
+                    '${Platform.environment['PATH'] ?? ''}',
+            },
+          ),
+        ]);
       default:
         throw ArgumentError.value(stage, 'stage', 'not a stage');
     }
