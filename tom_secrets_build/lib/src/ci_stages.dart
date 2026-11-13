@@ -105,7 +105,7 @@ class SecretsCiStages {
           );
         }
       case 'licences':
-        for (final manifest in workspace.foreignManifests()) {
+        for (final manifest in workspace.uncheckedForeignManifests()) {
           run.fail(
             stage,
             manifest,

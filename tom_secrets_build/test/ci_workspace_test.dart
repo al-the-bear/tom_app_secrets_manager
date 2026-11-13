@@ -36,6 +36,17 @@ void main() {
         'app_secrets_manager/tom_secrets_browser/node_modules/a/package.json',
         '{}',
       );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/stdlib_only/go.mod',
+        'module example.com/a\n\ngo 1.27\n',
+      );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/with_deps/go.mod',
+        'module example.com/b\n\ngo 1.27\n\n'
+            'require golang.org/x/crypto v0.59.0\n',
+      );
       secretsWriteFile(root, 'tom_ai/secrets_manager/tom_repository.yaml', '');
       pubspec('tom_ai/secrets_manager/tom_secrets_core');
       pubspec('tom_ai/secrets_manager/a/b/c/d/too_deep');
@@ -72,8 +83,47 @@ void main() {
       () {
         expect(workspace.foreignManifests(), [
           'app_secrets_manager/tom_secrets_browser/package.json',
+          'app_secrets_manager/tools/stdlib_only/go.mod',
+          'app_secrets_manager/tools/with_deps/go.mod',
         ]);
       },
     );
+
+    test('a Go module that requires nothing is checked, one with '
+        'requirements is not', () {
+      expect(workspace.uncheckedForeignManifests(), [
+        'app_secrets_manager/tom_secrets_browser/package.json',
+        'app_secrets_manager/tools/with_deps/go.mod',
+      ]);
+    });
+  });
+
+  group('secretsGoModuleRequirements', () {
+    test('reads require lines and blocks, indirect ones too', () {
+      expect(
+        secretsGoModuleRequirements('''
+module example.com/x
+
+go 1.27
+
+require golang.org/x/crypto v0.59.0 // a comment
+
+require (
+\tgolang.org/x/sys v0.50.0 // indirect
+
+\texample.com/y v1.0.0
+)
+'''),
+        [
+          'golang.org/x/crypto v0.59.0',
+          'golang.org/x/sys v0.50.0',
+          'example.com/y v1.0.0',
+        ],
+      );
+    });
+
+    test('a module without require has none', () {
+      expect(secretsGoModuleRequirements('module m\n\ngo 1.27\n'), isEmpty);
+    });
   });
 }

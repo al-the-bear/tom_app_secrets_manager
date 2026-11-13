@@ -34,7 +34,7 @@ lock, so two sessions never run flutter at once.
 | --- | --- |
 | `:analyze` | `pub get` and `analyze` (infos fatal for Dart packages) in every package |
 | `:test` | every package's suite, one full log per package; a package without `*_test.dart` is reported skipped |
-| `:licences` | `pub get` in every package, then the licence-boundary check (`test/licence_boundary_test.dart`, tag `licence-boundary`); every non-Dart dependency manifest (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`, `pyproject.toml`, `setup.py`) is red until a closure check reads it |
+| `:licences` | `pub get` in every package, then the licence-boundary check (`test/licence_boundary_test.dart`, tag `licence-boundary`); every non-Dart dependency manifest (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`, `pyproject.toml`, `setup.py`) is red until a closure check reads it, except a `go.mod` that requires nothing (its closure is the Go standard library, BSD-3), which the boundary check lists as checked |
 | `:all` | the three stages above, in that order |
 
 The packages are found, never listed: every directory with a `pubspec.yaml`

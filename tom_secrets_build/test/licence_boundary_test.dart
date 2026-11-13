@@ -40,6 +40,19 @@ void main() {
     }
   }
 
+  // A Go module that requires nothing has the standard library (BSD-3) as its
+  // whole closure; one with requirements is red in `:licences` already.
+  for (final manifest in workspace.foreignManifests()) {
+    if (workspace.isStandardLibraryGoModule(manifest)) {
+      test('$manifest requires only the Go standard library', () {
+        expect(
+          workspace.uncheckedForeignManifests(),
+          isNot(contains(manifest)),
+        );
+      });
+    }
+  }
+
   for (final pkg in packages) {
     test(pkg.name, () {
       expect(

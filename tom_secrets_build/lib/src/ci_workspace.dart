@@ -41,7 +41,9 @@ const Set<String> secretsCiSkippedDirectories = {
 
 /// Dependency manifests of the languages other than Dart. Each one found is a
 /// closure the licence-boundary check does not read yet, so `:licences`
-/// reports it red rather than passing it unread.
+/// reports it red rather than passing it unread; the one exception is a Go
+/// module that requires nothing ([secretsGoModuleRequirements]), whose
+/// closure is the Go standard library alone (BSD-3).
 const Map<String, String> secretsCiForeignManifests = {
   'package.json': 'npm',
   'Cargo.toml': 'Cargo',
@@ -50,6 +52,28 @@ const Map<String, String> secretsCiForeignManifests = {
   'pyproject.toml': 'Python',
   'setup.py': 'Python',
 };
+
+/// The modules a `go.mod` requires (`require x v` lines and `require ( ... )`
+/// blocks, indirect ones included), as `module version`.
+List<String> secretsGoModuleRequirements(String goMod) {
+  final found = <String>[];
+  var inBlock = false;
+  for (final raw in goMod.split('\n')) {
+    final line = raw.split('//').first.trim();
+    if (inBlock) {
+      if (line == ')') {
+        inBlock = false;
+      } else if (line.isNotEmpty) {
+        found.add(line);
+      }
+    } else if (line == 'require (' || line == 'require(') {
+      inBlock = true;
+    } else if (line.startsWith('require ')) {
+      found.add(line.substring('require '.length).trim());
+    }
+  }
+  return found;
+}
 
 /// How deep below a repository root a package may sit
 /// (`tom_ai/secrets_clients/clients/dart/tsm` is three levels).
@@ -159,6 +183,21 @@ class SecretsCiWorkspace {
     }
     return found..sort();
   }
+
+  /// The [foreignManifests] whose closure no check reads: all but the Go
+  /// modules that require nothing beyond the standard library.
+  List<String> uncheckedForeignManifests() => [
+    for (final manifest in foreignManifests())
+      if (!isStandardLibraryGoModule(manifest)) manifest,
+  ];
+
+  /// Whether the workspace-relative [manifest] is a `go.mod` that requires
+  /// nothing ([secretsGoModuleRequirements]).
+  bool isStandardLibraryGoModule(String manifest) =>
+      p.basename(manifest) == 'go.mod' &&
+      secretsGoModuleRequirements(
+        File(p.join(workspaceRoot, manifest)).readAsStringSync(),
+      ).isEmpty;
 
   /// The workspace lock every flutter-invoking session takes.
   String flutterLockPath({Map<String, String>? environment}) =>
