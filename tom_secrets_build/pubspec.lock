@@ -615,7 +615,7 @@ packages:
       path: "../../tom_ai/basics/tom_github_api"
       relative: true
     source: path
-    version: "1.3.0"
+    version: "1.4.0"
   tom_secrets_testkit:
     dependency: "direct dev"
     description:
