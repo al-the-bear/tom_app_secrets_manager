@@ -11,8 +11,10 @@ import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
 
 import 'host_bridge.dart';
 import 'ports/desktop_ports.dart';
+import 'screens/first_run_wizard.dart';
 import 'screens/gate_screens.dart';
 import 'screens/main_shell.dart';
+import 'state/first_run_model.dart';
 import 'state/service_connection.dart';
 import 'state/session_state.dart';
 import 'widgets/style.dart';
@@ -89,6 +91,7 @@ class _Gate extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.watch<TomSecretsServiceConnection>();
     final keyFiles = context.read<TomSecretsHost>().keyFiles;
+    if (c.firstRunOpen) return const _FirstRunGate();
     return switch (c.phase) {
       TomSecretsConnectionPhase.attached =>
         c.locked
@@ -99,5 +102,61 @@ class _Gate extends StatelessWidget {
       ),
       _ => const TomSecretsConnectionScreen(),
     };
+  }
+}
+
+/// The First run wizard, once the host handed over where it writes.
+class _FirstRunGate extends StatefulWidget {
+  const _FirstRunGate();
+
+  @override
+  State<_FirstRunGate> createState() => _FirstRunGateState();
+}
+
+class _FirstRunGateState extends State<_FirstRunGate> {
+  TomSecretsFirstRunModel? _model;
+  Object? _failure;
+
+  @override
+  void initState() {
+    super.initState();
+    final host = context.read<TomSecretsHost>();
+    final connection = context.read<TomSecretsServiceConnection>();
+    host.service.firstRun().then(
+      (firstRun) {
+        if (!mounted) return;
+        setState(
+          () => _model = TomSecretsFirstRunModel(
+            firstRun: firstRun,
+            connection: connection,
+          ),
+        );
+      },
+      onError: (Object e) {
+        if (mounted) setState(() => _failure = e);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _model?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final model = _model;
+    if (model != null) return TomSecretsFirstRunWizard(model: model);
+    return TomSecretsGateCard(
+      title: 'Set up Tom Secrets Manager',
+      icon: Icons.key_rounded,
+      children: [
+        if (_failure == null)
+          const Center(child: CircularProgressIndicator())
+        else
+          Text('The first run cannot start: $_failure'),
+      ],
+    );
   }
 }

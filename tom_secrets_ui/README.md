@@ -12,6 +12,7 @@ platform.
 | `TomSecretsApp` | The root: the controllers provided to the widget tree, the screen the connection's phase calls for, the compact theme. |
 | `TomSecretsServiceConnection` | The admin connection: attaching, starting and claiming the service, unlock and lock, `status`, the event stream (`locked`, `unlocked`, `store_state`, `unlock_needed`, `approval_needed`, `key_expiry`), a dropped connection. |
 | `TomSecretsSession` | The vaults open in the app's memory: the copy the service holds of each store (`vaultKeys`, then `vaultFile`, protocol 6.4), opened with its keys through `tom_secrets_core`; the search index; the selection; the tree/list switch (kept per device); edits saved through the service (`save` against the revision read), a change from elsewhere read again; everything dropped on `locked`. |
+| `TomSecretsFirstRunWizard` | Opened when the machine is not set up (no service runs and the data directory holds no `bootstrap.yaml`). Step 1: create a primary vault or open one, on this computer or in a GitHub repository (the token entered through `showTomTokenDialog` and the repository checked through `withTomTokenFlow`, its expiry as GitHub reports it or entered); the master password (`TomKeyFields` with the key file when opening). Step 2: the key file and the outer encryption (XChaCha20-Poly1305 or AES-256-GCM), each optional, with a copy saved where the user chooses. Step 3: the machine's name, default environment, the files it serves, the lock mode, where the device settings' key is kept. Then `tom_secrets_core`'s `TomSecretsFirstRun` writes the setup, the service is started and unlocked with the master password, and step 4 offers the import and the pairing the host provides (`TomSecretsHost.firstRunActions`). |
 | Unlock, claim, connection screens | The master password and key file (`TomKeyFields`); a store with a password of its own opened on the vault browser (BP-8); the warning before a claim sends the master password (DP-16); starting a service that is not running. |
 | `TomSecretsMainShell` | The rail (Vaults, Status), the top bar (search over every vault, tree/list, the sync status of the GitHub vaults, the approvals and key-expiry badges, lock) and the keyboard shortcuts (Cmd/Ctrl+F search, +L lock, +N new entry, +1 tree, +2 list, +S save in the editor). |
 | `TomSecretsVaultBrowser` | The tree view (group tree, entry list, details) and the list view (vault, type and tag filters); overlay groups (`@host:…`) shown as the entry's overlays, not folders; multi-select move, tag, delete to the recycle bin; groups created, renamed and moved; an offline vault marked with its reason and age. |
@@ -22,9 +23,10 @@ platform.
 ## Ports
 
 `TomSecretsHost` carries what the host provides: the service host
-(`TomSecretsServiceHost`: attach, start, claim), the tray, the window,
+(`TomSecretsServiceHost`: attach, start, claim, the first run), the tray, the window,
 notifications, the login item, the capture guard, the device's preferences,
-the key-file picker, the file dialogs and the clipboard. `tom_secrets_desktop`
+the key-file picker, the file dialogs, the clipboard and what the First run
+wizard's last step offers. `tom_secrets_desktop`
 implements them on macOS, Windows and Linux; a test uses fakes.
 
 ## Testing

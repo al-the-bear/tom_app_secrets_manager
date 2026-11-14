@@ -24,6 +24,7 @@ final class TomSecretsOpenVault {
     required this.revision,
     required this.file,
     required this.outerKey,
+    required this.cipher,
   });
 
   /// The store's name.
@@ -40,6 +41,9 @@ final class TomSecretsOpenVault {
 
   /// The repository's outer key of a `.tsmx` file (base64), or null.
   final String? outerKey;
+
+  /// The outer cipher of a `.tsmx` file, kept by every save, or null.
+  final TomSecretsOuterCipher? cipher;
 }
 
 /// An entry by its store and UUID.
@@ -393,6 +397,9 @@ class TomSecretsSession extends ChangeNotifier {
       ),
       outerKey: outerKey,
     );
+    final cipher = location.endsWith(tomSecretsOuterSuffix)
+        ? tomSecretsOuterCipherOf(stored)
+        : null;
     stored.fillRange(0, stored.length, 0);
     return TomSecretsOpenVault._(
       store: store,
@@ -400,6 +407,7 @@ class TomSecretsSession extends ChangeNotifier {
       revision: answer['revision'] as String,
       file: file,
       outerKey: outerKey,
+      cipher: cipher,
     );
   }
 
@@ -425,6 +433,7 @@ class TomSecretsSession extends ChangeNotifier {
       vault.location,
       vault.file,
       outerKey: vault.outerKey,
+      cipher: vault.cipher ?? TomSecretsOuterCipher.xchacha20Poly1305,
     );
     _ownSaves.add(store);
     try {
@@ -681,6 +690,7 @@ class TomSecretsSession extends ChangeNotifier {
       vault.location,
       vault.file,
       outerKey: vault.outerKey,
+      cipher: vault.cipher ?? TomSecretsOuterCipher.xchacha20Poly1305,
     );
   }
 

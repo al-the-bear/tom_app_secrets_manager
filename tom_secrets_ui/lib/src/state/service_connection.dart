@@ -22,6 +22,9 @@ enum TomSecretsConnectionPhase {
   /// No service runs; the app offers to start it.
   noService,
 
+  /// This machine is not set up; the app opens the First run wizard.
+  notSetUp,
+
   /// Starting the service.
   starting,
 
@@ -158,6 +161,19 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     await _take(await _guard(host.attach));
   }
 
+  bool _firstRunOpen = false;
+
+  /// Whether the First run wizard is shown: from the moment the machine was
+  /// found not set up until the wizard ends ([endFirstRun]), the service
+  /// started and attached in between included.
+  bool get firstRunOpen => _firstRunOpen;
+
+  /// Ends the First run wizard: the app goes on to the screen of the phase.
+  void endFirstRun() {
+    _firstRunOpen = false;
+    notifyListeners();
+  }
+
   /// Starts the service and attaches.
   Future<void> startService() async {
     _set(TomSecretsConnectionPhase.starting);
@@ -266,6 +282,9 @@ class TomSecretsServiceConnection extends ChangeNotifier {
         await _attach(channel);
       case TomSecretsNoService():
         _set(TomSecretsConnectionPhase.noService);
+      case TomSecretsNotSetUp():
+        _firstRunOpen = true;
+        _set(TomSecretsConnectionPhase.notSetUp);
       case TomSecretsClaimNeeded():
         _set(TomSecretsConnectionPhase.claimNeeded);
       case TomSecretsCannotStart(:final message):

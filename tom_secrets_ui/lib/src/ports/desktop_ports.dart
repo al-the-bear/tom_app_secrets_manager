@@ -10,6 +10,7 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:tom_basics/utilities.dart' show TomClipboardPort;
 import 'package:tom_reusable_ui/tom_reusable_ui.dart'
     show TomFlutterClipboardPort, TomKeyFilePicker;
@@ -128,6 +129,24 @@ abstract interface class TomSecretsFiles {
   /// Saves [bytes] where the user chooses, suggesting [name]; answers
   /// whether it was saved.
   Future<bool> save(String name, Uint8List bytes);
+
+  /// A path the user chooses, without reading or writing it: a file to
+  /// create ([save], suggesting [suggestedName]) or one that exists; null
+  /// when cancelled.
+  Future<String?> choosePath({required bool save, String? suggestedName});
+}
+
+/// What the last step of the First run wizard offers to start (part-app,
+/// First run, step 4), by its id in [TomSecretsFirstRunActions].
+typedef TomSecretsFirstRunAction = Future<void> Function(BuildContext context);
+
+/// The ids of the First run wizard's offers.
+abstract final class TomSecretsFirstRunActions {
+  /// The 1Password or Enpass import.
+  static const String import = 'import';
+
+  /// Pairing another desktop machine.
+  static const String pair = 'pair';
 }
 
 /// [TomSecretsPreferences] in memory.
@@ -178,6 +197,7 @@ final class TomSecretsHost {
     this.files,
     this.clipboard = const TomFlutterClipboardPort(),
     this.startedHidden = false,
+    this.firstRunActions = const {},
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -221,4 +241,9 @@ final class TomSecretsHost {
 
   /// Whether the app was started at login, hidden in the tray.
   final bool startedHidden;
+
+  /// What the First run wizard's last step can start, by the ids of
+  /// [TomSecretsFirstRunActions]; an offer without one is shown as not
+  /// available yet.
+  final Map<String, TomSecretsFirstRunAction> firstRunActions;
 }

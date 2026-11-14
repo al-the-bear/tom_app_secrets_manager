@@ -16,6 +16,7 @@ import 'package:tom_core_storage/io.dart' show TomDesktopSecretStore;
 import 'package:tom_core_storage/settings.dart'
     show TomSecretStore, TomSecretStoreAvailability, TomSecretStoreException;
 import 'package:tom_secrets_client/admin.dart';
+import 'package:tom_secrets_core/tom_secrets_core.dart' show TomSecretsFirstRun;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 /// How the app names itself to the service (shown, never trusted: the
@@ -94,7 +95,13 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
     final rt = runtime;
     final info = await rt.readInfo();
     final start = info?['start'];
-    if (start is! int) return const TomSecretsNoService();
+    if (start is! int) {
+      return await File(
+            tomSecretsBootstrapPath(environment: environment),
+          ).exists()
+          ? const TomSecretsNoService()
+          : const TomSecretsNotSetUp();
+    }
     final keychain = await _store();
     String? stored;
     try {
@@ -123,12 +130,7 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
   @override
   Future<TomSecretsAttach> start() async {
     final bootstrap = tomSecretsBootstrapPath(environment: environment);
-    if (!await File(bootstrap).exists()) {
-      return TomSecretsCannotStart(
-        'No bootstrap file at $bootstrap: this machine is not set up yet '
-        '(the first run, or tsm, writes it).',
-      );
-    }
+    if (!await File(bootstrap).exists()) return const TomSecretsNotSetUp();
     final exe = serviceExecutable;
     if (!await File(exe).exists()) {
       return TomSecretsCannotStart(
@@ -166,10 +168,19 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
     return TomSecretsAttached(TomSecretsAdminClientChannel(client));
   }
 
+  @override
+  Future<TomSecretsFirstRun> firstRun() async => TomSecretsFirstRun(
+    dataDirectory: tomSecretsDataDirectory(environment: environment),
+    keychain: await _store(),
+  );
+
   Future<void> _keep(int start, Uint8List key) async {
     final keychain = await _store();
     try {
-      await keychain?.write(tomSecretsAdminKeyHandle(start), base64.encode(key));
+      await keychain?.write(
+        tomSecretsAdminKeyHandle(start),
+        base64.encode(key),
+      );
     } on TomSecretStoreException {
       // Without the keychain the next start claims again (DP-22).
     }

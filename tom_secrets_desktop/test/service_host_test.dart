@@ -90,8 +90,12 @@ void main() {
     final service = await TomSecretsService.launch(
       TomSecretsServiceConfig(
         runtime: TomSecretsRuntime('${dir.path}/run', transport: transport),
-        bootstrap: await TomSecretsBootstrap.read('${dir.path}/data/bootstrap.yaml'),
-        adminKey: adminKey is Uint8List ? adminKey : Uint8List.fromList(adminKey),
+        bootstrap: await TomSecretsBootstrap.read(
+          '${dir.path}/data/bootstrap.yaml',
+        ),
+        adminKey: adminKey is Uint8List
+            ? adminKey
+            : Uint8List.fromList(adminKey),
         host: 'demo-host',
         authDelay: (n) => Duration(milliseconds: 10 * n),
       ),
@@ -100,67 +104,131 @@ void main() {
     return service;
   }
 
-  test('no service: NoService; starting without an executable says so',
-      () async {
-    expect(await host.attach(), isA<TomSecretsNoService>());
-    final started = await host.start();
-    expect(started, isA<TomSecretsCannotStart>());
-    expect((started as TomSecretsCannotStart).message, contains('no-such-service'));
-  });
+  test(
+    'no service: NoService; starting without an executable says so',
+    () async {
+      expect(await host.attach(), isA<TomSecretsNoService>());
+      final started = await host.start();
+      expect(started, isA<TomSecretsCannotStart>());
+      expect(
+        (started as TomSecretsCannotStart).message,
+        contains('no-such-service'),
+      );
+    },
+  );
 
-  test('no bootstrap: the start says the machine is not set up', () async {
-    File('${dir.path}/data/bootstrap.yaml').deleteSync();
-    final started = await host.start();
-    expect((started as TomSecretsCannotStart).message, contains('bootstrap'));
-  });
+  test(
+    'no bootstrap: the machine is not set up, attached or started; the '
+    'first run writes into TSM_DATA_DIR and the keychain, and the real '
+    'service unlocks the new primary with the master password alone',
+    () async {
+      File('${dir.path}/data/bootstrap.yaml').deleteSync();
+      expect(await host.attach(), isA<TomSecretsNotSetUp>());
+      expect(await host.start(), isA<TomSecretsNotSetUp>());
 
-  test('attached with the key tsm keeps; the editing path works over it',
-      () async {
-    final key = tomSecretsRandomBytes();
-    final service = await launch(key);
-    await keychain.write(
-      tomSecretsAdminKeyHandle(service.startedAt),
-      base64.encode(key),
-    );
-    final attached = await host.attach();
-    expect(attached, isA<TomSecretsAttached>());
-    final channel = (attached as TomSecretsAttached).channel;
-    await channel.request('unlock', {'password': _password});
-    final keys = await channel.request('vaultKeys');
-    final store = (keys['stores'] as List).cast<Map>().single;
-    final file = await channel.request('vaultFile', {'store': store['store']});
-    final opened = await tomSecretsDecodeStored(
-      file['location']! as String,
-      base64.decode(file['bytes']! as String),
-      tomSecretsVaultCredentials(
-        password: (store['keys'] as Map)['password'] as String?,
-      ),
-    );
-    expect(
-      opened.body.rootGroup.entries.single.getString(KdbxKeyCommon.PASSWORD)
-          ?.getText(),
-      'demo-db-pw',
-    );
-    await channel.close();
-  });
+      final firstRun = await host.firstRun();
+      expect(firstRun.dataDirectory, '${dir.path}/data');
+      expect(firstRun.keychain, same(keychain));
+      final locator = TomSecretsVaultLocator.parse(
+        'file:${dir.path}/vaults/new.kdbx.tsmx',
+      );
+      await TomSecretsFirstRun(
+        dataDirectory: firstRun.dataDirectory,
+        keychain: keychain,
+        argon2: _argon2,
+      ).run(
+        TomSecretsFirstRunSetup(
+          primary: locator,
+          create: true,
+          masterPassword: _password,
+          keyFile: TomSecretsKeyFile.generate().toBytes(),
+          repositoryKey: TomSecretsRepositoryKey.generate(),
+          deviceKey: TomSecretsDeviceKeyMode.keyfile,
+          host: 'demo-host',
+        ),
+      );
+      expect(await host.attach(), isA<TomSecretsNoService>());
 
-  test('without the key a claim is needed; the claim keeps the new key',
-      () async {
-    final service = await launch(tomSecretsRandomBytes());
-    expect(await host.attach(), isA<TomSecretsClaimNeeded>());
-    await expectLater(
-      host.claim('wrong'),
-      throwsA(isA<TomSecretsAdminException>()),
-    );
-    final claimed = await host.claim(_password);
-    expect(claimed, isA<TomSecretsAttached>());
-    await (claimed as TomSecretsAttached).channel.close();
-    expect(
-      await keychain.read(tomSecretsAdminKeyHandle(service.startedAt)),
-      isNotNull,
-    );
-    final again = await host.attach();
-    expect(again, isA<TomSecretsAttached>(), reason: 'the kept key');
-    await (again as TomSecretsAttached).channel.close();
-  });
+      final adminKey = tomSecretsRandomBytes();
+      final service = await TomSecretsService.launch(
+        TomSecretsServiceConfig(
+          runtime: TomSecretsRuntime('${dir.path}/run', transport: transport),
+          bootstrap: await TomSecretsBootstrap.read(firstRun.bootstrapPath),
+          adminKey: adminKey,
+          keychain: keychain,
+          authDelay: (n) => Duration(milliseconds: 10 * n),
+        ),
+      );
+      addTearDown(service.stop);
+      expect(service.host, 'demo-host', reason: 'from the bootstrap');
+      final admin = await TomSecretsAdminClient.connect(
+        TomSecretsRuntime('${dir.path}/run', transport: transport),
+        adminKey,
+      );
+      addTearDown(admin.close);
+      await admin.unlock(_password);
+      final status = await admin.request('status');
+      expect(status['locked'], isFalse);
+      expect((status['stores'] as List).map((s) => (s as Map)['name']), [
+        'new',
+      ]);
+    },
+  );
+
+  test(
+    'attached with the key tsm keeps; the editing path works over it',
+    () async {
+      final key = tomSecretsRandomBytes();
+      final service = await launch(key);
+      await keychain.write(
+        tomSecretsAdminKeyHandle(service.startedAt),
+        base64.encode(key),
+      );
+      final attached = await host.attach();
+      expect(attached, isA<TomSecretsAttached>());
+      final channel = (attached as TomSecretsAttached).channel;
+      await channel.request('unlock', {'password': _password});
+      final keys = await channel.request('vaultKeys');
+      final store = (keys['stores'] as List).cast<Map>().single;
+      final file = await channel.request('vaultFile', {
+        'store': store['store'],
+      });
+      final opened = await tomSecretsDecodeStored(
+        file['location']! as String,
+        base64.decode(file['bytes']! as String),
+        tomSecretsVaultCredentials(
+          password: (store['keys'] as Map)['password'] as String?,
+        ),
+      );
+      expect(
+        opened.body.rootGroup.entries.single
+            .getString(KdbxKeyCommon.PASSWORD)
+            ?.getText(),
+        'demo-db-pw',
+      );
+      await channel.close();
+    },
+  );
+
+  test(
+    'without the key a claim is needed; the claim keeps the new key',
+    () async {
+      final service = await launch(tomSecretsRandomBytes());
+      expect(await host.attach(), isA<TomSecretsClaimNeeded>());
+      await expectLater(
+        host.claim('wrong'),
+        throwsA(isA<TomSecretsAdminException>()),
+      );
+      final claimed = await host.claim(_password);
+      expect(claimed, isA<TomSecretsAttached>());
+      await (claimed as TomSecretsAttached).channel.close();
+      expect(
+        await keychain.read(tomSecretsAdminKeyHandle(service.startedAt)),
+        isNotNull,
+      );
+      final again = await host.attach();
+      expect(again, isA<TomSecretsAttached>(), reason: 'the kept key');
+      await (again as TomSecretsAttached).channel.close();
+    },
+  );
 }

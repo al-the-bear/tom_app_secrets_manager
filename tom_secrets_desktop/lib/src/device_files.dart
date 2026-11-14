@@ -82,6 +82,17 @@ final class TomSecretsDesktopFiles
   }
 
   @override
+  Future<String?> choosePath({
+    required bool save,
+    String? suggestedName,
+  }) async {
+    if (save) {
+      return (await getSaveLocation(suggestedName: suggestedName))?.path;
+    }
+    return (await openFile())?.path;
+  }
+
+  @override
   Future<TomKeyFile?> pickKeyFile(BuildContext context) async {
     final file = await openFile(confirmButtonText: 'Use as key file');
     if (file == null) return null;

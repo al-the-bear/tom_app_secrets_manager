@@ -28,6 +28,8 @@ dependencies:
     path: ../../app_webwork/reusable/tom_reusable_ui
   # The protected clipboard (cleared after a timeout).
   tom_basics: ">=3.3.0"
+  # The token prompt's types (the First run wizard's GitHub token).
+  tom_core_storage: ^0.1.2
   # The sync states the top bar's indicator presents.
   tom_core_sync:
     path: ../../tom_ai/core_extension/tom_core_sync
@@ -38,6 +40,8 @@ dev_dependencies:
   # The demo vaults' light Argon2id (a test opens a vault in milliseconds);
   # a dev dependency is not linked (DP-29 holds for the shipped closure).
   tom_kdbx_store: ^0.2.3
+  # The fake GitHub the First run's repository check is tested against.
+  tom_github_api: ^1.4.0
   flutter_lints: ^6.0.0
 
 flutter:

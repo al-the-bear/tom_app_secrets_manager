@@ -8,9 +8,11 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:tom_kdbx_store/tom_kdbx_store.dart' show KdbxArgon2, KdbxArgon2Type;
+import 'package:tom_kdbx_store/tom_kdbx_store.dart'
+    show KdbxArgon2, KdbxArgon2Type;
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
@@ -71,7 +73,10 @@ KdbxEntry addEntry(
   final entry = KdbxEntry.create(file, group)..label = parts.last;
   group.addEntry(entry);
   if (password != null) {
-    entry.setString(KdbxKeyCommon.PASSWORD, ProtectedValue.fromString(password));
+    entry.setString(
+      KdbxKeyCommon.PASSWORD,
+      ProtectedValue.fromString(password),
+    );
   }
   for (final MapEntry(:key, :value) in fields.entries) {
     entry.setString(KdbxKey(key), PlainValue(value));
@@ -219,24 +224,38 @@ final class FakeService implements TomSecretsAdminChannel {
   Future<void> close() async => closed = true;
 }
 
-/// A host whose service is [service], attachable at once.
+/// A host whose service is [service], attachable at once; with [setup],
+/// a machine that is not set up until that first run wrote its bootstrap.
 final class FakeHost implements TomSecretsServiceHost {
-  FakeHost(this.service, {this.running = true});
+  FakeHost(this.service, {this.running = true, this.setup});
 
   final FakeService service;
   bool running;
   int starts = 0;
 
+  /// The first run of this machine, or null (set up already).
+  final TomSecretsFirstRun? setup;
+
+  bool get _setUp => setup == null || File(setup!.bootstrapPath).existsSync();
+
   @override
-  Future<TomSecretsAttach> attach() async =>
-      running ? TomSecretsAttached(service) : const TomSecretsNoService();
+  Future<TomSecretsAttach> attach() async => running
+      ? TomSecretsAttached(service)
+      : _setUp
+      ? const TomSecretsNoService()
+      : const TomSecretsNotSetUp();
 
   @override
   Future<TomSecretsAttach> start() async {
+    if (!_setUp) return const TomSecretsNotSetUp();
     starts++;
     running = true;
     return TomSecretsAttached(service);
   }
+
+  @override
+  Future<TomSecretsFirstRun> firstRun() async =>
+      setup ?? (throw StateError('set up already'));
 
   @override
   Future<TomSecretsAttach> claim(String password, {Uint8List? keyFile}) async =>
@@ -254,11 +273,7 @@ Future<List<FakeStore>> demoStores() async {
       password: 'demo-db-pw',
       fields: {'UserName': 'demo-user', 'URL': 'https://db.example'},
     );
-    addEntry(
-      f,
-      '@host:bomber/Db/Main',
-      password: 'demo-bomber-pw',
-    );
+    addEntry(f, '@host:bomber/Db/Main', password: 'demo-bomber-pw');
     addEntry(
       f,
       'Bot',
@@ -268,9 +283,7 @@ Future<List<FakeStore>> demoStores() async {
     addEntry(f, 'Recovery codes', fields: {'tsm.type': 'note'});
   });
   final team = await demoVault('team', 'team-demo-pw', (f) {
-    addEntry(f, 'Api/Token', password: 'demo-api-token')
-      .tags
-      .set('prod;api');
+    addEntry(f, 'Api/Token', password: 'demo-api-token').tags.set('prod;api');
   });
   return [
     FakeStore('primary', demoPassword, primary),

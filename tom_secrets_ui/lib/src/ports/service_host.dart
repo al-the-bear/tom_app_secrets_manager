@@ -9,6 +9,8 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:tom_secrets_core/tom_secrets_core.dart' show TomSecretsFirstRun;
+
 /// An authenticated admin connection (protocol.md 6).
 abstract interface class TomSecretsAdminChannel {
   /// Sends [op] with [args] and answers the answer message; an `error`
@@ -54,8 +56,15 @@ final class TomSecretsClaimNeeded extends TomSecretsAttach {
   const TomSecretsClaimNeeded();
 }
 
-/// The service cannot be started: no bootstrap file (the first run has not
-/// set the machine up) or no service executable.
+/// This machine is not set up: no service runs and the data directory holds
+/// no `bootstrap.yaml`. The app opens the First run wizard.
+final class TomSecretsNotSetUp extends TomSecretsAttach {
+  /// Not set up.
+  const TomSecretsNotSetUp();
+}
+
+/// The service cannot be started: no service executable, or a bootstrap
+/// file it cannot read.
 final class TomSecretsCannotStart extends TomSecretsAttach {
   /// Not startable, with [message] saying what is missing.
   const TomSecretsCannotStart(this.message);
@@ -76,12 +85,13 @@ final class TomSecretsServiceStartFailed extends TomSecretsAttach {
 /// Starts, attaches to and claims the service of this user.
 abstract interface class TomSecretsServiceHost {
   /// Attaches with the admin key the device keychain keeps for the running
-  /// service's start: [TomSecretsAttached], [TomSecretsNoService] or
+  /// service's start: [TomSecretsAttached], [TomSecretsNoService] (or
+  /// [TomSecretsNotSetUp] when the machine has no bootstrap either) or
   /// [TomSecretsClaimNeeded].
   Future<TomSecretsAttach> attach();
 
   /// Starts the service (the admin key handed over and kept in the keychain)
-  /// and attaches.
+  /// and attaches; [TomSecretsNotSetUp] without a bootstrap.
   Future<TomSecretsAttach> start();
 
   /// Claims the running service with the master [password] (and
@@ -89,4 +99,8 @@ abstract interface class TomSecretsServiceHost {
   /// library's `TomSecretsAdminException` (`denied`, reason `bad_password`)
   /// for a wrong password.
   Future<TomSecretsAttach> claim(String password, {Uint8List? keyFile});
+
+  /// The first run of this machine: its data directory and the device
+  /// keychain, where the First run wizard writes (part-app, First run).
+  Future<TomSecretsFirstRun> firstRun();
 }
