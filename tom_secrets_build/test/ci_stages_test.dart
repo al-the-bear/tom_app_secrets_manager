@@ -14,7 +14,13 @@ void main() {
     test('all expands to every stage in order; repeats are dropped', () {
       List<String> resolve(List<String> names) =>
           resolveCiStages(names, stages: secretsCiStages);
-      expect(resolve(['all']), ['analyze', 'test', 'licences', 'conformance']);
+      expect(resolve(['all']), [
+        'analyze',
+        'test',
+        'integration',
+        'licences',
+        'conformance',
+      ]);
       expect(resolve(['licences', 'analyze', 'licences']), [
         'licences',
         'analyze',

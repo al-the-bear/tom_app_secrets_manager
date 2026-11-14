@@ -15,6 +15,7 @@ import 'ci_workspace.dart';
 const List<String> secretsCiStages = [
   'analyze',
   'test',
+  'integration',
   'licences',
   'conformance',
 ];
@@ -26,7 +27,12 @@ const Map<String, String> secretsCiStageDescriptions = {
       'repositories',
   'test':
       'every package suite, strictly serial, one full log per package '
-      '(the licence-boundary check is :licences\')',
+      '(the licence-boundary check is :licences\', the integration suites '
+      ':integration\')',
+  'integration':
+      'the integration suites against the real service (test tag '
+      'integration): the service built as a binary, started and driven by '
+      'tsm and the Dart client',
   'licences':
       'pub get in every package, then the licence-boundary check: no '
       'copyleft licence in any closure, KDBX only through tom_secrets_core; '
@@ -40,6 +46,9 @@ const Map<String, String> secretsCiStageDescriptions = {
 
 /// The test tag of the licence-boundary check, run by `:licences` only.
 const String secretsCiBoundaryTag = 'licence-boundary';
+
+/// The test tag of the integration suites, run by `:integration` only.
+const String secretsCiIntegrationTag = 'integration';
 
 /// The licence-boundary test `:licences` runs in this package.
 const String secretsCiBoundaryTest = 'test/licence_boundary_test.dart';
@@ -94,6 +103,10 @@ class SecretsCiStages {
             run.skip(stage, pkg.name, '${pkg.logName}.log', noSuite);
             continue;
           }
+          final excluded = ciTestTagsOf(pkg.directory, const [
+            secretsCiBoundaryTag,
+            secretsCiIntegrationTag,
+          ]);
           await run.step(
             stage,
             pkg.name,
@@ -101,13 +114,29 @@ class SecretsCiStages {
             [
               run.tool(pkg, [
                 'test',
-                if (ciTestTagsOf(pkg.directory, const [
-                  secretsCiBoundaryTag,
-                ]).isNotEmpty) ...[
+                if (excluded.isNotEmpty) ...[
                   '--exclude-tags',
-                  secretsCiBoundaryTag,
+                  excluded.join(','),
                 ],
               ]),
+            ],
+            needsFlutter: pkg.isFlutter,
+            counts: true,
+          );
+        }
+      case 'integration':
+        for (final pkg in packages) {
+          if (ciTestTagsOf(pkg.directory, const [
+            secretsCiIntegrationTag,
+          ]).isEmpty) {
+            continue;
+          }
+          await run.step(
+            stage,
+            pkg.name,
+            'integration.${pkg.logName}.log',
+            [
+              run.tool(pkg, ['test', '--tags', secretsCiIntegrationTag]),
             ],
             needsFlutter: pkg.isFlutter,
             counts: true,
