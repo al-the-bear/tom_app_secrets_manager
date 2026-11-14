@@ -11,7 +11,7 @@ A new Flutter plugin project.
                        DESC
   s.homepage         = 'https://enterprise-flutter.dev'
   s.license          = { :type => 'BSD-3-Clause', :file => '../LICENSE' }
-  s.author           = { 'Peter Nicolai Alexis Kyaw' => 'anthropic@kyaw.de' }
+  s.author           = 'Peter Nicolai Alexis Kyaw'
 
   s.source           = { :path => '.' }
   s.source_files = 'tom_secrets_desktop/Sources/tom_secrets_desktop/**/*'
