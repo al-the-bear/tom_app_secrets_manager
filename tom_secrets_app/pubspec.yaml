@@ -1,0 +1,31 @@
+name: tom_secrets_app
+description: >-
+  The Tom Secrets Manager's desktop app on macOS, Linux and Windows: the
+  composition root over tom_secrets_ui's screens and tom_secrets_desktop's
+  host (the service, the tray, the window, notifications, start at login,
+  screen-capture exclusion). License: BSD-3-Clause.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.8
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  tom_secrets_ui:
+    path: ../tom_secrets_ui
+  tom_secrets_desktop:
+    path: ../tom_secrets_desktop
+  # The data directory the app keeps its own files in (TSM_DATA_DIR).
+  tom_secrets_client:
+    path: ../../tom_ai/secrets_clients/clients/dart/tom_secrets_client
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

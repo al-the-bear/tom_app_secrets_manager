@@ -55,7 +55,15 @@ const Set<TomLicence> secretsAdmittedLicences = TomLicence.permissive;
 /// same, by package, each with why. Every one is a decision on record: the
 /// boundary test prints each on every run and turns red when one is no
 /// longer needed, so the list cannot outlive its reasons.
-const Map<String, Map<String, String>> secretsLicenceExceptions = {};
+const Map<String, Map<String, String>> secretsLicenceExceptions = {
+  'tom_secrets_desktop': {'dbus': _dbusReason},
+  'tom_secrets_app': {'dbus': _dbusReason},
+};
+
+const String _dbusReason =
+    'MPL-2.0 (file-level copyleft), linked only by flutter_local_notifications_linux '
+    'for Linux desktop notifications; unmodified, stated in THIRD_PARTY.md '
+    'with its source, so a BSD-3 binary may carry it (tsm_a23).';
 
 /// The KDBX rule for the package [package] of [repository], which declares
 /// the dependencies [declared] and links [linked] (itself included).

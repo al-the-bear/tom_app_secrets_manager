@@ -1,0 +1,103 @@
+// Copyright (c) 2026 Peter Nicolai Alexis Kyaw
+// SPDX-License-Identifier: BSD-3-Clause
+
+/// The manager app's root: the controllers of part-app's State provided to
+/// the widget tree, and the screen the connection's phase calls for.
+library;
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
+
+import 'host_bridge.dart';
+import 'ports/desktop_ports.dart';
+import 'screens/gate_screens.dart';
+import 'screens/main_shell.dart';
+import 'state/service_connection.dart';
+import 'state/session_state.dart';
+import 'widgets/style.dart';
+
+/// The Tom Secrets Manager app over [host].
+class TomSecretsApp extends StatefulWidget {
+  /// The app; a test passes a [connection] it controls.
+  const TomSecretsApp({super.key, required this.host, this.connection});
+
+  /// The host's capabilities.
+  final TomSecretsHost host;
+
+  /// The connection, when the caller made it (tests); else one over the
+  /// host's service.
+  final TomSecretsServiceConnection? connection;
+
+  @override
+  State<TomSecretsApp> createState() => _TomSecretsAppState();
+}
+
+class _TomSecretsAppState extends State<TomSecretsApp> {
+  late final TomSecretsServiceConnection _connection =
+      widget.connection ?? TomSecretsServiceConnection(widget.host.service);
+  late final TomSecretsSession _session = TomSecretsSession(
+    _connection,
+    widget.host.preferences,
+  );
+  late final TomProtectedClipboard _clipboard = TomProtectedClipboard(
+    port: widget.host.clipboard,
+  );
+  late final TomSecretsHostBridge _bridge = TomSecretsHostBridge(
+    host: widget.host,
+    connection: _connection,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _bridge.start();
+    if (widget.connection == null) _connection.connect();
+  }
+
+  @override
+  void dispose() {
+    _bridge.dispose();
+    _session.dispose();
+    if (widget.connection == null) _connection.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MultiProvider(
+    providers: [
+      Provider<TomSecretsHost>.value(value: widget.host),
+      ChangeNotifierProvider.value(value: _connection),
+      ChangeNotifierProvider.value(value: _session),
+    ],
+    child: MaterialApp(
+      title: 'Tom Secrets Manager',
+      debugShowCheckedModeBanner: false,
+      theme: tomSecretsTheme(Brightness.light),
+      darkTheme: tomSecretsTheme(Brightness.dark),
+      home: _Gate(clipboard: _clipboard),
+    ),
+  );
+}
+
+class _Gate extends StatelessWidget {
+  const _Gate({required this.clipboard});
+
+  final TomProtectedClipboard clipboard;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.watch<TomSecretsServiceConnection>();
+    final keyFiles = context.read<TomSecretsHost>().keyFiles;
+    return switch (c.phase) {
+      TomSecretsConnectionPhase.attached =>
+        c.locked
+            ? TomSecretsUnlockScreen(keyFiles: keyFiles)
+            : TomSecretsMainShell(clipboard: clipboard),
+      TomSecretsConnectionPhase.claimNeeded => TomSecretsClaimScreen(
+        keyFiles: keyFiles,
+      ),
+      _ => const TomSecretsConnectionScreen(),
+    };
+  }
+}

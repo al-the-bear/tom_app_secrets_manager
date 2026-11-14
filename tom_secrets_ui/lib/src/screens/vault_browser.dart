@@ -1,0 +1,687 @@
+// Copyright (c) 2026 Peter Nicolai Alexis Kyaw
+// SPDX-License-Identifier: BSD-3-Clause
+
+/// The vault browser (part-app, Screens › Vault browser, BP-24): the tree
+/// view (group tree, entry list, details) and the list view (one list with
+/// vault, type and tag filters, details beside it). Overlay groups
+/// (`@host:…`) are not folders: they show as the entry's overlays. Multi-
+/// select moves, tags and deletes (to the recycle bin); groups are created,
+/// renamed and moved in the tree.
+library;
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
+import 'package:tom_reusable_ui/tom_reusable_ui.dart' show tomShowNotice;
+import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_core/tom_secrets_core.dart';
+
+import '../ports/desktop_ports.dart';
+import '../state/service_connection.dart';
+import '../state/session_state.dart';
+import '../widgets/style.dart';
+import 'entry_editor.dart';
+import 'gate_screens.dart';
+
+/// The browser in the view the session has chosen.
+class TomSecretsVaultBrowser extends StatelessWidget {
+  /// The browser; [clipboard] is the protected clipboard.
+  const TomSecretsVaultBrowser({super.key, required this.clipboard});
+
+  /// The protected clipboard the editor copies through.
+  final TomProtectedClipboard clipboard;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<TomSecretsSession>();
+    if (session.loading && session.vaults.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final selected = session.selectedEntry;
+    final details = selected == null
+        ? const Center(child: Text('Choose an entry.'))
+        : TomSecretsEntryEditor(
+            key: ValueKey(selected),
+            ref: selected,
+            clipboard: clipboard,
+          );
+    final results = session.listView
+        ? session.listResults
+        : session.groupResults;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: 260,
+          child: session.listView ? const _ListFilters() : const _GroupTree(),
+        ),
+        const VerticalDivider(width: 1),
+        SizedBox(
+          width: 360,
+          child: _EntryList(entries: results, showPath: session.listView),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(child: details),
+      ],
+    );
+  }
+}
+
+Future<String?> _ask(
+  BuildContext context, {
+  required String title,
+  required String label,
+  String initial = '',
+}) {
+  final text = TextEditingController(text: initial);
+  return showDialog<String>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        key: const Key('tsm-ask'),
+        controller: text,
+        autofocus: true,
+        decoration: InputDecoration(labelText: label),
+        onSubmitted: (v) => Navigator.of(dialog).pop(v.trim()),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialog).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('tsm-ask-ok'),
+          onPressed: () => Navigator.of(dialog).pop(text.text.trim()),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  ).whenComplete(text.dispose);
+}
+
+/// A group of a vault to pick, as a path.
+typedef _GroupChoice = ({String store, KdbxUuid? group, String path});
+
+List<_GroupChoice> _groupsOf(TomSecretsSession session, {String? only}) => [
+  for (final vault in session.vaults)
+    if (only == null || vault.store == only) ...[
+      (store: vault.store, group: null, path: vault.store),
+      for (final (group, path) in _walk(vault.file.body.rootGroup, const []))
+        if (vault.file.recycleBin?.uuid != group.uuid)
+          (
+            store: vault.store,
+            group: group.uuid,
+            path: [vault.store, ...path].join(' / '),
+          ),
+    ],
+];
+
+Iterable<(KdbxGroup, List<String>)> _walk(
+  KdbxGroup group,
+  List<String> path,
+) sync* {
+  for (final child in group.groups) {
+    final name = child.name.get() ?? '';
+    if (tomSecretsIsOverlayGroup(name)) continue;
+    yield (child, [...path, name]);
+    yield* _walk(child, [...path, name]);
+  }
+}
+
+Future<_GroupChoice?> _pickGroup(
+  BuildContext context,
+  String title, {
+  String? only,
+}) {
+  final choices = _groupsOf(context.read<TomSecretsSession>(), only: only);
+  return showDialog<_GroupChoice>(
+    context: context,
+    builder: (dialog) => SimpleDialog(
+      title: Text(title),
+      children: [
+        for (final c in choices)
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialog).pop(c),
+            child: Text(c.path),
+          ),
+      ],
+    ),
+  );
+}
+
+Future<void> _guarded(BuildContext context, Future<void> Function() f) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    await f();
+  } on TomSecretsAdminException catch (e) {
+    tomShowNotice(
+      messenger,
+      kind: 'vault-change',
+      message: tomSecretsDescribeAdminError(e),
+    );
+  }
+}
+
+class _GroupTree extends StatelessWidget {
+  const _GroupTree();
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<TomSecretsSession>();
+    final connection = context.watch<TomSecretsServiceConnection>();
+    final host = context.read<TomSecretsHost>();
+    final waiting = connection.stores.values
+        .where((s) => s.state == 'needs_unlock')
+        .toList();
+    return ListView(
+      key: const Key('tsm-group-tree'),
+      children: [
+        for (final failure in session.failures)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.error_outline),
+            title: Text(failure.store),
+            subtitle: Text(failure.message),
+          ),
+        for (final store in waiting)
+          ListTile(
+            key: Key('tsm-needs-unlock-${store.name}'),
+            dense: true,
+            leading: const Icon(Icons.lock),
+            title: Text(store.name),
+            subtitle: const Text('has a password of its own'),
+            trailing: TextButton(
+              onPressed: () => unawaited(
+                tomSecretsUnlockStoreDialog(
+                  context,
+                  store.name,
+                  keyFiles: host.keyFiles,
+                ),
+              ),
+              child: const Text('Open…'),
+            ),
+          ),
+        for (final vault in session.vaults) ...[
+          _VaultHeader(vault: vault, state: connection.stores[vault.store]),
+          for (final (group, path) in _walk(
+            vault.file.body.rootGroup,
+            const [],
+          ))
+            _GroupRow(
+              store: vault.store,
+              group: group,
+              depth: path.length,
+              isRecycleBin: vault.file.recycleBin?.uuid == group.uuid,
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _VaultHeader extends StatelessWidget {
+  const _VaultHeader({required this.vault, required this.state});
+
+  final TomSecretsOpenVault vault;
+  final TomSecretsStoreState? state;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<TomSecretsSession>();
+    final selected =
+        session.selectedStore == vault.store && session.selectedGroup == null;
+    final offline = state?.isOffline ?? false;
+    return ListTile(
+      key: Key('tsm-vault-${vault.store}'),
+      selected: selected,
+      leading: TomSecretsAvatar(
+        icon: offline ? Icons.cloud_off_rounded : Icons.inventory_2_rounded,
+        colour: offline
+            ? Theme.of(context).colorScheme.error
+            : tomSecretsVaultColour(vault.store),
+        size: 26,
+      ),
+      title: Text(
+        vault.store,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: offline
+          ? Text(
+              'offline copy: ${state!.offlineReason}'
+              '${state!.fetchedAt == null ? '' : ', from ${tomSecretsAge(state!.fetchedAt!)}'}',
+              key: Key('tsm-offline-${vault.store}'),
+            )
+          : null,
+      onTap: () => session.selectGroup(vault.store, null),
+      trailing: PopupMenuButton<String>(
+        onSelected: (v) async {
+          if (v != 'group') return;
+          final name = await _ask(context, title: 'New group', label: 'Name');
+          if (name == null || name.isEmpty || !context.mounted) return;
+          await _guarded(
+            context,
+            () => session.createGroup(vault.store, null, name),
+          );
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'group', child: Text('New group')),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupRow extends StatelessWidget {
+  const _GroupRow({
+    required this.store,
+    required this.group,
+    required this.depth,
+    required this.isRecycleBin,
+  });
+
+  final String store;
+  final KdbxGroup group;
+  final int depth;
+  final bool isRecycleBin;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<TomSecretsSession>();
+    final selected =
+        session.selectedStore == store && session.selectedGroup == group.uuid;
+    return ListTile(
+      key: Key('tsm-group-$store-${group.name.get()}'),
+      dense: true,
+      selected: selected,
+      contentPadding: EdgeInsets.only(left: 18.0 + 14 * depth, right: 4),
+      leading: Icon(
+        isRecycleBin ? Icons.delete_outline_rounded : Icons.folder_rounded,
+        size: 18,
+        color: isRecycleBin
+            ? Theme.of(context).colorScheme.outline
+            : tomSecretsOnSurface(context, tomSecretsVaultColour(store)),
+      ),
+      title: Text(group.name.get() ?? ''),
+      onTap: () => session.selectGroup(store, group.uuid),
+      trailing: isRecycleBin
+          ? null
+          : PopupMenuButton<String>(
+              onSelected: (v) async {
+                switch (v) {
+                  case 'new':
+                    final name = await _ask(
+                      context,
+                      title: 'New group',
+                      label: 'Name',
+                    );
+                    if (name == null || name.isEmpty || !context.mounted) {
+                      return;
+                    }
+                    await _guarded(
+                      context,
+                      () => session.createGroup(store, group.uuid, name),
+                    );
+                  case 'rename':
+                    final name = await _ask(
+                      context,
+                      title: 'Rename group',
+                      label: 'Name',
+                      initial: group.name.get() ?? '',
+                    );
+                    if (name == null || name.isEmpty || !context.mounted) {
+                      return;
+                    }
+                    await _guarded(
+                      context,
+                      () => session.renameGroup(store, group.uuid, name),
+                    );
+                  case 'move':
+                    final target = await _pickGroup(
+                      context,
+                      'Move the group into',
+                      only: store,
+                    );
+                    if (target == null || !context.mounted) return;
+                    await _guarded(
+                      context,
+                      () => session.moveGroup(store, group.uuid, target.group),
+                    );
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'new', child: Text('New group in it')),
+                PopupMenuItem(value: 'rename', child: Text('Rename')),
+                PopupMenuItem(value: 'move', child: Text('Move…')),
+              ],
+            ),
+    );
+  }
+}
+
+class _ListFilters extends StatelessWidget {
+  const _ListFilters();
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<TomSecretsSession>();
+    return ListView(
+      key: const Key('tsm-list-filters'),
+      padding: const EdgeInsets.all(12),
+      children: [
+        Text('Vault', style: Theme.of(context).textTheme.titleSmall),
+        DropdownButton<String?>(
+          key: const Key('tsm-filter-vault'),
+          isExpanded: true,
+          value: session.filterStore,
+          items: [
+            const DropdownMenuItem(value: null, child: Text('All vaults')),
+            for (final v in session.vaults)
+              DropdownMenuItem(value: v.store, child: Text(v.store)),
+          ],
+          onChanged: (v) => session.filterStore = v,
+        ),
+        const SizedBox(height: 12),
+        Text('Type', style: Theme.of(context).textTheme.titleSmall),
+        DropdownButton<TomSecretsEntryType?>(
+          key: const Key('tsm-filter-type'),
+          isExpanded: true,
+          value: session.filterType,
+          items: [
+            const DropdownMenuItem(value: null, child: Text('All types')),
+            for (final t in const [
+              TomSecretsEntryType.login,
+              TomSecretsEntryType.apiToken,
+              TomSecretsEntryType.note,
+            ])
+              DropdownMenuItem(value: t, child: Text(tomSecretsTypeName(t))),
+          ],
+          onChanged: (t) => session.filterType = t,
+        ),
+        const SizedBox(height: 12),
+        Text('Tag', style: Theme.of(context).textTheme.titleSmall),
+        DropdownButton<String?>(
+          key: const Key('tsm-filter-tag'),
+          isExpanded: true,
+          value: session.filterTag,
+          items: [
+            const DropdownMenuItem(value: null, child: Text('All tags')),
+            for (final t in session.allTags)
+              DropdownMenuItem(value: t, child: Text(t)),
+          ],
+          onChanged: (t) => session.filterTag = t,
+        ),
+      ],
+    );
+  }
+}
+
+/// The name of an entry type for the user.
+String tomSecretsTypeName(TomSecretsEntryType type) => switch (type) {
+  TomSecretsEntryType.apiToken => 'API token',
+  TomSecretsEntryType.note => 'Secure note',
+  TomSecretsEntryType.sshKey => 'SSH key',
+  TomSecretsEntryType.certificate => 'Certificate',
+  TomSecretsEntryType.pgpKey => 'PGP key',
+  TomSecretsEntryType.login => 'Login',
+};
+
+/// How long ago [time] was, for the user.
+String tomSecretsAge(DateTime time, {DateTime? now}) {
+  final d = (now ?? DateTime.now()).difference(time);
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inHours < 1) return '${d.inMinutes} min ago';
+  if (d.inDays < 1) return '${d.inHours} h ago';
+  return '${d.inDays} days ago';
+}
+
+/// Creates an entry where the user is: the tree view's group, else the first
+/// vault's root; opens it in the editor.
+Future<void> tomSecretsNewEntry(
+  BuildContext context, {
+  TomSecretsEntryType type = TomSecretsEntryType.login,
+}) async {
+  final session = context.read<TomSecretsSession>();
+  final store = session.selectedStore ?? session.vaults.firstOrNull?.store;
+  if (store == null) return;
+  if (session.readOnlyReason(store) != null) return;
+  final title = await _ask(context, title: 'New entry', label: 'Title');
+  if (title == null || title.isEmpty || !context.mounted) return;
+  await _guarded(
+    context,
+    () => session.createEntry(
+      store,
+      group: session.selectedStore == store ? session.selectedGroup : null,
+      title: title,
+      type: type,
+    ),
+  );
+}
+
+class _EntryList extends StatelessWidget {
+  const _EntryList({required this.entries, required this.showPath});
+
+  final List<TomSecretsEntryView> entries;
+  final bool showPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<TomSecretsSession>();
+    final marked = session.marked;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: marked.isEmpty
+              ? Row(
+                  children: [
+                    Text('${entries.length} entries'),
+                    const Spacer(),
+                    PopupMenuButton<TomSecretsEntryType>(
+                      key: const Key('tsm-new-entry'),
+                      tooltip: 'New entry',
+                      icon: const Icon(Icons.add),
+                      onSelected: (t) =>
+                          unawaited(tomSecretsNewEntry(context, type: t)),
+                      itemBuilder: (_) => [
+                        for (final t in const [
+                          TomSecretsEntryType.login,
+                          TomSecretsEntryType.apiToken,
+                          TomSecretsEntryType.note,
+                        ])
+                          PopupMenuItem(
+                            value: t,
+                            child: Text(tomSecretsTypeName(t)),
+                          ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  key: const Key('tsm-marked-actions'),
+                  children: [
+                    Text('${marked.length} marked'),
+                    const Spacer(),
+                    IconButton(
+                      key: const Key('tsm-move-marked'),
+                      tooltip: 'Move…',
+                      icon: const Icon(Icons.drive_file_move_outline),
+                      onPressed: () async {
+                        final target = await _pickGroup(context, 'Move into');
+                        if (target == null || !context.mounted) return;
+                        await _guarded(
+                          context,
+                          () => session.moveEntries(
+                            marked,
+                            target.store,
+                            target.group,
+                          ),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      key: const Key('tsm-tag-marked'),
+                      tooltip: 'Tag…',
+                      icon: const Icon(Icons.sell_outlined),
+                      onPressed: () async {
+                        final tag = await _ask(
+                          context,
+                          title: 'Add a tag',
+                          label: 'Tag',
+                        );
+                        if (tag == null || tag.isEmpty || !context.mounted) {
+                          return;
+                        }
+                        await _guarded(
+                          context,
+                          () => session.tagEntries(marked, tag),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      key: const Key('tsm-delete-marked'),
+                      tooltip: 'Move to the recycle bin',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _guarded(
+                        context,
+                        () => session.deleteEntries(marked),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Clear the marks',
+                      icon: const Icon(Icons.close),
+                      onPressed: session.clearMarked,
+                    ),
+                  ],
+                ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.builder(
+            key: const Key('tsm-entry-list'),
+            itemCount: entries.length,
+            itemBuilder: (context, i) => _EntryRow(
+              view: entries[i],
+              showPath: showPath,
+              selected: session.selectedEntry == entries[i].ref,
+              marked: marked.contains(entries[i].ref),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EntryRow extends StatelessWidget {
+  const _EntryRow({
+    required this.view,
+    required this.showPath,
+    required this.selected,
+    required this.marked,
+  });
+
+  final TomSecretsEntryView view;
+  final bool showPath;
+  final bool selected;
+  final bool marked;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.read<TomSecretsSession>();
+    final expires = view.expires;
+    final now = DateTime.now();
+    final second = switch (view.type) {
+      TomSecretsEntryType.apiToken => view.key ?? view.url,
+      TomSecretsEntryType.note => view.key ?? '',
+      _ => view.userName.isNotEmpty ? view.userName : (view.key ?? view.url),
+    };
+    return ListTile(
+      key: Key('tsm-entry-${view.ref}'),
+      dense: true,
+      selected: selected,
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox.square(
+            dimension: 24,
+            child: Checkbox(
+              value: marked,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onChanged: (_) => session.toggleMarked(view.ref),
+            ),
+          ),
+          const SizedBox(width: 6),
+          TomSecretsTypeAvatar(view.type),
+        ],
+      ),
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(
+              view.title.isEmpty ? '(untitled)' : view.title,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          for (final tag in view.tags.take(3))
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: TomSecretsChip(tag, colour: tomSecretsTagColour(tag)),
+            ),
+        ],
+      ),
+      subtitle: Text(
+        [
+          if (showPath) [view.ref.store, ...view.groups].join(' / '),
+          if (second.isNotEmpty) second,
+        ].join(' · '),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Wrap(
+        spacing: 4,
+        children: [
+          if (view.overlays > 0)
+            Tooltip(
+              message: '${view.overlays} overlays',
+              child: Badge.count(
+                count: view.overlays,
+                backgroundColor: Theme.of(context).colorScheme.tertiary,
+                child: Icon(
+                  Icons.layers_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.tertiary,
+                ),
+              ),
+            ),
+          if (expires != null)
+            Tooltip(
+              message: expires.isBefore(now) ? 'expired' : 'expires',
+              child: Icon(
+                Icons.timer_outlined,
+                size: 18,
+                color: expires.isBefore(now)
+                    ? Theme.of(context).colorScheme.error
+                    : null,
+              ),
+            ),
+          if (view.hasConflict)
+            Tooltip(
+              message: 'conflict',
+              child: Icon(
+                Icons.warning_amber,
+                size: 18,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+        ],
+      ),
+      onTap: () => session.selectedEntry = view.ref,
+    );
+  }
+}

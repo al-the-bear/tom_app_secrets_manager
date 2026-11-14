@@ -12,17 +12,17 @@ In the workspace this repository is the submodule `app_secrets_manager`
 
 | Package | Phase | What it holds |
 | --- | --- | --- |
-| `tom_secrets_ui` | A | the shell, screens and widgets both apps use |
-| `tom_secrets_desktop` | A | the desktop host capabilities: the service, tray and menu bar, the platform secret store, notifications |
-| `tom_secrets_app` | A | the desktop composition root (macOS, Linux, Windows), shipping the service binary beside itself |
+| [`tom_secrets_ui`](tom_secrets_ui/) | A | the shell, screens and state both apps use: unlock, the vault browser, the entry editor, over ports the host implements |
+| [`tom_secrets_desktop`](tom_secrets_desktop/) | A | the desktop host: starting and attaching to the service, tray and menu bar, window, notifications, start at login, screen-capture exclusion, the protected clipboard |
+| [`tom_secrets_app`](tom_secrets_app/) | A | the desktop composition root (macOS, Linux, Windows), shipping the service binary beside itself |
 | [`tom_secrets_build`](tom_secrets_build/) | A | the manual CI: analyze, test and the licence-boundary check over every package of the three repositories, started by a person (`ci.sh`, `ci.ps1`, `ci.cmd`) |
 | [`tom_secrets_testkit`](tom_secrets_testkit/) | A | test fixtures more than one package needs (the scratch folder so far); a dev dependency only |
 | `tom_secrets_mobile` | B | the mobile composition root (iOS/iPadOS, Android) |
 | `tom_secrets_browser` | B | the WebExtension and its native-messaging host |
 | `tom_secrets_relay` | C | the optional relay server |
 
-`tom_secrets_build` and `tom_secrets_testkit` exist; the other packages are
-created by the quest's todos of their phase.
+The phase-A packages exist; the others are created by the quest's todos of
+their phase.
 
 ## Checking it
 

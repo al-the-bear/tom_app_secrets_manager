@@ -1,0 +1,14 @@
+# Source unification, not an API workaround (the precedent:
+# app_webwork/tom_webwork_app/pubspec_overrides.yaml).
+#
+# `tom_secrets_core` takes `tom_core_storage`, `tom_core_sync` and
+# `tom_github_api` from pub.dev, while `tom_reusable_ui`, which the screens
+# use, takes the same packages by path from the workspace (the last through
+# `tom_test_support`). Pub refuses a hosted and a path source for one package
+# in one resolution, so this root takes them from pub.dev, at exactly the
+# versions the workspace checkouts carry (tom_core_storage 0.1.2,
+# tom_core_sync 0.1.0, tom_github_api 1.4.0): the code compiled is the same.
+dependency_overrides:
+  tom_core_storage: 0.1.2
+  tom_core_sync: 0.1.0
+  tom_github_api: 1.4.0

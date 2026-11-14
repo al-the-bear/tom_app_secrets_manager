@@ -1,0 +1,68 @@
+name: tom_secrets_desktop
+description: >-
+  The desktop host of the Tom Secrets Manager's manager app: starting,
+  attaching to and claiming the secrets service, the tray or menu bar, the
+  window, system notifications, start at login, keeping the window out of
+  screen capture (own platform code, DP-33), the protected clipboard, the
+  device's preferences and files. Each third-party plugin is wrapped behind
+  a port of tom_secrets_ui (DP-32). License: BSD-3-Clause.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.8
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The ports this package implements.
+  tom_secrets_ui:
+    path: ../tom_secrets_ui
+  # The admin client, the runtime directory, the starter with its admin-key
+  # handover, the data directory and the keychain names (shared with tsm).
+  tom_secrets_client:
+    path: ../../tom_ai/secrets_clients/clients/dart/tom_secrets_client
+  # The OS keychain tsm keeps the admin key in (TomDesktopSecretStore), so
+  # the app and tsm share it.
+  tom_core_storage: ^0.1.2
+  # The key-file picker port and the desktop clipboard port.
+  tom_reusable_ui:
+    path: ../../app_webwork/reusable/tom_reusable_ui
+  tom_basics: ">=3.3.0"
+  # DP-32: the desktop plugins, each behind a port. tray_manager and
+  # window_manager at their 0.5 lines (the next ones need Flutter 3.50 and
+  # move onto a new native stack); launch_at_startup for Windows and Linux
+  # (macOS: this package's own SMAppService code); flutter_local_notifications
+  # for notifications (it builds through Swift Package Manager on macOS,
+  # which the workspace uses instead of CocoaPods).
+  tray_manager: 0.5.3
+  window_manager: 0.5.2
+  flutter_local_notifications: ^23.0.2
+  launch_at_startup: 0.5.1
+  # Key files and attachments.
+  file_selector: ^1.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  # The service host's tests run the real service in this process, on demo
+  # vaults (dev dependencies are not linked: the app reaches no KDBX but
+  # through the service and tom_secrets_ui's core).
+  tom_secrets_service:
+    path: ../../tom_ai/secrets_manager/tom_secrets_service
+  tom_secrets_core:
+    path: ../../tom_ai/secrets_manager/tom_secrets_core
+  tom_kdbx_store: ^0.2.3
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  plugin:
+    platforms:
+      macos:
+        pluginClass: TomSecretsDesktopPlugin
+      windows:
+        pluginClass: TomSecretsDesktopPluginCApi
+  assets:
+    - assets/tray/

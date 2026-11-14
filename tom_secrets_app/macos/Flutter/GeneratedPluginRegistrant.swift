@@ -1,0 +1,24 @@
+//
+//  Generated file. Do not edit.
+//
+
+import FlutterMacOS
+import Foundation
+
+import file_selector_macos
+import flutter_local_notifications
+import flutter_secure_storage_darwin
+import screen_retriever_macos
+import tom_secrets_desktop
+import tray_manager
+import window_manager
+
+func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
+  FileSelectorPlugin.register(with: registry.registrar(forPlugin: "FileSelectorPlugin"))
+  FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
+  FlutterSecureStorageDarwinPlugin.register(with: registry.registrar(forPlugin: "FlutterSecureStorageDarwinPlugin"))
+  ScreenRetrieverMacosPlugin.register(with: registry.registrar(forPlugin: "ScreenRetrieverMacosPlugin"))
+  TomSecretsDesktopPlugin.register(with: registry.registrar(forPlugin: "TomSecretsDesktopPlugin"))
+  TrayManagerPlugin.register(with: registry.registrar(forPlugin: "TrayManagerPlugin"))
+  WindowManagerPlugin.register(with: registry.registrar(forPlugin: "WindowManagerPlugin"))
+}

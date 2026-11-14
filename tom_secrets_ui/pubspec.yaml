@@ -1,0 +1,44 @@
+name: tom_secrets_ui
+description: >-
+  The screens and state of the Tom Secrets Manager's manager app, shared by
+  the desktop and (phase B) the mobile app: the shell, unlock, the vault
+  browser and the entry editor, over ports the host implements (the service,
+  the tray, the window, notifications, screen capture). License: BSD-3-Clause.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.8
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The controllers handed down the widget tree (part-app, State).
+  provider: ^6.1.5
+  # The vaults: KDBX through the one gateway (DP-29), the TOTP, the password
+  # generator, the stored-file codec and the entry fields.
+  tom_secrets_core:
+    path: ../../tom_ai/secrets_manager/tom_secrets_core
+  # The admin errors and the reference grammar ("How clients name it").
+  tom_secrets_client:
+    path: ../../tom_ai/secrets_clients/clients/dart/tom_secrets_client
+  # The key fields, notices, sync indicator and the masked editing surface.
+  tom_reusable_ui:
+    path: ../../app_webwork/reusable/tom_reusable_ui
+  # The protected clipboard (cleared after a timeout).
+  tom_basics: ">=3.3.0"
+  # The sync states the top bar's indicator presents.
+  tom_core_sync:
+    path: ../../tom_ai/core_extension/tom_core_sync
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  # The demo vaults' light Argon2id (a test opens a vault in milliseconds);
+  # a dev dependency is not linked (DP-29 holds for the shipped closure).
+  tom_kdbx_store: ^0.2.3
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

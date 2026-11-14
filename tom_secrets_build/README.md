@@ -68,9 +68,12 @@ is classified by its licence file as `npm ci` installs it under
 `node_modules/` (not by the lock's SPDX tag), with the same admitted licences.
 A package that links nothing needs no install.
 
-An exception would be named in `secretsLicenceExceptions`, by package, with
-its reason; the check prints each one on every run and turns red when one is
-no longer needed. None is in force: every package's closure is permissive.
+An exception is named in `secretsLicenceExceptions`, by package, with its
+reason; the check prints each one on every run and turns red when one is no
+longer needed. One is in force: `dbus` (MPL-2.0, file-level copyleft), which
+`tom_secrets_desktop` and `tom_secrets_app` link on Linux through
+`flutter_local_notifications_linux`, unmodified and stated in
+`THIRD_PARTY.md` with its source. Every other closure is permissive.
 
 ## Licence
 

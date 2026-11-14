@@ -1,0 +1,259 @@
+// Copyright (c) 2026 Peter Nicolai Alexis Kyaw
+// SPDX-License-Identifier: BSD-3-Clause
+
+/// The shell once unlocked (part-app, Navigation): the rail on the left,
+/// the top bar (search over every open vault, the tree/list switch, the sync
+/// status of the GitHub vaults, the pending-approvals and key-expiry badges,
+/// the lock button) and the keyboard shortcuts.
+library;
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
+import 'package:tom_core_sync/tom_core_sync.dart' show TomSyncState;
+import 'package:tom_reusable_ui/tom_reusable_ui.dart';
+
+import '../state/service_connection.dart';
+import '../state/session_state.dart';
+import 'status_view.dart';
+import '../widgets/style.dart';
+import 'vault_browser.dart';
+
+/// The rail's destinations.
+enum TomSecretsDestination {
+  /// The vault browser.
+  vaults,
+
+  /// The Status screen.
+  status,
+}
+
+/// The shell.
+class TomSecretsMainShell extends StatefulWidget {
+  /// The shell; [clipboard] is the protected clipboard.
+  const TomSecretsMainShell({super.key, required this.clipboard});
+
+  /// The protected clipboard.
+  final TomProtectedClipboard clipboard;
+
+  @override
+  State<TomSecretsMainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<TomSecretsMainShell> {
+  final FocusNode _search = FocusNode(debugLabel: 'search');
+  final TextEditingController _query = TextEditingController();
+  TomSecretsDestination _destination = TomSecretsDestination.vaults;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _query.dispose();
+    super.dispose();
+  }
+
+  void _lock() => unawaited(
+    context.read<TomSecretsServiceConnection>().lock().catchError(
+      (Object _) {},
+    ),
+  );
+
+  Map<ShortcutActivator, VoidCallback> get _shortcuts {
+    final session = context.read<TomSecretsSession>();
+    final bindings = <ShortcutActivator, VoidCallback>{};
+    for (final meta in [true, false]) {
+      SingleActivator key(LogicalKeyboardKey k) =>
+          SingleActivator(k, meta: meta, control: !meta);
+      bindings[key(LogicalKeyboardKey.keyF)] = () {
+        setState(() => _destination = TomSecretsDestination.vaults);
+        _search.requestFocus();
+      };
+      bindings[key(LogicalKeyboardKey.keyL)] = _lock;
+      bindings[key(LogicalKeyboardKey.keyN)] = () =>
+          unawaited(tomSecretsNewEntry(context));
+      bindings[key(LogicalKeyboardKey.digit1)] = () => session.listView = false;
+      bindings[key(LogicalKeyboardKey.digit2)] = () => session.listView = true;
+    }
+    return bindings;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.watch<TomSecretsServiceConnection>();
+    final session = context.watch<TomSecretsSession>();
+    if (_query.text != session.query) _query.text = session.query;
+    final github = c.stores.values.where(
+      (s) => s.source == 'github' || s.source == 'cache',
+    );
+    return CallbackShortcuts(
+      bindings: _shortcuts,
+      child: FocusScope(
+        autofocus: true,
+        child: Scaffold(
+          body: Row(
+            children: [
+              NavigationRail(
+                key: const Key('tsm-rail'),
+                selectedIndex: _destination.index,
+                labelType: NavigationRailLabelType.all,
+                leading: const Padding(
+                  padding: EdgeInsets.only(top: 8, bottom: 12),
+                  child: Tooltip(
+                    message: 'Tom Secrets Manager',
+                    child: TomSecretsAvatar(
+                      icon: Icons.shield_rounded,
+                      colour: tomSecretsSeed,
+                      size: 38,
+                    ),
+                  ),
+                ),
+                onDestinationSelected: (i) => setState(
+                  () => _destination = TomSecretsDestination.values[i],
+                ),
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.inventory_2_outlined),
+                    selectedIcon: Icon(Icons.inventory_2_rounded),
+                    label: Text('Vaults'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.monitor_heart_outlined),
+                    selectedIcon: Icon(Icons.monitor_heart),
+                    label: Text('Status'),
+                  ),
+                ],
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key: const Key('tsm-search'),
+                              controller: _query,
+                              focusNode: _search,
+                              decoration: const InputDecoration(
+                                prefixIcon: Icon(Icons.search),
+                                hintText: 'Search every vault',
+                                isDense: true,
+                              ),
+                              onChanged: (q) {
+                                session.query = q;
+                                if (_destination !=
+                                    TomSecretsDestination.vaults) {
+                                  setState(
+                                    () => _destination =
+                                        TomSecretsDestination.vaults,
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SegmentedButton<bool>(
+                            key: const Key('tsm-view-switch'),
+                            segments: const [
+                              ButtonSegment(
+                                value: false,
+                                icon: Icon(Icons.account_tree_outlined),
+                                label: Text('Tree'),
+                              ),
+                              ButtonSegment(
+                                value: true,
+                                icon: Icon(Icons.view_list_outlined),
+                                label: Text('List'),
+                              ),
+                            ],
+                            selected: {session.listView},
+                            onSelectionChanged: (s) =>
+                                session.listView = s.single,
+                          ),
+                          const SizedBox(width: 12),
+                          for (final s in github)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: TomSyncIndicator(
+                                key: Key('tsm-sync-${s.name}'),
+                                iconOnly: true,
+                                presentation: TomSyncPresentation.of(
+                                  tomSecretsSyncSummary(s),
+                                ),
+                              ),
+                            ),
+                          if (c.pendingApprovals > 0)
+                            Tooltip(
+                              message:
+                                  '${c.pendingApprovals} approvals waiting',
+                              child: Badge.count(
+                                key: const Key('tsm-approvals-badge'),
+                                count: c.pendingApprovals,
+                                child: const Icon(Icons.how_to_reg_outlined),
+                              ),
+                            ),
+                          if (c.expiringKeys.isNotEmpty)
+                            Tooltip(
+                              message:
+                                  '${c.expiringKeys.length} keys expire soon',
+                              child: Badge.count(
+                                key: const Key('tsm-keys-badge'),
+                                count: c.expiringKeys.length,
+                                child: const Icon(Icons.key_outlined),
+                              ),
+                            ),
+                          IconButton(
+                            key: const Key('tsm-lock'),
+                            tooltip: 'Lock',
+                            icon: const Icon(Icons.lock_outline),
+                            onPressed: _lock,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: switch (_destination) {
+                        TomSecretsDestination.vaults => TomSecretsVaultBrowser(
+                          clipboard: widget.clipboard,
+                        ),
+                        TomSecretsDestination.status =>
+                          const TomSecretsStatusView(),
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The sync summary of a GitHub vault for `tom_reusable_ui`'s indicator:
+/// its changes not yet pushed, offline while served from its cached copy,
+/// last synced at its last fetch.
+TomSyncSummary tomSecretsSyncSummary(TomSecretsStoreState s) => TomSyncSummary(
+  scope: s.name,
+  state: s.notPushed > 0 ? TomSyncState.dirty : TomSyncState.clean,
+  offline: s.isOffline,
+  pendingCount: s.notPushed,
+  lastSyncedAt: s.fetchedAt,
+  offlineLocations: s.isOffline
+      ? [TomOfflineLocation(label: s.name, pendingCount: s.notPushed)]
+      : const [],
+  noun: 'change',
+  nounPlural: 'changes',
+  applicationName: 'the secrets service',
+);

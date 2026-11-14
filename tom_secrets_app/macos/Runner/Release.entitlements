@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Not sandboxed. The app starts the secrets service (an executable beside
+	  it) and hands it the admin key, reaches the service's Unix sockets in
+	  the user's runtime directory ($TMPDIR/tsm), keeps the admin key in the
+	  login keychain through /usr/bin/security (shared with tsm), and reads
+	  key files and attachments the user picks. Under App Sandbox the
+	  runtime directory and the keychain item would be the container's, so
+	  the app could not reach a service tsm started, nor share its key. The
+	  app is not distributed through the App Store.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>

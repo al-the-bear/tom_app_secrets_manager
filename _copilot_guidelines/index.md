@@ -16,6 +16,19 @@ application, capability, build and testkit packages).
   (`../app_webwork/reusable/tom_reusable_ui`); a build host needs both
   repositories checked out.
 - A shipped dependency gets its row in `THIRD_PARTY.md`.
+- **Source unification only:** `tom_secrets_core` and the service take the
+  workspace's published packages (`tom_core_storage`, `tom_core_sync`,
+  `tom_github_api`) from pub.dev, `tom_reusable_ui` takes them by path. A
+  Flutter package that reaches both carries a tracked `pubspec_overrides.yaml`
+  pointing them at pub.dev at exactly the version the workspace checkout
+  carries, with the reason in the file. It never reaches for an unpublished
+  API; a version that differs is published first.
+- **Desktop plugins:** each third-party plugin sits behind a port of
+  `tom_secrets_ui`, implemented in `tom_secrets_desktop` (DP-32); where a
+  plugin needs hand edits of the app's runner, the capability is this
+  package's own platform code instead (start at login on macOS).
+- **macOS builds through Swift Package Manager**, not CocoaPods: a plugin
+  without a `Package.swift` cannot be taken.
 
 ## Rules for every package
 
