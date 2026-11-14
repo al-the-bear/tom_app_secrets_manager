@@ -103,4 +103,8 @@ abstract interface class TomSecretsServiceHost {
   /// The first run of this machine: its data directory and the device
   /// keychain, where the First run wizard writes (part-app, First run).
   Future<TomSecretsFirstRun> firstRun();
+
+  /// The service this host attached to was stopped (`shutdown`): its admin
+  /// key leaves the keychain.
+  Future<void> serviceStopped();
 }

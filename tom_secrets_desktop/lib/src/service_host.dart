@@ -8,7 +8,6 @@
 /// (`tsm.admin.<start>`), so the app and tsm share it.
 library;
 
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -112,24 +111,25 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
           ? const TomSecretsNoService()
           : const TomSecretsNotSetUp();
     }
-    final keychain = await _store();
-    String? stored;
+    final keyring = await _keyring();
+    Uint8List? stored;
     try {
-      stored = await keychain?.read(tomSecretsAdminKeyHandle(start));
+      stored = await keyring?.keyOf(start);
     } on TomSecretStoreException {
       stored = null;
     }
-    if (stored == null) return const TomSecretsClaimNeeded();
+    if (keyring == null || stored == null) {
+      return const TomSecretsClaimNeeded();
+    }
     try {
-      return TomSecretsAttached(
-        TomSecretsAdminClientChannel(
-          await TomSecretsAdminClient.connect(
-            rt,
-            base64.decode(stored),
-            client: tomSecretsAppClient,
-          ),
-        ),
+      final client = await TomSecretsAdminClient.connect(
+        rt,
+        stored,
+        client: tomSecretsAppClient,
       );
+      _attachedStart = start;
+      await _pruneOthers(keyring, start);
+      return TomSecretsAttached(TomSecretsAdminClientChannel(client));
     } on TomSecretsAdminException catch (e) {
       if (e.kind == 'not_running') return const TomSecretsNoService();
       // The key was revoked by a claim since: only a claim attaches.
@@ -174,7 +174,10 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
       keyFile: keyFile,
       client: tomSecretsAppClient,
     );
-    if (start is int) await _keep(start, key);
+    if (start is int) {
+      _attachedStart = start;
+      await _keep(start, key);
+    }
     return TomSecretsAttached(TomSecretsAdminClientChannel(client));
   }
 
@@ -184,15 +187,52 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
     keychain: await _store(),
   );
 
-  Future<void> _keep(int start, Uint8List key) async {
-    final keychain = await _store();
+  @override
+  Future<void> serviceStopped() async {
+    final start = _attachedStart;
+    final keyring = await _keyring();
+    if (start == null || keyring == null) return;
+    _attachedStart = null;
     try {
-      await keychain?.write(
-        tomSecretsAdminKeyHandle(start),
-        base64.encode(key),
-      );
+      await keyring.forget(start);
+    } on TomSecretStoreException {
+      // A key left behind is removed by the next prune.
+    }
+  }
+
+  /// The start of the service this host last attached to, or null.
+  int? _attachedStart;
+
+  /// The admin keys in the keychain, or null without one.
+  Future<TomSecretsAdminKeyring?> _keyring() async {
+    final keychain = await _store();
+    if (keychain == null) return null;
+    return TomSecretsAdminKeyring(
+      read: keychain.read,
+      write: keychain.write,
+      delete: keychain.delete,
+    );
+  }
+
+  /// Keeps [key] for the service started at [start] and removes the keys of
+  /// services that are gone.
+  Future<void> _keep(int start, Uint8List key) async {
+    final keyring = await _keyring();
+    if (keyring == null) return;
+    try {
+      await keyring.keep(start, key);
     } on TomSecretStoreException {
       // Without the keychain the next start claims again (DP-22).
+      return;
+    }
+    await _pruneOthers(keyring, start);
+  }
+
+  Future<void> _pruneOthers(TomSecretsAdminKeyring keyring, int start) async {
+    try {
+      await keyring.pruneOthers(start);
+    } on TomSecretStoreException {
+      // Tried again the next time a key is kept or used.
     }
   }
 }

@@ -253,6 +253,12 @@ final class FakeHost implements TomSecretsServiceHost {
     return TomSecretsAttached(service);
   }
 
+  /// How often the connection reported the service stopped.
+  int stoppedReports = 0;
+
+  @override
+  Future<void> serviceStopped() async => stoppedReports++;
+
   @override
   Future<TomSecretsFirstRun> firstRun() async =>
       setup ?? (throw StateError('set up already'));

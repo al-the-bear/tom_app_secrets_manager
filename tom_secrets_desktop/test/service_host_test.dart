@@ -258,4 +258,34 @@ void main() {
       await (again as TomSecretsAttached).channel.close();
     },
   );
+
+  test('attaching prunes the keys of services that are gone; a stopped '
+      'service\'s key leaves the keychain', () async {
+    final keyring = TomSecretsAdminKeyring(
+      read: keychain.read,
+      write: keychain.write,
+      delete: keychain.delete,
+    );
+    await keyring.keep(111, tomSecretsRandomBytes());
+    await keyring.keep(222, tomSecretsRandomBytes());
+    final key = tomSecretsRandomBytes();
+    final service = await launch(key);
+    await keyring.keep(service.startedAt, key);
+    final attached = await host.attach();
+    expect(attached, isA<TomSecretsAttached>());
+    expect(await keyring.recorded(), {service.startedAt});
+    expect(await keychain.read(tomSecretsAdminKeyHandle(111)), isNull);
+
+    final connection = TomSecretsServiceConnection(host);
+    await connection.connect();
+    expect(connection.phase, TomSecretsConnectionPhase.attached);
+    await connection.stopService();
+    await service.done;
+    expect(
+      await keychain.read(tomSecretsAdminKeyHandle(service.startedAt)),
+      isNull,
+    );
+    expect(await keyring.recorded(), isEmpty);
+    await (attached as TomSecretsAttached).channel.close();
+  });
 }

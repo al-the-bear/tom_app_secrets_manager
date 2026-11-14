@@ -9,3 +9,5 @@
   writes into the data directory and the OS keychain.
 - The service is looked for beside the app, then in the app's distribution
   (`tsm/bin`).
+- Attaching removes the admin keys of services that are gone; stopping the
+  service removes its key (`TomSecretsAdminKeyring`).

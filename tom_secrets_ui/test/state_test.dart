@@ -65,6 +65,14 @@ void main() {
       expect(connection.phase, TomSecretsConnectionPhase.attached);
     });
 
+    test('stopping the service shuts it down and tells the host, which drops '
+        'its admin key', () async {
+      await connection.connect();
+      await connection.stopService();
+      expect(service.requests.last['op'], 'shutdown');
+      expect(host.stoppedReports, 1);
+    });
+
     test('a wrong password is denied; the right one unlocks and reads the '
         'stores', () async {
       await connection.connect();

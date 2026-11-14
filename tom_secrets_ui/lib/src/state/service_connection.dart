@@ -222,6 +222,7 @@ class TomSecretsServiceConnection extends ChangeNotifier {
   /// app (BP-14).
   Future<void> stopService() async {
     await request('shutdown');
+    await host.serviceStopped();
   }
 
   /// Fetches every store now.
