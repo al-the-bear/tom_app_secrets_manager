@@ -55,7 +55,7 @@ dev_dependencies:
   # through tom_secrets_core).
   tom_secrets_service:
     path: ../../tom_ai/secrets_manager/tom_secrets_service
-  tom_kdbx_store: ^0.2.3
+  tom_kdbx_store: ^0.2.4
   flutter_lints: ^6.0.0
 
 flutter:
