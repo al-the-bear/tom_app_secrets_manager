@@ -19,3 +19,9 @@ A package that adds a shipped dependency adds its row here.
 | [dbus](https://pub.dev/packages/dbus) | MPL-2.0 | `tom_secrets_desktop`, `tom_secrets_app` on Linux, through `flutter_local_notifications_linux`; unmodified; source: https://github.com/canonical/dbus.dart. The one named exception of the licence boundary (`secretsLicenceExceptions`) |
 | [launch_at_startup](https://pub.dev/packages/launch_at_startup) | MIT | `tom_secrets_desktop`: start at login on Windows and Linux |
 | [file_selector](https://pub.dev/packages/file_selector) | BSD-3-Clause | `tom_secrets_desktop`: key files and attachments |
+
+The app's distribution also carries the command line `tsm` and the secrets
+service (its `tsm` folder), built from the product's other two repositories
+(BSD-3, the same `LICENSE`); the service links `tom_pqc` (BSD-3), whose
+native library vendors mlkem-native and mldsa-native (MIT); a release
+carries their licence texts and `tom_pqc`'s in its `licenses/` folder.

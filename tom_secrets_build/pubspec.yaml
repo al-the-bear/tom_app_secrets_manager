@@ -18,10 +18,11 @@ dependencies:
   tom_build_base: ^2.27.0
   # The dependency-closure walk and the licence classification the
   # licence-boundary check is built on (licence_audit.dart).
-  tom_test_support:
-    path: ../../tom_ai/basics/tom_test_support
+  tom_test_support: ^0.8.1
   path: ^1.9.0
   yaml: ^3.1.3
+  # The release's SHA256SUMS.
+  crypto: ^3.0.6
 
 dev_dependencies:
   lints: ^6.0.0

@@ -38,8 +38,9 @@ const Set<String> secretsKdbxLibraries = {
   'kdbx',
 };
 
-/// The repository whose packages reach no KDBX at all.
-const String secretsKdbxFreeRepository = 'tom_ai/secrets_clients';
+/// The role of the repository whose packages reach no KDBX at all (the
+/// clients', `SecretsCiWorkspace.roleOf`).
+const String secretsKdbxFreeRepository = 'secrets_clients';
 
 /// Packages outside [secretsKdbxFreeRepository] that reach no KDBX either:
 /// the relay carries only ciphertext, and the CI is tooling.
@@ -65,7 +66,8 @@ const String _dbusReason =
     'for Linux desktop notifications; unmodified, stated in THIRD_PARTY.md '
     'with its source, so a BSD-3 binary may carry it (tsm_a23).';
 
-/// The KDBX rule for the package [package] of [repository], which declares
+/// The KDBX rule for the package [package] of the repository of role
+/// [repository] (`SecretsCiWorkspace.roleOf`), which declares
 /// the dependencies [declared] and links [linked] (itself included).
 List<String> secretsKdbxProblems({
   required String package,
@@ -136,7 +138,8 @@ Map<String, Directory> secretsResolvedPackages(String packageDir) {
   };
 }
 
-/// Every problem of the package in [packageDir], a package of [repository]:
+/// Every problem of the package in [packageDir], of the repository of role
+/// [repository]:
 /// the licences of its closure and the KDBX rule. Empty when it passes.
 /// [exceptions] are the named exceptions, by package (default
 /// [secretsLicenceExceptions]).

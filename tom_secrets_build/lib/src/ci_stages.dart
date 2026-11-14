@@ -3,6 +3,7 @@
 /// `package:tom_build_base/ci.dart`'s.
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -10,6 +11,7 @@ import 'package:tom_build_base/ci.dart';
 
 import 'ci_workspace.dart';
 import 'licence_boundary.dart';
+import 'release.dart';
 
 /// The stages, in the order `:all` runs them. The build stages of the desktop
 /// app join when `tom_secrets_app` exists.
@@ -19,7 +21,12 @@ const List<String> secretsCiStages = [
   'integration',
   'licences',
   'conformance',
+  'standalone',
+  'release',
 ];
+
+/// The stages `:all` leaves out: the release is built when one is made.
+const Set<String> secretsCiStagesNotInAll = {'release'};
 
 /// One-line descriptions, shared by `--help` and the README.
 const Map<String, String> secretsCiStageDescriptions = {
@@ -43,7 +50,17 @@ const Map<String, String> secretsCiStageDescriptions = {
       'the client conformance suite (tom_secrets_clients/conformance): the '
       'reference table current, the coverage gate, every runner against every '
       'case table, a runner without its toolchain red',
-  'all': 'every stage above, in that order, continuing past a red',
+  'standalone':
+      'the standalone check over the three repositories\' tracked files: no '
+      'path dependency into another repository, no pubspec_overrides.yaml, no '
+      'path of the maintainers\' workspace in code or documents, but the '
+      'exceptions on record',
+  'release':
+      'the release for this platform (not part of :all): the service bundle, '
+      'tsm, the app built with both in its tsm folder, the app and tools-only '
+      'archives with SHA256SUMS in tom_secrets_build/release/<version>/, and '
+      'a smoke run of the assembled tsm and service on a demo installation',
+  'all': 'every stage above but :release, in that order, continuing past a red',
 };
 
 /// The test tag of the licence-boundary check, run by `:licences` only.
@@ -51,6 +68,12 @@ const String secretsCiBoundaryTag = 'licence-boundary';
 
 /// The test tag of the integration suites, run by `:integration` only.
 const String secretsCiIntegrationTag = 'integration';
+
+/// The test tag of the standalone check, run by `:standalone` only.
+const String secretsCiStandaloneTag = 'standalone';
+
+/// The standalone test `:standalone` runs in this package.
+const String secretsCiStandaloneTest = 'test/standalone_test.dart';
 
 /// The licence-boundary test `:licences` runs in this package.
 const String secretsCiBoundaryTest = 'test/licence_boundary_test.dart';
@@ -116,6 +139,7 @@ class SecretsCiStages {
           final excluded = ciTestTagsOf(pkg.directory, const [
             secretsCiBoundaryTag,
             secretsCiIntegrationTag,
+            secretsCiStandaloneTag,
           ]);
           await run.step(
             stage,
@@ -204,7 +228,7 @@ class SecretsCiStages {
           ]),
         ], counts: true);
       case 'conformance':
-        final clients = workspace.repositoryDir('tom_ai/secrets_clients');
+        final clients = workspace.clientsRoot;
         await run.step(stage, 'conformance', 'conformance.log', [
           CiCommand(
             Platform.isWindows ? 'py' : 'python3',
@@ -225,11 +249,141 @@ class SecretsCiStages {
             },
           ),
         ]);
+      case 'standalone':
+        await run.step(stage, 'standalone', 'standalone.log', [
+          run.tool(_buildPackage, ['pub', 'get']),
+          run.tool(_buildPackage, [
+            'test',
+            '--tags',
+            secretsCiStandaloneTag,
+            secretsCiStandaloneTest,
+          ]),
+        ], counts: true);
+      case 'release':
+        await _release(run);
       default:
         throw ArgumentError.value(stage, 'stage', 'not a stage');
     }
   }
 }
+
+extension on SecretsCiStages {
+  CiPackage get _buildPackage => CiPackage(
+    name: 'tom_secrets_build',
+    directory: workspace.buildPackageDir,
+    isFlutter: false,
+  );
+
+  /// The release for this platform: the parts, the assembly, a smoke run.
+  Future<void> _release(CiRun run) async {
+    const stage = 'release';
+    final platform = secretsReleasePlatform();
+    final windows = platform.startsWith('windows');
+    final exe = windows ? '.exe' : '';
+    final appPackage = p.join(workspace.repoRoot, 'tom_secrets_app');
+    final version = secretsPubspecVersion(p.join(appPackage, 'pubspec.yaml'));
+    final releaseRoot = p.join(workspace.buildPackageDir, 'release');
+    final outDir = p.join(releaseRoot, version);
+    final work = p.join(releaseRoot, 'work-$platform');
+    Directory(outDir).createSync(recursive: true);
+    Directory(work).createSync(recursive: true);
+
+    CiPackage package(String dir, {bool flutter = false}) => CiPackage(
+      name: workspace.relative(dir),
+      directory: dir,
+      isFlutter: flutter,
+    );
+
+    final service = package(
+      p.join(workspace.managerRoot, 'tom_secrets_service'),
+    );
+    final serviceBundle = p.join(work, 'service', 'bundle');
+    await run.step(stage, 'service', 'release.service.log', [
+      run.tool(service, ['pub', 'get']),
+      run.tool(service, [
+        'build',
+        'cli',
+        '--target',
+        'bin/tom_secrets_service.dart',
+        '-o',
+        p.join(work, 'service'),
+      ]),
+    ], produces: p.join(serviceBundle, 'bin', 'tom_secrets_service$exe'));
+
+    final tsmPackage = package(
+      p.join(workspace.clientsRoot, 'clients', 'dart', 'tsm'),
+    );
+    final tsm = p.join(work, 'tsm', 'tsm$exe');
+    Directory(p.dirname(tsm)).createSync(recursive: true);
+    await run.step(stage, 'tsm', 'release.tsm.log', [
+      run.tool(tsmPackage, ['pub', 'get']),
+      run.tool(tsmPackage, ['compile', 'exe', 'bin/tsm.dart', '-o', tsm]),
+    ], produces: tsm);
+
+    final app = package(appPackage, flutter: true);
+    final built = secretsBuiltApp(appPackage, platform);
+    await run.step(
+      stage,
+      'app',
+      'release.app.log',
+      [
+        run.tool(app, ['pub', 'get']),
+        run.tool(app, ['build', platform.split('-').first, '--release']),
+      ],
+      needsFlutter: true,
+      produces: secretsBuiltAppExecutable(built, platform),
+    );
+
+    final inputs = SecretsReleaseInputs(
+      version: version,
+      platform: platform,
+      app: built,
+      serviceBundle: serviceBundle,
+      tsm: tsm,
+      licenceFiles: [
+        p.join(workspace.repoRoot, 'LICENSE'),
+        p.join(workspace.repoRoot, 'THIRD_PARTY.md'),
+      ],
+      notices: secretsPqcNotices(service.directory),
+      outDir: outDir,
+    );
+    final inputsFile = File(p.join(work, 'inputs.json'))
+      ..writeAsStringSync(jsonEncode(inputs.toJson()));
+    await run.step(stage, 'assemble', 'release.assemble.log', [
+      run.tool(_buildPackage, [
+        'run',
+        'bin/assemble_release.dart',
+        inputsFile.path,
+      ]),
+    ], produces: p.join(outDir, secretsAppArchiveName(version, platform)));
+
+    // The smoke run's installation is in the system's temporary folder: a
+    // Unix socket path is limited to 104 bytes on macOS, which a path in the
+    // repository exceeds (as for the service's own tests).
+    final demo = Directory.systemTemp.createTempSync('tsmrel');
+    try {
+      final desktop = package(
+        p.join(workspace.repoRoot, 'tom_secrets_desktop'),
+      );
+      await run.step(stage, 'smoke', 'release.smoke.log', [
+        run.tool(desktop, ['run', 'tool/demo_installation.dart', demo.path]),
+        run.tool(_buildPackage, [
+          'run',
+          'bin/smoke_release.dart',
+          secretsAppToolsBin(outDir, platform),
+          demo.path,
+          secretsReleaseSmokePassword,
+        ]),
+      ]);
+    } finally {
+      demo.deleteSync(recursive: true);
+    }
+  }
+}
+
+/// The demo master password of the smoke run's installation (the desktop
+/// package's `tool/demo_installation.dart`; demo data only).
+const String secretsReleaseSmokePassword = 'primary-demo-pw';
 
 /// An npm command in [dir] (on Windows through the shell, as every CI
 /// command, which finds `npm.cmd`).

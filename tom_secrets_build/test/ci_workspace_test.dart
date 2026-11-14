@@ -1,6 +1,8 @@
 /// Package and manifest discovery over the three repositories.
 library;
 
+import 'dart:io';
+
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:tom_secrets_build/tom_secrets_build.dart';
@@ -117,6 +119,68 @@ void main() {
         workspace.relative(workspace.npmPackageDirs().single),
         'app_secrets_manager/tom_secrets_npm',
       );
+    });
+  });
+
+  group('where the two other repositories are', () {
+    late Directory root;
+    setUp(() {
+      root = secretsScratchDir('layouts');
+      secretsWriteFile(root, 'app_secrets_manager/tom_repository.yaml', '');
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tom_secrets_build/pubspec.yaml',
+        'name: x\n',
+      );
+    });
+
+    SecretsCiWorkspace find() => SecretsCiWorkspace.find(
+      from: p.join(root.path, 'app_secrets_manager', 'tom_secrets_build'),
+      workspaceRoot: root.path,
+    );
+
+    test('cloned side by side under their GitHub names', () {
+      secretsWriteFile(root, 'tom_secrets_manager/tom_repository.yaml', '');
+      secretsWriteFile(root, 'tom_secrets_clients/tom_repository.yaml', '');
+      final workspace = find();
+      expect(workspace.repositories, [
+        'app_secrets_manager',
+        'tom_secrets_manager',
+        'tom_secrets_clients',
+      ]);
+      expect(workspace.missingRepositories(), isEmpty);
+      expect(workspace.roleOf('tom_secrets_clients'), secretsCiClientsRole);
+      expect(workspace.roleOf('tom_secrets_manager'), secretsCiManagerRole);
+      expect(workspace.roleOf('app_secrets_manager'), secretsCiAppsRole);
+    });
+
+    test('where repositories.yaml says, relative to this repository or '
+        'absolute; the names relative to what holds all three', () {
+      secretsWriteFile(root, 'elsewhere/core/tom_repository.yaml', '');
+      secretsWriteFile(root, 'far/clients/tom_repository.yaml', '');
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tom_secrets_build/repositories.yaml',
+        'secrets_manager: ../elsewhere/core\n'
+            'secrets_clients: ${p.join(root.path, 'far', 'clients')}\n',
+      );
+      final workspace = find();
+      expect(workspace.repositories, [
+        'app_secrets_manager',
+        'elsewhere/core',
+        'far/clients',
+      ]);
+      expect(workspace.clientsRoot, p.join(root.path, 'far', 'clients'));
+      expect(workspace.missingRepositories(), isEmpty);
+    });
+
+    test('a repositories.yaml naming another key is refused', () {
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tom_secrets_build/repositories.yaml',
+        'secrets_core: ../x\n',
+      );
+      expect(find, throwsFormatException);
     });
   });
 

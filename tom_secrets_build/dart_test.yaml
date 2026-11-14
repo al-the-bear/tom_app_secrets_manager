@@ -3,3 +3,7 @@ tags:
   # each package's resolution, so it runs in `:licences`, after `pub get` in
   # every package, and `:test` leaves it out.
   licence-boundary:
+  # The standalone check over the three repositories' tracked files. It reads
+  # the other repositories too, so it runs in `:standalone`, and `:test`
+  # leaves it out.
+  standalone:

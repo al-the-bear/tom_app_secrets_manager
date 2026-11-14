@@ -31,8 +31,7 @@ dependencies:
   # The token prompt's types (the First run wizard's GitHub token).
   tom_core_storage: ^0.1.2
   # The sync states the top bar's indicator presents.
-  tom_core_sync:
-    path: ../../tom_ai/core_extension/tom_core_sync
+  tom_core_sync: ^0.1.0
 
 dev_dependencies:
   flutter_test:

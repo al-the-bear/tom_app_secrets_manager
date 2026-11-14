@@ -70,7 +70,10 @@ void main() {
   for (final pkg in packages) {
     test(pkg.name, () {
       expect(
-        secretsBoundaryProblems(pkg.directory, workspace.repositoryOf(pkg)),
+        secretsBoundaryProblems(
+          pkg.directory,
+          workspace.roleOf(workspace.repositoryOf(pkg)),
+        ),
         isEmpty,
       );
     });

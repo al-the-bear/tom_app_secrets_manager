@@ -12,15 +12,20 @@ import 'package:tom_secrets_testkit/tom_secrets_testkit.dart';
 void main() {
   group('stages', () {
     test('all expands to every stage in order; repeats are dropped', () {
-      List<String> resolve(List<String> names) =>
-          resolveCiStages(names, stages: secretsCiStages);
+      List<String> resolve(List<String> names) => resolveCiStages(
+        names,
+        stages: secretsCiStages,
+        inAll: (s) => !secretsCiStagesNotInAll.contains(s),
+      );
       expect(resolve(['all']), [
         'analyze',
         'test',
         'integration',
         'licences',
         'conformance',
+        'standalone',
       ]);
+      expect(resolve(['release']), ['release'], reason: 'only when named');
       expect(resolve(['licences', 'analyze', 'licences']), [
         'licences',
         'analyze',

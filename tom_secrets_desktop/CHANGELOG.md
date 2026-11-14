@@ -7,3 +7,5 @@
   protected clipboard, preferences, files and one instance per user.
 - A machine without `bootstrap.yaml` answers not set up; the first run
   writes into the data directory and the OS keychain.
+- The service is looked for beside the app, then in the app's distribution
+  (`tsm/bin`).

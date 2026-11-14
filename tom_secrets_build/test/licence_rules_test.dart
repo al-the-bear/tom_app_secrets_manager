@@ -20,7 +20,7 @@ void main() {
   group('secretsKdbxProblems', () {
     List<String> check(
       String package, {
-      String repository = 'tom_ai/secrets_manager',
+      String repository = 'secrets_manager',
       Set<String> declared = const {},
       Set<String> linked = const {},
     }) => secretsKdbxProblems(
@@ -72,7 +72,7 @@ void main() {
       expect(
         check(
           'tsm',
-          repository: 'tom_ai/secrets_clients',
+          repository: 'secrets_clients',
           declared: {'tom_secrets_client'},
           linked: {'tom_secrets_client'},
         ),
@@ -81,7 +81,7 @@ void main() {
       expect(
         check(
           'tom_secrets_client',
-          repository: 'tom_ai/secrets_clients',
+          repository: 'secrets_clients',
           linked: {'tom_secrets_core', 'tom_kdbx_store'},
         ),
         [contains('links tom_secrets_core'), contains('links tom_kdbx_store')],
@@ -145,7 +145,7 @@ void main() {
       expect(
         secretsBoundaryProblems(
           p.join(root.path, 'tom_secrets_core'),
-          'tom_ai/secrets_manager',
+          'secrets_manager',
         ),
         isEmpty,
       );
@@ -158,7 +158,7 @@ void main() {
       resolve('tom_secrets_client', ['tom_secrets_client', 'gpl_pkg', 'bare']);
       final problems = secretsBoundaryProblems(
         p.join(root.path, 'tom_secrets_client'),
-        'tom_ai/secrets_clients',
+        'secrets_clients',
       );
       expect(problems, hasLength(2));
       expect(problems, contains(startsWith('gpl_pkg: ')));

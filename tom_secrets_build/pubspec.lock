@@ -138,7 +138,7 @@ packages:
     source: hosted
     version: "1.16.0"
   crypto:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: crypto
       sha256: e3626ae6270383c9e3a549f34c9e4cd26c09ae6a9adaab2bf4737a00340efdc4
@@ -604,9 +604,10 @@ packages:
   tom_github_api:
     dependency: transitive
     description:
-      path: "../../tom_ai/basics/tom_github_api"
-      relative: true
-    source: path
+      name: tom_github_api
+      sha256: caee4d47c1974f3aacf939b983dd70ad09de7e193d8528505881531a57b316d0
+      url: "https://pub.dev"
+    source: hosted
     version: "1.4.0"
   tom_secrets_testkit:
     dependency: "direct dev"
@@ -618,9 +619,10 @@ packages:
   tom_test_support:
     dependency: "direct main"
     description:
-      path: "../../tom_ai/basics/tom_test_support"
-      relative: true
-    source: path
+      name: tom_test_support
+      sha256: "9fdde943dfac892d2d1cba8f629ea86562e9a529d01efd3f540f8e59fd8b5b29"
+      url: "https://pub.dev"
+    source: hosted
     version: "0.8.1"
   typed_data:
     dependency: transitive

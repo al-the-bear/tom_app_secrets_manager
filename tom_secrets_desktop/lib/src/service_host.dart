@@ -83,12 +83,22 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
     return _keychain;
   }
 
-  /// Where the service executable is: `TSM_SERVICE`, else
-  /// `tom_secrets_service` beside the app.
-  String get serviceExecutable =>
-      environment['TSM_SERVICE'] ??
-      '$executableDirectory${Platform.pathSeparator}tom_secrets_service'
-          '${Platform.isWindows ? '.exe' : ''}';
+  /// Where the service executable is: `TSM_SERVICE`, else the first of
+  /// `tom_secrets_service` beside the app and the one in the app's
+  /// distribution (`tsm/bin`, `tomSecretsServiceCandidates`) that exists,
+  /// else the one beside the app (for the message saying it is missing).
+  String get serviceExecutable {
+    final named = environment['TSM_SERVICE'];
+    if (named != null) return named;
+    final candidates = tomSecretsServiceCandidates(
+      executableDirectory,
+      operatingSystem: Platform.operatingSystem,
+    );
+    return candidates.firstWhere(
+      (c) => File(c).existsSync(),
+      orElse: () => candidates.first,
+    );
+  }
 
   @override
   Future<TomSecretsAttach> attach() async {

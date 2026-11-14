@@ -104,6 +104,33 @@ void main() {
     return service;
   }
 
+  test('the service: TSM_SERVICE, else beside the app, else in the app\'s '
+      'distribution (tsm/bin)', () {
+    final appDir = Platform.isMacOS
+        ? '${dir.path}/X.app/Contents/MacOS'
+        : '${dir.path}/app';
+    Directory(appDir).createSync(recursive: true);
+    final ext = Platform.isWindows ? '.exe' : '';
+    final plain = {...env}..remove('TSM_SERVICE');
+    TomSecretsDesktopServiceHost at() => TomSecretsDesktopServiceHost(
+      environment: plain,
+      executableDirectory: appDir,
+      keychain: keychain,
+    );
+    final beside = '$appDir${Platform.pathSeparator}tom_secrets_service$ext';
+    expect(at().serviceExecutable, beside, reason: 'none there: the default');
+    final bundled = File(
+      tomSecretsServiceCandidates(
+        appDir,
+        operatingSystem: Platform.operatingSystem,
+      ).last,
+    )..createSync(recursive: true);
+    expect(at().serviceExecutable, bundled.path);
+    File(beside).createSync();
+    expect(at().serviceExecutable, beside, reason: 'beside the app first');
+    expect(host.serviceExecutable, '${dir.path}/no-such-service');
+  });
+
   test(
     'no service: NoService; starting without an executable says so',
     () async {

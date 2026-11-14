@@ -11,13 +11,42 @@ import 'package:path/path.dart' as p;
 import 'package:tom_build_base/ci.dart';
 import 'package:tom_build_base/seams.dart'
     show resolveRepositoryRoot, resolveWorkspaceRoot;
+import 'package:yaml/yaml.dart';
 
-/// The two repositories beside this one, by their path in the workspace.
-/// This repository (`app_secrets_manager`) is found by its landmark.
-const List<String> secretsCiSiblingRepositories = [
-  'tom_ai/secrets_manager',
-  'tom_ai/secrets_clients',
-];
+/// The two repositories beside this one, by their role: the core and the
+/// service (`secrets_manager`), the clients and the protocol
+/// (`secrets_clients`). This repository (`app_secrets_manager`, role
+/// [secretsCiAppsRole]) is found by its landmark.
+const String secretsCiManagerRole = 'secrets_manager';
+
+/// The role of the clients' repository.
+const String secretsCiClientsRole = 'secrets_clients';
+
+/// The role of this repository, the apps'.
+const String secretsCiAppsRole = 'apps';
+
+/// Where the two other repositories are in this workspace (`tom_ai/…`), by
+/// role: the default when [secretsCiRepositoriesFile] names none.
+const Map<String, String> secretsCiWorkspaceLayout = {
+  secretsCiManagerRole: 'tom_ai/secrets_manager',
+  secretsCiClientsRole: 'tom_ai/secrets_clients',
+};
+
+/// Where they are when the three repositories are cloned side by side under
+/// their GitHub names (a checkout outside this workspace), by role.
+const Map<String, String> secretsCiSideBySideLayout = {
+  secretsCiManagerRole: 'tom_secrets_manager',
+  secretsCiClientsRole: 'tom_secrets_clients',
+};
+
+/// The optional file in `tom_secrets_build/` naming where the two other
+/// repositories are, absolute or relative to this repository's root:
+///
+/// ```yaml
+/// secrets_manager: ../tom_secrets_manager
+/// secrets_clients: ../tom_secrets_clients
+/// ```
+const String secretsCiRepositoriesFile = 'repositories.yaml';
 
 /// Directory names the package and manifest search never enters: hidden
 /// directories (checked apart), build output and scratch, dependencies
@@ -77,18 +106,40 @@ List<String> secretsGoModuleRequirements(String goMod) {
 }
 
 /// How deep below a repository root a package may sit
-/// (`tom_ai/secrets_clients/clients/dart/tsm` is three levels).
+/// (`clients/dart/tsm` in the clients' repository is three levels).
 const int secretsCiSearchDepth = 4;
 
-/// The product's repositories and the workspace around them.
+/// The product's repositories and the directory around them.
 class SecretsCiWorkspace {
-  SecretsCiWorkspace({required this.repoRoot, required this.workspaceRoot});
+  /// The repositories at [repoRoot] (this one), [managerRoot] and
+  /// [clientsRoot]; names are relative to [workspaceRoot], which holds all
+  /// three.
+  SecretsCiWorkspace({
+    required this.repoRoot,
+    required this.workspaceRoot,
+    String? managerRoot,
+    String? clientsRoot,
+  }) : managerRoot =
+           managerRoot ??
+           p.join(
+             workspaceRoot,
+             secretsCiWorkspaceLayout[secretsCiManagerRole]!,
+           ),
+       clientsRoot =
+           clientsRoot ??
+           p.join(
+             workspaceRoot,
+             secretsCiWorkspaceLayout[secretsCiClientsRole]!,
+           );
 
   /// Finds this repository from [from] (default: the current directory) by
-  /// its `tom_repository.yaml`, and the workspace by `buildkit_master.yaml`; a
-  /// repository checked out on its own takes its parent as the workspace.
-  /// [workspaceRoot] names the workspace instead (a fixture inside a real
-  /// workspace).
+  /// its `tom_repository.yaml`, then the two others: where
+  /// [secretsCiRepositoriesFile] says, else in this workspace's layout
+  /// ([secretsCiWorkspaceLayout], the workspace found by
+  /// `buildkit_master.yaml`), else cloned side by side
+  /// ([secretsCiSideBySideLayout]); the workspace layout when none is there
+  /// (they are reported missing). [workspaceRoot] names the workspace
+  /// instead (a fixture inside a real workspace).
   factory SecretsCiWorkspace.find({String? from, String? workspaceRoot}) {
     final start = Directory(from ?? Directory.current.path).absolute.path;
     final String repo;
@@ -100,23 +151,47 @@ class SecretsCiWorkspace {
         'app_secrets_manager repository, so there is nothing to verify.',
       );
     }
-    if (workspaceRoot != null) {
-      return SecretsCiWorkspace(
-        repoRoot: repo,
-        workspaceRoot: p.normalize(p.absolute(workspaceRoot)),
-      );
-    }
     String workspace;
-    try {
-      workspace = resolveWorkspaceRoot(repo);
-    } on StateError {
-      workspace = p.dirname(repo);
+    if (workspaceRoot != null) {
+      workspace = p.normalize(p.absolute(workspaceRoot));
+    } else {
+      try {
+        workspace = resolveWorkspaceRoot(repo);
+      } on StateError {
+        workspace = p.dirname(repo);
+      }
     }
-    return SecretsCiWorkspace(repoRoot: repo, workspaceRoot: workspace);
+    bool isRepository(String dir) =>
+        File(p.join(dir, 'tom_repository.yaml')).existsSync();
+    final configured = secretsCiReadRepositoriesFile(repo);
+    String locate(String role) {
+      final named = configured[role];
+      if (named != null) return named;
+      final inWorkspace = p.join(workspace, secretsCiWorkspaceLayout[role]!);
+      if (isRepository(inWorkspace)) return inWorkspace;
+      final beside = p.join(p.dirname(repo), secretsCiSideBySideLayout[role]!);
+      if (isRepository(beside)) return beside;
+      return inWorkspace;
+    }
+
+    final manager = locate(secretsCiManagerRole);
+    final clients = locate(secretsCiClientsRole);
+    return SecretsCiWorkspace(
+      repoRoot: repo,
+      workspaceRoot: _commonAncestor([workspace, repo, manager, clients]),
+      managerRoot: manager,
+      clientsRoot: clients,
+    );
   }
 
   /// Absolute path of the app_secrets_manager repository.
   final String repoRoot;
+
+  /// Absolute path of the core and service repository.
+  final String managerRoot;
+
+  /// Absolute path of the clients and protocol repository.
+  final String clientsRoot;
 
   /// Absolute path of the directory the repositories are named relative to.
   final String workspaceRoot;
@@ -124,13 +199,24 @@ class SecretsCiWorkspace {
   /// This package's own directory.
   String get buildPackageDir => p.join(repoRoot, 'tom_secrets_build');
 
-  /// The three repositories by their workspace-relative path, this one first.
+  /// The three repositories by their path relative to [workspaceRoot], this
+  /// one first.
   List<String> get repositories => [
-    p.relative(repoRoot, from: workspaceRoot).replaceAll(r'\', '/'),
-    ...secretsCiSiblingRepositories,
+    relative(repoRoot),
+    relative(managerRoot),
+    relative(clientsRoot),
   ];
 
-  /// The workspace-relative path of the absolute [dir], with `/`.
+  /// The role of [repository] (a member of [repositories]):
+  /// [secretsCiAppsRole], [secretsCiManagerRole] or [secretsCiClientsRole].
+  String roleOf(String repository) {
+    final dir = repositoryDir(repository);
+    if (p.equals(dir, managerRoot)) return secretsCiManagerRole;
+    if (p.equals(dir, clientsRoot)) return secretsCiClientsRole;
+    return secretsCiAppsRole;
+  }
+
+  /// The path relative to [workspaceRoot] of the absolute [dir], with `/`.
   String relative(String dir) =>
       p.relative(dir, from: workspaceRoot).replaceAll(r'\', '/');
 
@@ -245,4 +331,45 @@ class SecretsCiWorkspace {
       _walk(child.path, depth + 1, visit);
     }
   }
+}
+
+/// The locations [secretsCiRepositoriesFile] in [repoRoot]'s
+/// `tom_secrets_build/` names, by role, as absolute paths; empty without the
+/// file. Throws [FormatException] for a file that is not a mapping of the two
+/// roles to paths.
+Map<String, String> secretsCiReadRepositoriesFile(String repoRoot) {
+  final file = File(
+    p.join(repoRoot, 'tom_secrets_build', secretsCiRepositoriesFile),
+  );
+  if (!file.existsSync()) return const {};
+  final doc = loadYaml(file.readAsStringSync());
+  if (doc is! YamlMap) {
+    throw FormatException('${file.path} is not a mapping');
+  }
+  final out = <String, String>{};
+  for (final MapEntry(:key, :value) in doc.entries) {
+    if (!secretsCiWorkspaceLayout.containsKey(key) || value is! String) {
+      throw FormatException(
+        '${file.path}: $key is not one of '
+        '${secretsCiWorkspaceLayout.keys.join(', ')} with a path',
+      );
+    }
+    out[key as String] = p.normalize(
+      p.isAbsolute(value) ? value : p.join(repoRoot, value),
+    );
+  }
+  return out;
+}
+
+String _commonAncestor(List<String> dirs) {
+  var common = p.split(p.normalize(p.absolute(dirs.first)));
+  for (final dir in dirs.skip(1)) {
+    final parts = p.split(p.normalize(p.absolute(dir)));
+    var i = 0;
+    while (i < common.length && i < parts.length && common[i] == parts[i]) {
+      i++;
+    }
+    common = common.sublist(0, i);
+  }
+  return p.joinAll(common);
 }

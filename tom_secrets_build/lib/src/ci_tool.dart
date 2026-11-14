@@ -41,10 +41,17 @@ ToolRunner secretsCiRunner({
 }) => ciToolRunner(
   tool: secretsCiTool,
   console: console,
-  runStages: (requested, out) => secretsCiRun(
-    workspace: workspace ?? SecretsCiWorkspace.find(from: _packageDir()),
-    console: out,
-  ).run(resolveCiStages(requested, stages: secretsCiStages)),
+  runStages: (requested, out) =>
+      secretsCiRun(
+        workspace: workspace ?? SecretsCiWorkspace.find(from: _packageDir()),
+        console: out,
+      ).run(
+        resolveCiStages(
+          requested,
+          stages: secretsCiStages,
+          inAll: (s) => !secretsCiStagesNotInAll.contains(s),
+        ),
+      ),
 );
 
 /// This package's directory, from the running script (`bin/…dart`), so the

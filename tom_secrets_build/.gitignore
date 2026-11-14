@@ -2,5 +2,7 @@
 build/
 ztmp/
 testlog/
-# Application package: its pubspec.lock is tracked (al_the_bear tom_app_locks, todo oqa2).
+# Application package: its pubspec.lock is tracked (one resolution, valid only
+# as a whole; a library keeps its lock ignored).
 !/pubspec.lock
+release/
