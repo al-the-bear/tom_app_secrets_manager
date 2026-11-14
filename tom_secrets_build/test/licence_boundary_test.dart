@@ -7,6 +7,7 @@
 @Tags(['licence-boundary'])
 library;
 
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:tom_secrets_build/tom_secrets_build.dart';
 
@@ -48,6 +49,19 @@ void main() {
         expect(
           workspace.uncheckedForeignManifests(),
           isNot(contains(manifest)),
+        );
+      });
+    }
+  }
+
+  // An npm package with its lock: its own licence and the licences of its
+  // closure (the lock's packages but the dev ones), as installed by npm ci.
+  for (final manifest in workspace.foreignManifests()) {
+    if (workspace.isLockedNpmManifest(manifest)) {
+      test(manifest, () {
+        expect(
+          secretsNpmProblems(workspace.repositoryDir(p.dirname(manifest))),
+          isEmpty,
         );
       });
     }

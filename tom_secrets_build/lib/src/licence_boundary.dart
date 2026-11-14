@@ -163,3 +163,95 @@ List<String> secretsBoundaryProblems(
     ),
   ];
 }
+
+/// The npm package's own licence ([secretsNpmProblems]): BSD-3 (DP-203).
+const String secretsNpmLicence = 'BSD-3-Clause';
+
+/// Every problem of the npm package whose `package.json` is in [packageDir]:
+/// its own licence, and the licences of its closure as `package-lock.json`
+/// records it. The closure is every entry of the lock's `packages` but the
+/// root and those marked `dev` (dev dependencies are not linked, as for the
+/// Dart packages). Each is classified by its licence file as installed under
+/// `node_modules` (`npm ci`), not by the lock's SPDX tag, which a package may
+/// carry without carrying the terms. Empty when it passes.
+List<String> secretsNpmProblems(String packageDir) {
+  final problems = <String>[];
+  final manifest = File(p.join(packageDir, 'package.json'));
+  final Object? package;
+  try {
+    package = jsonDecode(manifest.readAsStringSync());
+  } on FormatException catch (e) {
+    return ['${manifest.path} is not JSON: ${e.message}'];
+  }
+  if (package is! Map || package['name'] is! String) {
+    return ['${manifest.path} declares no name.'];
+  }
+  final name = package['name'] as String;
+  if (package['license'] != secretsNpmLicence) {
+    problems.add(
+      '$name declares licence ${package['license']}, not $secretsNpmLicence.',
+    );
+  }
+  final own = tomLicenceFileOf(Directory(packageDir));
+  if (own == null ||
+      tomClassifyLicence(own.readAsStringSync()) != TomLicence.bsd3) {
+    problems.add('$name has no BSD-3 licence file.');
+  }
+  final lockFile = File(p.join(packageDir, 'package-lock.json'));
+  if (!lockFile.existsSync()) {
+    return [...problems, '$name has no package-lock.json: run npm install.'];
+  }
+  final lock = jsonDecode(lockFile.readAsStringSync());
+  final packages = lock is Map ? lock['packages'] : null;
+  if (packages is! Map) {
+    return [
+      ...problems,
+      '$name: package-lock.json has no packages (lockfileVersion 2 or '
+          'later): run npm install.',
+    ];
+  }
+  for (final MapEntry(key: linked, value: entry) in secretsNpmLinked(
+    packages,
+  ).entries) {
+    final installed = Directory(p.join(packageDir, linked));
+    if (!installed.existsSync()) {
+      problems.add(
+        '$name links $linked, which is not installed: run npm ci in '
+        '$packageDir before the check.',
+      );
+      continue;
+    }
+    final file = tomLicenceFileOf(installed);
+    final licence = file == null
+        ? null
+        : tomClassifyLicence(file.readAsStringSync());
+    if (licence == null || !secretsAdmittedLicences.contains(licence)) {
+      problems.add(
+        '$name links $linked under '
+        '${licence?.name ?? 'no recognised licence'} '
+        '(lock: ${entry['license'] ?? 'none'}).',
+      );
+    }
+  }
+  return problems;
+}
+
+/// The entries of a lock's `packages` an npm package links: all but the root
+/// (`""`) and those marked `dev`, by their location (`node_modules/<name>`).
+Map<String, Map<Object?, Object?>> secretsNpmLinked(
+  Map<Object?, Object?> packages,
+) => {
+  for (final MapEntry(:key, :value) in packages.entries)
+    if (key is String && key != '' && value is Map && value['dev'] != true)
+      key: value,
+};
+
+/// Whether the npm package in [packageDir] links anything by its
+/// `package-lock.json` (so `:licences` installs it before the check).
+bool secretsNpmLinksAnything(String packageDir) {
+  final lock = File(p.join(packageDir, 'package-lock.json'));
+  if (!lock.existsSync()) return false;
+  final decoded = jsonDecode(lock.readAsStringSync());
+  final packages = decoded is Map ? decoded['packages'] : null;
+  return packages is Map && secretsNpmLinked(packages).isNotEmpty;
+}

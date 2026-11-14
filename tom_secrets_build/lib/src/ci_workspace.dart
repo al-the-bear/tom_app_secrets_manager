@@ -40,10 +40,11 @@ const Set<String> secretsCiSkippedDirectories = {
 };
 
 /// Dependency manifests of the languages other than Dart. Each one found is a
-/// closure the licence-boundary check does not read yet, so `:licences`
-/// reports it red rather than passing it unread; the one exception is a Go
-/// module that requires nothing ([secretsGoModuleRequirements]), whose
-/// closure is the Go standard library alone (BSD-3).
+/// closure the licence-boundary check must read, so `:licences` reports it red
+/// rather than passing it unread, except two the check reads: a Go module
+/// that requires nothing ([secretsGoModuleRequirements]), whose closure is the
+/// Go standard library alone (BSD-3), and an npm package with its
+/// `package-lock.json` ([secretsNpmProblems]).
 const Map<String, String> secretsCiForeignManifests = {
   'package.json': 'npm',
   'Cargo.toml': 'Cargo',
@@ -129,6 +130,10 @@ class SecretsCiWorkspace {
     ...secretsCiSiblingRepositories,
   ];
 
+  /// The workspace-relative path of the absolute [dir], with `/`.
+  String relative(String dir) =>
+      p.relative(dir, from: workspaceRoot).replaceAll(r'\', '/');
+
   /// The absolute directory of [repository] (a member of [repositories]).
   String repositoryDir(String repository) =>
       p.normalize(p.join(workspaceRoot, repository));
@@ -185,11 +190,30 @@ class SecretsCiWorkspace {
   }
 
   /// The [foreignManifests] whose closure no check reads: all but the Go
-  /// modules that require nothing beyond the standard library.
+  /// modules that require nothing beyond the standard library and the npm
+  /// packages with a lock ([isLockedNpmManifest]).
   List<String> uncheckedForeignManifests() => [
     for (final manifest in foreignManifests())
-      if (!isStandardLibraryGoModule(manifest)) manifest,
+      if (!isStandardLibraryGoModule(manifest) &&
+          !isLockedNpmManifest(manifest))
+        manifest,
   ];
+
+  /// The absolute directories of the npm packages with a lock
+  /// ([isLockedNpmManifest]), sorted: the stages build, test and check them.
+  List<String> npmPackageDirs() => [
+    for (final manifest in foreignManifests())
+      if (isLockedNpmManifest(manifest))
+        p.normalize(p.join(workspaceRoot, p.dirname(manifest))),
+  ];
+
+  /// Whether the workspace-relative [manifest] is a `package.json` with a
+  /// `package-lock.json` beside it, whose closure [secretsNpmProblems] reads.
+  bool isLockedNpmManifest(String manifest) =>
+      p.basename(manifest) == 'package.json' &&
+      File(
+        p.join(workspaceRoot, p.dirname(manifest), 'package-lock.json'),
+      ).existsSync();
 
   /// Whether the workspace-relative [manifest] is a `go.mod` that requires
   /// nothing ([secretsGoModuleRequirements]).

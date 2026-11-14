@@ -231,4 +231,98 @@ void main() {
       );
     });
   });
+
+  group('secretsNpmProblems', () {
+    late Directory root;
+    const mit =
+        'Permission is hereby granted, free of charge, to any person '
+        'obtaining a copy of this software.';
+
+    /// The npm package `pkg` under [root] with [lock]'s `packages`.
+    String npmPackage(
+      Map<String, Object?> packages, {
+      String licence = 'BSD-3-Clause',
+      String? licenceFile = _bsd3,
+      bool withLock = true,
+    }) {
+      secretsWriteFile(
+        root,
+        'pkg/package.json',
+        jsonEncode({'name': 'pkg', 'license': licence}),
+      );
+      if (licenceFile != null) {
+        secretsWriteFile(root, 'pkg/LICENSE', licenceFile);
+      }
+      if (withLock) {
+        secretsWriteFile(
+          root,
+          'pkg/package-lock.json',
+          jsonEncode({
+            'lockfileVersion': 3,
+            'packages': {
+              '': {'name': 'pkg'},
+              ...packages,
+            },
+          }),
+        );
+      }
+      return p.join(root.path, 'pkg');
+    }
+
+    setUp(() => root = secretsScratchDir('npm'));
+
+    test('dev dependencies are not linked; a permissive closure passes', () {
+      final dir = npmPackage({
+        'node_modules/typescript': {'dev': true, 'license': 'Apache-2.0'},
+        'node_modules/dep': {'license': 'MIT'},
+      });
+      secretsWriteFile(root, 'pkg/node_modules/dep/LICENSE', mit);
+      expect(secretsNpmProblems(dir), isEmpty);
+      expect(secretsNpmLinksAnything(dir), isTrue);
+    });
+
+    test('a package that links nothing needs no install', () {
+      final dir = npmPackage({
+        'node_modules/typescript': {'dev': true},
+      });
+      expect(secretsNpmProblems(dir), isEmpty);
+      expect(secretsNpmLinksAnything(dir), isFalse);
+    });
+
+    test('a GPL, unlicensed or uninstalled dependency is named, by its '
+        'licence file rather than the lock\'s tag', () {
+      final dir = npmPackage({
+        'node_modules/gpl': {'license': 'MIT'},
+        'node_modules/bare': {'license': 'MIT'},
+        'node_modules/missing': {'license': 'MIT'},
+      });
+      secretsWriteFile(root, 'pkg/node_modules/gpl/LICENSE', _gpl);
+      secretsWriteFile(root, 'pkg/node_modules/bare/package.json', '{}');
+      final problems = secretsNpmProblems(dir);
+      expect(problems, hasLength(3));
+      expect(
+        problems,
+        contains(
+          'pkg links node_modules/gpl under no recognised licence '
+          '(lock: MIT).',
+        ),
+      );
+      expect(problems, contains(startsWith('pkg links node_modules/bare ')));
+      expect(problems, contains(contains('run npm ci')));
+    });
+
+    test('its own licence is BSD-3, declared and as a file', () {
+      final dir = npmPackage(const {}, licence: 'MIT', licenceFile: mit);
+      expect(secretsNpmProblems(dir), [
+        'pkg declares licence MIT, not BSD-3-Clause.',
+        'pkg has no BSD-3 licence file.',
+      ]);
+    });
+
+    test('no lock: run npm install', () {
+      final dir = npmPackage(const {}, withLock: false);
+      expect(secretsNpmProblems(dir), [contains('no package-lock.json')]);
+      expect(secretsNpmLinksAnything(dir), isFalse);
+    });
+  });
 }

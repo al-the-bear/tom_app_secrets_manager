@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:tom_build_base/ci.dart';
 
 import 'ci_workspace.dart';
+import 'licence_boundary.dart';
 
 /// The stages, in the order `:all` runs them. The build stages of the desktop
 /// app join when `tom_secrets_app` exists.
@@ -24,11 +25,11 @@ const List<String> secretsCiStages = [
 const Map<String, String> secretsCiStageDescriptions = {
   'analyze':
       'pub get + analyze (infos fatal) in every package of the three '
-      'repositories',
+      'repositories; npm ci + npm run build in every npm package',
   'test':
       'every package suite, strictly serial, one full log per package '
       '(the licence-boundary check is :licences\', the integration suites '
-      ':integration\')',
+      ':integration\'); npm test in every npm package',
   'integration':
       'the integration suites against the real service (test tag '
       'integration): the service built as a binary, started and driven by '
@@ -36,7 +37,8 @@ const Map<String, String> secretsCiStageDescriptions = {
   'licences':
       'pub get in every package, then the licence-boundary check: no '
       'copyleft licence in any closure, KDBX only through tom_secrets_core; '
-      'every non-Dart manifest is red until its closure is checked',
+      'the npm closures from their locks; every other non-Dart manifest is '
+      'red until its closure is checked',
   'conformance':
       'the client conformance suite (tom_secrets_clients/conformance): the '
       'reference table current, the coverage gate, every runner against every '
@@ -96,6 +98,14 @@ class SecretsCiStages {
                 : run.tool(pkg, ['analyze', '--fatal-infos']),
           ], needsFlutter: pkg.isFlutter);
         }
+        for (final dir in workspace.npmPackageDirs()) {
+          final name = workspace.relative(dir);
+          await run.step(stage, name, 'analyze.${_npmLogName(name)}.log', [
+            _npm(['ci'], dir),
+            // tsc with the package's strict settings is its analyzer.
+            _npm(['run', 'build'], dir),
+          ]);
+        }
       case 'test':
         for (final pkg in packages) {
           final noSuite = secretsCiNoSuiteReason(pkg.directory);
@@ -124,6 +134,13 @@ class SecretsCiStages {
             counts: true,
           );
         }
+        for (final dir in workspace.npmPackageDirs()) {
+          final name = workspace.relative(dir);
+          await run.step(stage, name, '${_npmLogName(name)}.log', [
+            _npm(['ci'], dir),
+            _npm(['test'], dir),
+          ]);
+        }
       case 'integration':
         for (final pkg in packages) {
           if (ciTestTagsOf(pkg.directory, const [
@@ -148,8 +165,12 @@ class SecretsCiStages {
             stage,
             manifest,
             'licences.manifest.${manifest.replaceAll('/', '.')}.log',
-            'no closure check reads ${secretsCiForeignManifests[p.basename(manifest)]} '
-                'manifests yet — add one to the licence-boundary check',
+            p.basename(manifest) == 'package.json'
+                ? 'no package-lock.json beside it: the npm closure check '
+                      'reads the lock — run npm install and commit it'
+                : 'no closure check reads '
+                      '${secretsCiForeignManifests[p.basename(manifest)]} '
+                      'manifests yet — add one to the licence-boundary check',
           );
         }
         await run.step(stage, 'pub get', 'licences.pub-get.log', [
@@ -160,6 +181,20 @@ class SecretsCiStages {
           directory: workspace.buildPackageDir,
           isFlutter: false,
         );
+        for (final dir in workspace.npmPackageDirs()) {
+          // The closure is classified by its installed licence files; a
+          // package that links nothing needs no install (and no npm).
+          if (!secretsNpmLinksAnything(dir)) continue;
+          final name = workspace.relative(dir);
+          await run.step(
+            stage,
+            '$name npm ci',
+            'licences.npm-ci.${_npmLogName(name)}.log',
+            [
+              _npm(['ci', '--omit=dev'], dir),
+            ],
+          );
+        }
         await run.step(stage, 'licence boundary', 'licences.boundary.log', [
           run.tool(build, [
             'test',
@@ -195,6 +230,13 @@ class SecretsCiStages {
     }
   }
 }
+
+/// An npm command in [dir] (on Windows through the shell, as every CI
+/// command, which finds `npm.cmd`).
+CiCommand _npm(List<String> args, String dir) =>
+    CiCommand('npm', args, workingDirectory: dir);
+
+String _npmLogName(String name) => 'npm.${name.replaceAll('/', '.')}';
 
 /// Why [packageDir] has no suite to run, or null when it has one: no
 /// `test/` directory, or no `*_test.dart` in it.

@@ -38,6 +38,16 @@ void main() {
       );
       secretsWriteFile(
         root,
+        'app_secrets_manager/tom_secrets_npm/package.json',
+        '{}',
+      );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tom_secrets_npm/package-lock.json',
+        '{}',
+      );
+      secretsWriteFile(
+        root,
         'app_secrets_manager/tools/stdlib_only/go.mod',
         'module example.com/a\n\ngo 1.27\n',
       );
@@ -83,18 +93,30 @@ void main() {
       () {
         expect(workspace.foreignManifests(), [
           'app_secrets_manager/tom_secrets_browser/package.json',
+          'app_secrets_manager/tom_secrets_npm/package.json',
           'app_secrets_manager/tools/stdlib_only/go.mod',
           'app_secrets_manager/tools/with_deps/go.mod',
         ]);
       },
     );
 
-    test('a Go module that requires nothing is checked, one with '
-        'requirements is not', () {
+    test('a Go module that requires nothing and an npm package with its '
+        'lock are checked; one with requirements or no lock is not', () {
       expect(workspace.uncheckedForeignManifests(), [
         'app_secrets_manager/tom_secrets_browser/package.json',
         'app_secrets_manager/tools/with_deps/go.mod',
       ]);
+      expect(workspace.npmPackageDirs(), [
+        p.join(
+          workspace.workspaceRoot,
+          'app_secrets_manager',
+          'tom_secrets_npm',
+        ),
+      ]);
+      expect(
+        workspace.relative(workspace.npmPackageDirs().single),
+        'app_secrets_manager/tom_secrets_npm',
+      );
     });
   });
 
