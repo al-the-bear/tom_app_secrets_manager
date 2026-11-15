@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /// The shell once unlocked (part-app, Navigation): the rail on the left,
-/// the top bar (search over every open vault, the tree/list switch, the sync
+/// the top bar (search over every open vault, the tree/list and the
+/// vault-aware/uniform switches, the sync
 /// status of the GitHub vaults, the pending-approvals and key-expiry badges,
 /// the lock button) and the keyboard shortcuts.
 library;
@@ -18,14 +19,22 @@ import 'package:tom_reusable_ui/tom_reusable_ui.dart';
 
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
-import 'status_view.dart';
 import '../widgets/style.dart';
+import 'conflicts_view.dart';
+import 'environments_view.dart';
+import 'status_view.dart';
 import 'vault_browser.dart';
 
 /// The rail's destinations.
 enum TomSecretsDestination {
   /// The vault browser.
   vaults,
+
+  /// The same keys across the environments' files.
+  environments,
+
+  /// The unsettled merge conflicts.
+  conflicts,
 
   /// The Status screen.
   status,
@@ -85,6 +94,7 @@ class _MainShellState extends State<TomSecretsMainShell> {
     final c = context.watch<TomSecretsServiceConnection>();
     final session = context.watch<TomSecretsSession>();
     if (_query.text != session.query) _query.text = session.query;
+    final conflicts = {for (final r in session.conflictRows) r.ref}.length;
     final github = c.stores.values.where(
       (s) => s.source == 'github' || s.source == 'cache',
     );
@@ -113,13 +123,28 @@ class _MainShellState extends State<TomSecretsMainShell> {
                 onDestinationSelected: (i) => setState(
                   () => _destination = TomSecretsDestination.values[i],
                 ),
-                destinations: const [
-                  NavigationRailDestination(
+                destinations: [
+                  const NavigationRailDestination(
                     icon: Icon(Icons.inventory_2_outlined),
                     selectedIcon: Icon(Icons.inventory_2_rounded),
                     label: Text('Vaults'),
                   ),
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.view_column_outlined),
+                    selectedIcon: Icon(Icons.view_column_rounded),
+                    label: Text('Environments'),
+                  ),
                   NavigationRailDestination(
+                    icon: Badge.count(
+                      key: const Key('tsm-conflicts-badge'),
+                      count: conflicts,
+                      isLabelVisible: conflicts > 0,
+                      child: const Icon(Icons.call_split_outlined),
+                    ),
+                    selectedIcon: const Icon(Icons.call_split_rounded),
+                    label: const Text('Conflicts'),
+                  ),
+                  const NavigationRailDestination(
                     icon: Icon(Icons.monitor_heart_outlined),
                     selectedIcon: Icon(Icons.monitor_heart),
                     label: Text('Status'),
@@ -179,6 +204,30 @@ class _MainShellState extends State<TomSecretsMainShell> {
                             onSelectionChanged: (s) =>
                                 session.listView = s.single,
                           ),
+                          const SizedBox(width: 8),
+                          SegmentedButton<bool>(
+                            key: const Key('tsm-vaults-switch'),
+                            segments: const [
+                              ButtonSegment(
+                                value: true,
+                                icon: Icon(Icons.dns_outlined),
+                                label: Text('Vault-aware'),
+                                tooltip:
+                                    'System vaults show keys, overlays, '
+                                    'bindings and readers; personal ones '
+                                    'logins, URLs and TOTP',
+                              ),
+                              ButtonSegment(
+                                value: false,
+                                icon: Icon(Icons.table_rows_outlined),
+                                label: Text('Uniform'),
+                                tooltip: 'One column set for every vault',
+                              ),
+                            ],
+                            selected: {session.vaultAware},
+                            onSelectionChanged: (s) =>
+                                session.vaultAware = s.single,
+                          ),
                           const SizedBox(width: 12),
                           for (final s in github)
                             Padding(
@@ -226,6 +275,12 @@ class _MainShellState extends State<TomSecretsMainShell> {
                         TomSecretsDestination.vaults => TomSecretsVaultBrowser(
                           clipboard: widget.clipboard,
                         ),
+                        TomSecretsDestination.environments =>
+                          TomSecretsEnvironmentsView(
+                            clipboard: widget.clipboard,
+                          ),
+                        TomSecretsDestination.conflicts =>
+                          const TomSecretsConflictsView(),
                         TomSecretsDestination.status =>
                           const TomSecretsStatusView(),
                       },

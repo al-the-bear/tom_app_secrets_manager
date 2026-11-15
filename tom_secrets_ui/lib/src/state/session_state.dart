@@ -14,6 +14,8 @@ import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
+import 'conflicts.dart';
+import 'overlays.dart';
 import 'service_connection.dart';
 
 /// A vault open in the app's memory.
@@ -123,8 +125,7 @@ final class TomSecretsEntryView {
       entry.times.expires.get() == true ? entry.times.expiryTime.get() : null;
 
   /// Whether it carries an unsettled conflict record (`tsm.conflict`).
-  bool get hasConflict =>
-      entry.stringEntries.any((e) => e.key.key.startsWith('tsm.conflict'));
+  bool get hasConflict => tomSecretsConflictsOf(entry).isNotEmpty;
 
   /// The text the search matches: title, user name, URL, key, tags, notes
   /// and the group path; never a protected value.
@@ -153,6 +154,31 @@ bool tomSecretsIsOverlayGroup(String name) => name.startsWith('@');
 abstract final class TomSecretsPreferenceKeys {
   /// `list` or `tree` (BP-24).
   static const view = 'view.layout';
+
+  /// `aware` or `uniform` (BP-25).
+  static const vaults = 'view.vaults';
+}
+
+/// A file opened for editing only, beside the served vaults (part-app,
+/// Environments, BP-15): another environment's file this machine does not
+/// serve, picked by the user and saved back where the user chooses.
+final class TomSecretsExtraFile {
+  TomSecretsExtraFile._(this.name, this.file, this.outerKey, this.cipher);
+
+  /// Its file name, which also names its column.
+  final String name;
+
+  /// The opened file.
+  final KdbxFile file;
+
+  /// The outer key of a `.tsmx` file (base64), or null.
+  final String? outerKey;
+
+  /// The outer cipher of a `.tsmx` file, kept by a save, or null.
+  final TomSecretsOuterCipher? cipher;
+
+  /// Whether it was changed since it was opened or saved.
+  bool dirty = false;
 }
 
 /// A vault that could not be opened for editing, with why.
@@ -173,6 +199,8 @@ class TomSecretsSession extends ChangeNotifier {
   /// [preferences].
   TomSecretsSession(this.connection, this.preferences) {
     _listView = preferences.read(TomSecretsPreferenceKeys.view) == 'list';
+    _vaultAware =
+        preferences.read(TomSecretsPreferenceKeys.vaults) != 'uniform';
     _events = connection.events.listen(_onEvent);
     connection.addListener(_onConnection);
   }
@@ -189,6 +217,9 @@ class TomSecretsSession extends ChangeNotifier {
   List<TomSecretsEntryView> _index = const [];
   bool _loading = false;
   bool _listView = false;
+  bool _vaultAware = true;
+  TomSecretsResolutionModel? _resolution;
+  final Map<String, TomSecretsExtraFile> _extra = {};
   String _query = '';
   String? _filterTag;
   TomSecretsEntryType? _filterType;
@@ -221,6 +252,170 @@ class TomSecretsSession extends ChangeNotifier {
     );
     notifyListeners();
   }
+
+  /// Whether the vault-aware view (else the uniform one) is shown (BP-25):
+  /// a system vault's entries show their key, overlays, bindings and
+  /// readers; a personal or shared vault's their logins, URLs and TOTP.
+  bool get vaultAware => _vaultAware;
+  set vaultAware(bool value) {
+    _vaultAware = value;
+    unawaited(
+      preferences.write(
+        TomSecretsPreferenceKeys.vaults,
+        value ? 'aware' : 'uniform',
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// The open vaults as the resolver sees them, built again after every
+  /// change.
+  TomSecretsResolutionModel get resolution =>
+      _resolution ??= TomSecretsResolutionModel.build([
+        for (final v in _vaults.values) (store: v.store, file: v.file),
+      ]);
+
+  /// The kind of [store]'s vault (its metadata's `tsm.kind`).
+  TomSecretsVaultKind kindOf(String store) =>
+      resolution.store(store)?.metadata.kind ?? TomSecretsVaultKind.personal;
+
+  /// The indexed form of [ref] (its path, bindings and key), or null.
+  TomSecretsIndexedEntry? indexedOf(TomSecretsEntryRef ref) =>
+      resolution.indexed(ref.store, ref.uuid);
+
+  /// Every unsettled conflict of the open vaults, one row per attribute.
+  List<TomSecretsConflictRow> get conflictRows => [
+    for (final v in _vaults.values) ...tomSecretsConflictRows(v.store, v.file),
+  ];
+
+  /// Writes [resolution] of [row] into its entry, takes the attribute off
+  /// the conflict record (the record goes with its last one) and saves.
+  Future<void> settleConflict(
+    TomSecretsConflictRow row,
+    TomSecretsConflictValue? resolution,
+  ) => updateEntry(row.ref, (entry) {
+    if (row.attribute != 'group') {
+      tomSecretsWriteAttribute(entry, row.attribute, resolution);
+    }
+    tomSecretsSettleAttribute(entry, row.attribute);
+  });
+
+  /// A new overlay of [base] bound to [dimension] = [value]: a copy of the
+  /// shared entry at `@<dimension>:<value>/<groups>/<title>` (the root
+  /// placement, part-structure), saved; answers it.
+  Future<TomSecretsEntryRef> createOverlay(
+    TomSecretsEntryRef base,
+    String dimension,
+    String value,
+  ) async {
+    final indexed = indexedOf(base);
+    final shared = entryOf(base);
+    if (indexed == null || shared == null) {
+      throw StateError('$base is not open');
+    }
+    final file = _vaults[base.store]!.file;
+    var group = file.body.rootGroup;
+    for (final name in [
+      '$tomSecretsOverlayPrefix$dimension:$value',
+      ...indexed.path.sublist(0, indexed.path.length - 1),
+    ]) {
+      group =
+          group.groups.where((g) => g.name.get() == name).firstOrNull ??
+          file.createGroup(parent: group, name: name);
+    }
+    final overlay = KdbxEntry.create(file, group);
+    for (final MapEntry(:key, :value) in shared.stringEntries) {
+      overlay.setString(key, switch (value) {
+        final ProtectedValue p => ProtectedValue.fromString(p.getText()),
+        _ => value,
+      });
+    }
+    for (final MapEntry(:key, :value) in shared.binaryEntries) {
+      overlay.createBinary(
+        isProtected: value.isProtected,
+        name: key.key,
+        bytes: value.value,
+      );
+    }
+    overlay.tags.set(shared.tags.get());
+    overlay.times.expires.set(shared.times.expires.get());
+    if (shared.times.expiryTime.get() case final at?) {
+      overlay.times.expiryTime.set(at);
+    }
+    group.addEntry(overlay);
+    await save(base.store);
+    return TomSecretsEntryRef(base.store, overlay.uuid);
+  }
+
+  /// Sets [field] of [ref] to [text] (kept protected when it was, or when
+  /// it is the password) and saves.
+  Future<void> setField(TomSecretsEntryRef ref, String field, String text) =>
+      updateEntry(ref, (entry) {
+        final key = KdbxKey(field);
+        final protected =
+            entry.getString(key) is ProtectedValue ||
+            key == KdbxKeyCommon.PASSWORD;
+        entry.setString(
+          key,
+          protected ? ProtectedValue.fromString(text) : PlainValue(text),
+        );
+      });
+
+  /// The files opened for editing only (Environments), by name.
+  List<TomSecretsExtraFile> get extraFiles => _extra.values.toList();
+
+  /// Opens [bytes], a file named [name] this machine does not serve, with
+  /// [credentials] (and the [outerKey] of a `.tsmx` file), for editing only.
+  /// Throws `KdbxInvalidKeyException` on wrong keys.
+  Future<TomSecretsExtraFile> openExtraFile(
+    String name,
+    Uint8List bytes,
+    Credentials credentials, {
+    String? outerKey,
+  }) async {
+    final file = await tomSecretsDecodeStored(
+      _extraLocator(name),
+      bytes,
+      credentials,
+      outerKey: outerKey,
+    );
+    final extra = TomSecretsExtraFile._(
+      name,
+      file,
+      outerKey,
+      name.endsWith(tomSecretsOuterSuffix)
+          ? tomSecretsOuterCipherOf(bytes)
+          : null,
+    );
+    _extra[name] = extra;
+    notifyListeners();
+    return extra;
+  }
+
+  /// The bytes the opened file [name] saves to, with its own keys.
+  Future<Uint8List> encodeExtraFile(String name) {
+    final extra = _extra[name]!;
+    return tomSecretsEncodeStored(
+      _extraLocator(extra.name),
+      extra.file,
+      outerKey: extra.outerKey,
+      cipher: extra.cipher ?? TomSecretsOuterCipher.xchacha20Poly1305,
+    );
+  }
+
+  /// A locator for a picked file: only its name matters (the outer layer
+  /// of a `.tsmx` file), the bytes come from the user.
+  static String _extraLocator(String name) =>
+      'file:/${name.split(RegExp(r'[/\\]')).last}';
+
+  /// Closes the opened file [name] without saving.
+  void closeExtraFile(String name) {
+    _extra.remove(name);
+    notifyListeners();
+  }
+
+  /// Tells the listeners an opened file changed in memory.
+  void extraFileChanged() => notifyListeners();
 
   /// The search over every open vault.
   String get query => _query;
@@ -587,6 +782,7 @@ class TomSecretsSession extends ChangeNotifier {
   }
 
   void _reindex() {
+    _resolution = null;
     final views = <TomSecretsEntryView>[];
     for (final vault in _vaults.values) {
       final root = vault.file.body.rootGroup;
@@ -634,6 +830,8 @@ class TomSecretsSession extends ChangeNotifier {
   void clear() {
     _vaults.clear();
     _failures.clear();
+    _extra.clear();
+    _resolution = null;
     _index = const [];
     _selectedEntry = null;
     _selectedGroup = null;

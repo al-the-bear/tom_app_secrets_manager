@@ -29,6 +29,7 @@ import '../widgets/protected_field.dart';
 import '../widgets/style.dart';
 import '../widgets/totp_view.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
+import 'overlay_editor.dart' show tomSecretsShowOverlayEditor;
 
 /// The fields the editor shows in their own places; every other non-reserved
 /// string field is a custom field.
@@ -801,14 +802,33 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                         ),
                 ),
               ),
-              if (view.overlays > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    '${view.overlays} overlay${view.overlays == 1 ? '' : 's'}: '
-                    'other hosts, platforms or environments get their own value.',
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      view.overlays == 0
+                          ? 'No overlays: every host, platform and '
+                                'environment gets this value.'
+                          : '${view.overlays} overlay'
+                                '${view.overlays == 1 ? '' : 's'}: other '
+                                'hosts, platforms or environments get their '
+                                'own value.',
+                    ),
                   ),
-                ),
+                  TextButton.icon(
+                    key: const Key('tsm-open-overlays'),
+                    icon: const Icon(Icons.layers_rounded, size: 18),
+                    label: const Text('Overlays…'),
+                    onPressed: () => unawaited(
+                      tomSecretsShowOverlayEditor(
+                        context,
+                        widget.ref,
+                        clipboard: widget.clipboard,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
           Padding(

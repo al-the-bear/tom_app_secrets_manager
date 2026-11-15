@@ -296,3 +296,141 @@ Future<List<FakeStore>> demoStores() async {
     FakeStore('team', 'team-demo-pw', team),
   ];
 }
+
+/// The configuration of the system demo: host, platform, env (default
+/// `dev`); the files `primary` (dev), `prod` and `staging` (not served).
+const systemConfig = '''
+dimensions:
+  - name: host
+  - name: platform
+  - name: env
+    default: dev
+stores:
+  dev:
+    - name: primary
+      path: /demo/primary.kdbx
+  prod:
+    - name: prod
+      path: /demo/prod.kdbx
+  staging:
+    - name: staging
+      path: /demo/staging.kdbx
+''';
+
+/// The demo grants' last use.
+final demoLastUsed = DateTime.utc(2026, 11, 14, 9);
+
+/// The system demo: `primary` (kind system, the configuration, grants) with
+/// `Api/Stripe` (key `stripe.key`, an overlay for bomber), `Api/Twin` (two
+/// overlays for bomber: ambiguous) and `Box` (a conflict on Password and
+/// Notes, the older side in its history); `prod` (bound `env:prod`) with
+/// `Stripe` (key `stripe.key`). The staging file is returned beside them,
+/// not served. Demo data only.
+Future<({List<FakeStore> stores, Uint8List staging})> systemStores() async {
+  final primary = await demoVault('primary', demoPassword, (f) {
+    TomSecretsMetadata(
+      store: 'primary',
+      kind: TomSecretsVaultKind.system,
+      configYaml: systemConfig,
+    ).writeTo(f);
+    addEntry(
+      f,
+      'Api/Stripe',
+      password: 'demo-stripe-dev',
+      fields: {'tsm.key': 'stripe.key', 'tsm.type': 'api-token'},
+    );
+    addEntry(f, '@host:bomber/Api/Stripe', password: 'demo-stripe-bomber');
+    addEntry(f, 'Api/Twin', password: 'demo-twin');
+    addEntry(f, '@host:bomber/Api/Twin', password: 'demo-twin-a');
+    addEntry(f, '@host:bomber/Api/Twin', password: 'demo-twin-b');
+    addEntry(f, 'Box', password: 'pw-older', fields: {'Notes': 'n-older'});
+    final grants = TomSecretsGrantsGroup(f);
+    grants.write('bomber', TomSecretsSignedKind.grant, {
+      'id': 'g-stripe',
+      'host': 'bomber',
+      'subject': 'exe /usr/bin/demo-app',
+      'secret': 'stripe.key',
+      'decision': 'allow',
+      'created': '2026-11-01T00:00:00Z',
+      'lastUsed': demoLastUsed.toIso8601String(),
+    });
+    grants.write('bomber', TomSecretsSignedKind.grant, {
+      'id': 'g-never',
+      'host': 'bomber',
+      'subject': 'exe /usr/bin/other',
+      'secret': 'all',
+      'decision': 'never',
+      'created': '2026-11-01T00:00:00Z',
+    });
+    grants.write('ci', TomSecretsSignedKind.grant, {
+      'id': 'g-revoked',
+      'host': 'ci',
+      'subject': 'exe /usr/bin/ci',
+      'secret': 'all',
+      'decision': 'allow',
+      'created': '2026-11-01T00:00:00Z',
+    });
+    grants.write('ci', TomSecretsSignedKind.revocation, {
+      'host': 'ci',
+      'grantId': 'g-revoked',
+      'revoked': '2026-11-02T00:00:00Z',
+    });
+  });
+  final prod = await demoVault('prod', 'prod-demo-pw', (f) {
+    TomSecretsMetadata(
+      store: 'prod',
+      kind: TomSecretsVaultKind.system,
+      binding: const {'env': 'prod'},
+    ).writeTo(f);
+    addEntry(
+      f,
+      'Stripe',
+      password: 'demo-stripe-prod',
+      fields: {'tsm.key': 'stripe.key'},
+    );
+  });
+  final staging = await demoVault('staging', 'staging-demo-pw', (f) {
+    TomSecretsMetadata(
+      store: 'staging',
+      kind: TomSecretsVaultKind.system,
+      binding: const {'env': 'staging'},
+    ).writeTo(f);
+    addEntry(
+      f,
+      'Stripe',
+      password: 'demo-stripe-staging',
+      fields: {'tsm.key': 'stripe.key'},
+    );
+  });
+  return (
+    stores: [
+      FakeStore('primary', demoPassword, await _withConflict(primary)),
+      FakeStore('prod', 'prod-demo-pw', prod),
+    ],
+    staging: staging,
+  );
+}
+
+/// [stored] with `Box` changed (Password, Notes) and a conflict record
+/// naming the older version, as a merge leaves it.
+Future<Uint8List> _withConflict(Uint8List stored) async {
+  final credentials = tomSecretsVaultCredentials(password: demoPassword);
+  final edited = await KdbxFormat().read(stored, credentials);
+  KdbxEntry box(KdbxFile f) =>
+      f.body.rootGroup.getAllEntries().firstWhere((e) => e.label == 'Box');
+  box(edited)
+    ..setString(KdbxKeyCommon.PASSWORD, ProtectedValue.fromString('pw-newer'))
+    ..setString(KdbxKeyCommon.NOTES, PlainValue('n-newer'));
+  // Read back, so the record names the history version's stored time.
+  final file = await KdbxFormat().read(await edited.save(), credentials);
+  final entry = box(file);
+  entry.customData[tomSecretsConflictKey] = jsonEncode([
+    TomSecretsEntryConflict(
+      entryUuid: entry.uuid.uuid,
+      fields: const ['field:Notes', 'field:Password'],
+      loserModified: entry.history.last.times.lastModificationTime.get()!,
+      at: DateTime.utc(2026, 11, 13),
+    ).toJson(),
+  ]);
+  return file.save();
+}

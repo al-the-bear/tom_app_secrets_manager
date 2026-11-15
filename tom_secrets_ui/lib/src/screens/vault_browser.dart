@@ -3,7 +3,8 @@
 
 /// The vault browser (part-app, Screens › Vault browser, BP-24): the tree
 /// view (group tree, entry list, details) and the list view (one list with
-/// vault, type and tag filters, details beside it). Overlay groups
+/// vault, type and tag filters, details beside it), each in the vault-aware
+/// or the uniform view (BP-25, [tomSecretsEntryDetails]). Overlay groups
 /// (`@host:…`) are not folders: they show as the entry's overlays. Multi-
 /// select moves, tags and deletes (to the recycle bin); groups are created,
 /// renamed and moved in the tree.
@@ -20,6 +21,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
 import '../state/service_connection.dart';
+import '../state/overlays.dart' show TomSecretsGrantUse;
 import '../state/session_state.dart';
 import '../widgets/style.dart';
 import 'entry_editor.dart';
@@ -152,7 +154,11 @@ Future<_GroupChoice?> _pickGroup(
   );
 }
 
-Future<void> _guarded(BuildContext context, Future<void> Function() f) async {
+/// Runs [f], showing a refused change (an admin error) as a notice.
+Future<void> tomSecretsGuarded(
+  BuildContext context,
+  Future<void> Function() f,
+) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   try {
     await f();
@@ -261,7 +267,7 @@ class _VaultHeader extends StatelessWidget {
           if (v != 'group') return;
           final name = await _ask(context, title: 'New group', label: 'Name');
           if (name == null || name.isEmpty || !context.mounted) return;
-          await _guarded(
+          await tomSecretsGuarded(
             context,
             () => session.createGroup(vault.store, null, name),
           );
@@ -320,7 +326,7 @@ class _GroupRow extends StatelessWidget {
                     if (name == null || name.isEmpty || !context.mounted) {
                       return;
                     }
-                    await _guarded(
+                    await tomSecretsGuarded(
                       context,
                       () => session.createGroup(store, group.uuid, name),
                     );
@@ -334,7 +340,7 @@ class _GroupRow extends StatelessWidget {
                     if (name == null || name.isEmpty || !context.mounted) {
                       return;
                     }
-                    await _guarded(
+                    await tomSecretsGuarded(
                       context,
                       () => session.renameGroup(store, group.uuid, name),
                     );
@@ -345,7 +351,7 @@ class _GroupRow extends StatelessWidget {
                       only: store,
                     );
                     if (target == null || !context.mounted) return;
-                    await _guarded(
+                    await tomSecretsGuarded(
                       context,
                       () => session.moveGroup(store, group.uuid, target.group),
                     );
@@ -428,6 +434,39 @@ String tomSecretsTypeName(TomSecretsEntryType type) => switch (type) {
   TomSecretsEntryType.login => 'Login',
 };
 
+/// The columns an entry's line shows after its path, by the vault-aware or
+/// uniform view (BP-25): in the vault-aware view a system vault's entry shows
+/// its key, the dimensions it is bound in and which clients read it and
+/// when, a personal or shared vault's entry its login and URL; the uniform
+/// view shows every one of them the entry has.
+List<String> tomSecretsEntryDetails(
+  TomSecretsSession session,
+  TomSecretsEntryView view,
+) {
+  final system = session.kindOf(view.ref.store) == TomSecretsVaultKind.system;
+  final login = [
+    if (view.userName.isNotEmpty) view.userName,
+    if (view.url.isNotEmpty) view.url,
+  ];
+  if (session.vaultAware && !system) {
+    return login.isEmpty && view.key != null ? [view.key!] : login;
+  }
+  final indexed = session.indexedOf(view.ref);
+  final readers = indexed == null
+      ? const <TomSecretsGrantUse>[]
+      : session.resolution.readersOf(indexed);
+  final last = readers.map((r) => r.lastUsed).nonNulls.firstOrNull;
+  final machine = [
+    if (view.key case final key?) key else if (session.vaultAware) '(no key)',
+    if (indexed != null && indexed.bindings.isNotEmpty)
+      'bound ${[for (final MapEntry(:key, :value) in indexed.bindings.entries) '$key:$value'].join(',')}',
+    if (readers.isNotEmpty)
+      '${readers.length} client${readers.length == 1 ? '' : 's'}'
+          '${last == null ? ', not used yet' : ', last ${tomSecretsAge(last)}'}',
+  ];
+  return session.vaultAware ? machine : [...login, ...machine];
+}
+
 /// How long ago [time] was, for the user.
 String tomSecretsAge(DateTime time, {DateTime? now}) {
   final d = (now ?? DateTime.now()).difference(time);
@@ -449,7 +488,7 @@ Future<void> tomSecretsNewEntry(
   if (session.readOnlyReason(store) != null) return;
   final title = await _ask(context, title: 'New entry', label: 'Title');
   if (title == null || title.isEmpty || !context.mounted) return;
-  await _guarded(
+  await tomSecretsGuarded(
     context,
     () => session.createEntry(
       store,
@@ -512,7 +551,7 @@ class _EntryList extends StatelessWidget {
                       onPressed: () async {
                         final target = await _pickGroup(context, 'Move into');
                         if (target == null || !context.mounted) return;
-                        await _guarded(
+                        await tomSecretsGuarded(
                           context,
                           () => session.moveEntries(
                             marked,
@@ -535,7 +574,7 @@ class _EntryList extends StatelessWidget {
                         if (tag == null || tag.isEmpty || !context.mounted) {
                           return;
                         }
-                        await _guarded(
+                        await tomSecretsGuarded(
                           context,
                           () => session.tagEntries(marked, tag),
                         );
@@ -545,7 +584,7 @@ class _EntryList extends StatelessWidget {
                       key: const Key('tsm-delete-marked'),
                       tooltip: 'Move to the recycle bin',
                       icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _guarded(
+                      onPressed: () => tomSecretsGuarded(
                         context,
                         () => session.deleteEntries(marked),
                       ),
@@ -594,11 +633,12 @@ class _EntryRow extends StatelessWidget {
     final session = context.read<TomSecretsSession>();
     final expires = view.expires;
     final now = DateTime.now();
-    final second = switch (view.type) {
-      TomSecretsEntryType.apiToken => view.key ?? view.url,
-      TomSecretsEntryType.note => view.key ?? '',
-      _ => view.userName.isNotEmpty ? view.userName : (view.key ?? view.url),
-    };
+    final details = tomSecretsEntryDetails(session, view);
+    final hasTotp = TomSecretsTotp.fromEntry(view.entry) != null;
+    final showTotp =
+        hasTotp &&
+        (!session.vaultAware ||
+            session.kindOf(view.ref.store) != TomSecretsVaultKind.system);
     return ListTile(
       key: Key('tsm-entry-${view.ref}'),
       dense: true,
@@ -636,9 +676,10 @@ class _EntryRow extends StatelessWidget {
         ],
       ),
       subtitle: Text(
+        key: Key('tsm-entry-details-${view.ref}'),
         [
           if (showPath) [view.ref.store, ...view.groups].join(' / '),
-          if (second.isNotEmpty) second,
+          ...details,
         ].join(' · '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -657,6 +698,15 @@ class _EntryRow extends StatelessWidget {
                   size: 18,
                   color: Theme.of(context).colorScheme.tertiary,
                 ),
+              ),
+            ),
+          if (showTotp)
+            Tooltip(
+              message: 'one-time code (TOTP)',
+              child: Icon(
+                Icons.pin_outlined,
+                key: Key('tsm-entry-totp-${view.ref}'),
+                size: 18,
               ),
             ),
           if (expires != null)
