@@ -26,6 +26,7 @@ import '../state/session_state.dart';
 import '../widgets/style.dart';
 import 'entry_editor.dart';
 import 'gate_screens.dart';
+import 'rewritten_question.dart';
 
 /// The browser in the view the session has chosen.
 class TomSecretsVaultBrowser extends StatelessWidget {
@@ -240,6 +241,7 @@ class _VaultHeader extends StatelessWidget {
     final selected =
         session.selectedStore == vault.store && session.selectedGroup == null;
     final offline = state?.isOffline ?? false;
+    final rewritten = state?.rewrittenHead != null;
     return ListTile(
       key: Key('tsm-vault-${vault.store}'),
       selected: selected,
@@ -254,7 +256,13 @@ class _VaultHeader extends StatelessWidget {
         vault.store,
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
-      subtitle: offline
+      subtitle: rewritten
+          ? Text(
+              'the branch on GitHub was rewritten: choose how to go on',
+              key: Key('tsm-rewritten-${vault.store}'),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            )
+          : offline
           ? Text(
               'offline copy: ${state!.offlineReason}'
               '${state!.fetchedAt == null ? '' : ', from ${tomSecretsAge(state!.fetchedAt!)}'}'
@@ -268,6 +276,10 @@ class _VaultHeader extends StatelessWidget {
       onTap: () => session.selectGroup(vault.store, null),
       trailing: PopupMenuButton<String>(
         onSelected: (v) async {
+          if (v == 'rewritten') {
+            await tomSecretsShowRewrittenQuestion(context, vault.store);
+            return;
+          }
           if (v != 'group') return;
           final name = await _ask(context, title: 'New group', label: 'Name');
           if (name == null || name.isEmpty || !context.mounted) return;
@@ -276,8 +288,13 @@ class _VaultHeader extends StatelessWidget {
             () => session.createGroup(vault.store, null, name),
           );
         },
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'group', child: Text('New group')),
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'group', child: Text('New group')),
+          if (rewritten)
+            const PopupMenuItem(
+              value: 'rewritten',
+              child: Text('The rewritten branch…'),
+            ),
         ],
       ),
     );

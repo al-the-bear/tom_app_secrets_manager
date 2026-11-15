@@ -11,6 +11,9 @@
   step), the vault-aware and uniform views, the Environments screen (the
   keys across the files, the vaults this machine does not serve opened for
   editing through the service) and the Conflicts screen over `TomMergeView`.
+- The force-push question: a vault whose branch on GitHub was rewritten
+  without a compaction is named on its header and the Status screen, and a
+  dialog takes the file on GitHub or merges this copy over it.
 - Import, keys and reminders: the Import screen (1Password 1PUX/CSV,
   Enpass JSON/CSV: mapping, preview, import, report, deleting the export),
   the Keys screen (every key with its date, a vault's keys' due date, the

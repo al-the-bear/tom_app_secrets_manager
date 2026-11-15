@@ -59,6 +59,7 @@ final class TomSecretsStoreState {
     this.source,
     this.fetchedAt,
     this.notPushed = 0,
+    this.rewrittenHead,
   });
 
   /// Read from a `statusReport` store or a `store_state` event.
@@ -70,6 +71,7 @@ final class TomSecretsStoreState {
       source: m['source'] as String?,
       fetchedAt: fetched is String ? DateTime.tryParse(fetched) : null,
       notPushed: m['notPushed'] is int ? m['notPushed']! as int : 0,
+      rewrittenHead: (m['rewritten'] as Map?)?['head'] as String?,
     );
   }
 
@@ -87,6 +89,11 @@ final class TomSecretsStoreState {
 
   /// Its changes not yet written to GitHub.
   final int notPushed;
+
+  /// The head of its branch on GitHub, rewritten without a compaction (a
+  /// force push), while the service waits for the user's answer
+  /// (`history.resolve`, protocol.md 6.4); null otherwise.
+  final String? rewrittenHead;
 
   /// Whether it is served from its offline copy.
   bool get isOffline =>
@@ -277,6 +284,20 @@ class TomSecretsServiceConnection extends ChangeNotifier {
 
   /// Fetches every store now.
   Future<void> reload() => request('reload');
+
+  /// Answers the rewritten branch of [store] (`history.resolve`): with
+  /// [takeRemote] the file on GitHub is taken as it is and the refused
+  /// change dropped, otherwise this copy is merged over it and committed on
+  /// top. Answers how many conflict records the merge wrote. Throws
+  /// `TomSecretsAdminException`.
+  Future<int> resolveRewritten(String store, {required bool takeRemote}) async {
+    final answer = await request('history.resolve', {
+      'store': store,
+      'take': takeRemote ? 'remote' : 'merge',
+    });
+    await refreshStatus();
+    return answer['conflicts'] is int ? answer['conflicts']! as int : 0;
+  }
 
   /// Reads `status` again.
   Future<void> refreshStatus() async {

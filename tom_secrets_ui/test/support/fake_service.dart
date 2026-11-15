@@ -38,6 +38,17 @@ final class FakeStore {
   String revision;
   String state;
 
+  /// The file on GitHub after a force push ([FakeService.forcePush]), and
+  /// the rewritten head; a save meets it.
+  Uint8List? remote;
+  String? forcedHead;
+
+  /// The rewritten head reported while the service waits for an answer.
+  String? rewrittenHead;
+
+  /// The refused edit the service holds meanwhile.
+  Uint8List? held;
+
   String get location => 'file:/demo/$name.kdbx';
 }
 
@@ -154,6 +165,24 @@ final class FakeService implements TomSecretsAdminChannel {
   /// The keys with a date (`keys`), as the service would compute them.
   List<Map<String, Object?>> keys = [];
 
+  /// The answers `history.resolve` got.
+  final List<Map<String, Object?>> resolutions = [];
+
+  /// GitHub's branch of [name] is force-pushed to [head] with [file]: the
+  /// next save is refused as rewritten.
+  void forcePush(String name, Uint8List file, String head) => store(name)
+    ..remote = file
+    ..forcedHead = head;
+
+  Map<String, Object?> _storeState(FakeStore s) => {
+    'op': 'store_state',
+    'store': s.name,
+    'state': s.state,
+    'source': 'github',
+    'notPushed': 0,
+    if (s.rewrittenHead != null) 'rewritten': {'head': s.rewrittenHead},
+  };
+
   /// How many times `reload` was asked for.
   int reloads = 0;
 
@@ -238,6 +267,8 @@ final class FakeService implements TomSecretsAdminChannel {
                   'source': s.state == 'offline' ? 'cache' : 'file',
                   'fetchedAt': '2026-11-14T08:00:00Z',
                   'notPushed': 0,
+                  if (s.rewrittenHead != null)
+                    'rewritten': {'head': s.rewrittenHead},
                 },
           ],
           'admins': 1,
@@ -309,6 +340,18 @@ final class FakeService implements TomSecretsAdminChannel {
       case 'save':
         _unlocked();
         final s = store(args['store']! as String);
+        if (s.forcedHead != null) {
+          // The branch was rewritten without a compaction: refused, held,
+          // reported (protocol.md 6.4).
+          s.rewrittenHead = s.forcedHead;
+          s.held = base64.decode(args['bytes']! as String);
+          emit(_storeState(s));
+          throw TomSecretsAdminException(
+            'denied',
+            'the branch was rewritten without a compaction',
+            details: {'reason': 'history_rewritten'},
+          );
+        }
         if (s.state == 'offline') {
           throw TomSecretsAdminException('offline', 'served from the cache');
         }
@@ -378,6 +421,24 @@ final class FakeService implements TomSecretsAdminChannel {
         _unlocked();
         cliApprovals = args['on']! as bool;
         return {'op': 'ok'};
+      case 'history.resolve':
+        _unlocked();
+        final s = store(args['store']! as String);
+        if (s.rewrittenHead == null) {
+          throw TomSecretsAdminException('not_found', 'nothing waits');
+        }
+        resolutions.add(args);
+        // The fake does not merge: a merge keeps the held edit.
+        s.stored = args['take'] == 'remote' ? s.remote! : s.held!;
+        s.revision = tomSecretsBlobId(s.stored);
+        s
+          ..rewrittenHead = null
+          ..forcedHead = null
+          ..remote = null
+          ..held = null;
+        emit(_storeState(s));
+        emit({'op': 'store_changed', 'store': s.name, 'revision': s.revision});
+        return {'op': 'ok', 'revision': s.revision, 'conflicts': 0};
       case 'keys':
         _unlocked();
         return {'op': 'keyList', 'keys': keys};

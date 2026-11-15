@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/service_connection.dart';
+import 'rewritten_question.dart';
 import 'vault_browser.dart' show tomSecretsAge;
 
 /// The Status screen.
@@ -76,6 +77,14 @@ class TomSecretsStatusView extends StatelessWidget {
           ListTile(
             key: Key('tsm-status-store-${s.name}'),
             leading: Icon(s.isOffline ? Icons.cloud_off : Icons.cloud_done),
+            trailing: s.rewrittenHead == null
+                ? null
+                : FilledButton.tonal(
+                    key: Key('tsm-status-rewritten-${s.name}'),
+                    onPressed: () =>
+                        tomSecretsShowRewrittenQuestion(context, s.name),
+                    child: const Text('Choose…'),
+                  ),
             title: Text(s.name),
             subtitle: Text(
               [
@@ -90,6 +99,8 @@ class TomSecretsStatusView extends StatelessWidget {
                   'fetched ${tomSecretsAge(s.fetchedAt!)}',
                 if (s.isStaleAt(DateTime.now()))
                   'the offline copy is over a week old and may be out of date',
+                if (s.rewrittenHead != null)
+                  'its branch on GitHub was rewritten: a choice is needed',
                 if (s.notPushed > 0) '${s.notPushed} changes not yet on GitHub',
               ].join(' · '),
             ),

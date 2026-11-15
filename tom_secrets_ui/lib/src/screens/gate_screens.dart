@@ -451,6 +451,9 @@ String tomSecretsDescribeAdminError(TomSecretsAdminException e) => switch ((
   ('denied', 'wrong_executable') =>
     'The service accepts no admin from this app here: it must be '
         'installed beside the service, or named in its bootstrap.',
+  ('denied', 'history_rewritten') =>
+    'The vault\'s branch on GitHub was rewritten. Choose on the vault how to '
+        'go on: take the file on GitHub, or merge this copy over it.',
   ('denied', 'stale_base') =>
     'The vault changed meanwhile; it was read again. Make the change once '
         'more.',
