@@ -470,6 +470,23 @@ final class FakeService implements TomSecretsAdminChannel {
       case 'keys':
         _unlocked();
         return {'op': 'keyList', 'keys': keys};
+      case 'token.set':
+        _unlocked();
+        tokenRequests.add(args);
+        final reason = refusedTokens[args['token']];
+        if (reason != null) {
+          throw TomSecretsAdminException(
+            'denied',
+            'refused',
+            details: {'reason': reason},
+          );
+        }
+        return {
+          'op': 'tokenSet',
+          'repository': args['repository'],
+          'where': 'keychain',
+          'expiresAt': '2027-02-13T09:00:00.000Z',
+        };
       case 'compact':
         _unlocked();
         compactions.add(args);
@@ -597,6 +614,12 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// The `compact` requests.
   final List<Map<String, Object?>> compactions = [];
+
+  /// The `token.set` requests.
+  final List<Map<String, Object?>> tokenRequests = [];
+
+  /// Tokens `token.set` refuses, with the `denied` reason.
+  final Map<String, String> refusedTokens = {};
 
   void _unlocked() {
     if (locked) throw TomSecretsAdminException('locked', 'locked');

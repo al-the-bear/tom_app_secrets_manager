@@ -27,6 +27,7 @@ import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
+import 'renew_token_dialog.dart';
 import 'rotate_dialog.dart';
 import 'vault_browser.dart' show tomSecretsGuarded;
 
@@ -104,6 +105,16 @@ class _KeysState extends State<TomSecretsKeysView> {
     // Read again whatever the outcome: a failed rotation leaves a pending
     // one to finish.
     await tomSecretsShowRotateDialog(context, store);
+    await c.refreshStatus();
+    await _load();
+  }
+
+  Future<void> _renew(String key) async {
+    final c = context.read<TomSecretsServiceConnection>();
+    await tomSecretsShowRenewTokenDialog(
+      context,
+      key.substring('github-token:'.length),
+    );
     await c.refreshStatus();
     await _load();
   }
@@ -229,7 +240,13 @@ class _KeysState extends State<TomSecretsKeysView> {
               onPressed: () => unawaited(_setDue(k)),
               child: const Text('Due date…'),
             ),
-          if (k.kind == 'vault_keys' && k.vault != null)
+          if (k.kind == 'github_token')
+            TextButton(
+              key: Key('tsm-key-renew-${k.key}'),
+              onPressed: () => unawaited(_renew(k.key)),
+              child: Text(rotation),
+            )
+          else if (k.kind == 'vault_keys' && k.vault != null)
             TextButton(
               key: Key('tsm-key-rotate-${k.key}'),
               onPressed: () => unawaited(_rotate(k.vault!)),

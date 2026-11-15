@@ -6,6 +6,7 @@
 /// Linux.
 library;
 
+export 'src/browser.dart';
 export 'src/device_files.dart';
 export 'src/platform_channels.dart';
 export 'src/printer.dart';

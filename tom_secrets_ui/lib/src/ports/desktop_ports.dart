@@ -211,6 +211,7 @@ final class TomSecretsHost {
     this.keyFiles,
     this.files,
     this.printer,
+    this.openUrl,
     this.clipboard = const TomFlutterClipboardPort(),
     this.startedHidden = false,
     this.firstRunActions = const {},
@@ -254,6 +255,10 @@ final class TomSecretsHost {
 
   /// The print path (the emergency sheet), where the platform has one.
   final TomSecretsPrinter? printer;
+
+  /// Opens a web page in the system browser (GitHub's token pages); answers
+  /// whether it was opened. Without one the app shows the address to copy.
+  final Future<bool> Function(Uri url)? openUrl;
 
   /// The clipboard protected values are copied to.
   final TomClipboardPort clipboard;

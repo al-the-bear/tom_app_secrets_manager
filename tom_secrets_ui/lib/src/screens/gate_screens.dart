@@ -461,6 +461,14 @@ String tomSecretsDescribeAdminError(TomSecretsAdminException e) => switch ((
     'The vault is served from its offline copy: '
         '${e.kind == 'offline' ? 'GitHub is not reachable' : 'the GitHub token expired'}. '
         'The change could not be written.',
+  ('denied', 'token_refused') =>
+    'GitHub refused the token: it may be mistyped, expired or revoked.',
+  ('denied', 'token_no_access') =>
+    'The token does not see the repository: under Repository access, '
+        'select it.',
+  ('denied', 'token_read_only') =>
+    'The token may read the repository but not write to it: give it '
+        'Contents: Read and write.',
   ('not_running', _) => 'The service is not running.',
   (final kind, final reason?) => '$kind ($reason): ${e.message}',
   (final kind, _) => '$kind: ${e.message}',

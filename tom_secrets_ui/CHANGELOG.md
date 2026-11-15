@@ -37,6 +37,9 @@
   and every key file and repository key as a QR code with its key id;
   printed through the host's print path or saved as a PDF, offered in the
   First run wizard and after a key rotation.
+- Renewing a GitHub token from the Keys screen: GitHub's new-token page
+  opened filled in, the pasted token checked and kept by the service
+  (`token.set`), the result, and the page where the old token is deleted.
 - The First run wizard: the primary vault created or opened, local or in a
   GitHub repository, its key file and outer encryption, the machine's
   settings; then the service started and unlocked.
