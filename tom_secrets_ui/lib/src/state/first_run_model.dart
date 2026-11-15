@@ -21,6 +21,8 @@ import 'package:tom_reusable_ui/tom_reusable_ui.dart'
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
+import 'emergency_sheet.dart';
+
 import 'service_connection.dart';
 
 /// The wizard's steps.
@@ -379,6 +381,17 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
 
   /// Shows [message] as the wizard's error.
   void fail(String message) => _update(() => _error = message);
+
+  /// The emergency sheet of the primary being created (BP-37): its
+  /// locator, the new key file and repository key, the outer cipher; the
+  /// master password is never put on it.
+  TomSecretsEmergencySheet get emergencySheet => TomSecretsEmergencySheet.of(
+    primaryName: 'primary',
+    primaryLocator: locator!.text,
+    primaryKeyFile: _newKeyFile,
+    primaryOuterKey: _newRepositoryKey?.toBase64(),
+    primaryCipher: useOuter ? cipher : null,
+  );
 
   /// The setup the choices make.
   TomSecretsFirstRunSetup get setup => TomSecretsFirstRunSetup(

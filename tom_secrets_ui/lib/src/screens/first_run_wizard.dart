@@ -18,6 +18,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 import '../ports/desktop_ports.dart';
 import '../state/first_run_model.dart';
 import '../state/service_connection.dart';
+import '../widgets/emergency_sheet_offer.dart';
 import '../widgets/style.dart';
 
 /// The wizard.
@@ -690,6 +691,16 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
             'They are due for rotation in $tomSecretsPrimaryKeyMonths months; '
             'the app reminds you.',
             style: theme.textTheme.bodySmall,
+          ),
+        if (m.locator != null)
+          TomSecretsSection(
+            title: 'Emergency sheet',
+            icon: Icons.print_outlined,
+            children: [
+              TomSecretsEmergencySheetOffer(
+                sheet: () async => m.emergencySheet,
+              ),
+            ],
           ),
       ],
     );

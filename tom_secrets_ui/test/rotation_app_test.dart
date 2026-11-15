@@ -56,6 +56,16 @@ final class _Files implements TomSecretsFiles {
   Future<bool> delete(String path) async => false;
 }
 
+final class _Printer implements TomSecretsPrinter {
+  final Map<String, Uint8List> printed = {};
+
+  @override
+  Future<bool> printPdf(String name, Uint8List pdf) async {
+    printed[name] = pdf;
+    return true;
+  }
+}
+
 const _repo = 'al-the-bear/demo-vaults';
 const _team = 'github:$_repo/team.kdbx';
 const _secrets = 'github:$_repo/secrets.kdbx.tsmx';
@@ -80,6 +90,7 @@ Future<Uint8List> _outerVault(
 void main() {
   late FakeService service;
   late _Files files;
+  late _Printer printer;
   late TomSecretsHost host;
   late String repoKey;
 
@@ -138,11 +149,13 @@ void main() {
       ],
     );
     files = _Files();
+    printer = _Printer();
     host = TomSecretsHost(
       service: FakeHost(service),
       preferences: TomSecretsMemoryPreferences(),
       clipboard: _Clipboard(),
       files: files,
+      printer: printer,
     );
   });
 
@@ -236,6 +249,41 @@ void main() {
     await tester.tap(find.byKey(const Key('tsm-rotate-save-keyfile')));
     await wait(tester);
     expect(files.saved['team.keyx'], team.keyFile);
+
+    // The new emergency sheet (BP-37): printed and saved as the keys are now.
+    await tester.ensureVisible(find.byKey(const Key('tsm-sheet-print')));
+    await tester.tap(find.byKey(const Key('tsm-sheet-print')));
+    await wait(tester, 5);
+    final printed = printer.printed['primary-emergency-sheet.pdf']!;
+    expect(latin1.decode(printed.sublist(0, 5)), '%PDF-');
+    expect(find.text('The emergency sheet was printed.'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('tsm-sheet-save')));
+    await tester.tap(find.byKey(const Key('tsm-sheet-save')));
+    await wait(tester, 5);
+    expect(files.saved['primary-emergency-sheet.pdf'], isNotNull);
+    final sheet = (await tester.runAsync(session.emergencySheet))!;
+    final teamRow = sheet.vaults.firstWhere((v) => v.name == 'team');
+    expect(
+      teamRow.keyFileId,
+      TomSecretsKeyFile.parse(team.keyFile!).hash,
+      reason: 'the sheet names the new key file',
+    );
+    expect(sheet.vaults.map((v) => v.name), [
+      'primary',
+      'team',
+      'secrets',
+      'certs',
+    ]);
+    expect(
+      sheet.vaults.firstWhere((v) => v.name == 'secrets').cipherName,
+      'XChaCha20-Poly1305',
+    );
+    expect(
+      sheet.vaults.firstWhere((v) => v.name == 'certs').cipherName,
+      'not read on this machine',
+    );
+    expect(sheet.lines.join('\n'), isNot(contains('team-demo-pw-2')));
+
     await tester.tap(find.byKey(const Key('tsm-rotate-done')));
     await wait(tester, 5);
     await tester.pumpAndSettle();

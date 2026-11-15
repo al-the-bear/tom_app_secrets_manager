@@ -15,6 +15,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
 import 'conflicts.dart';
+import 'emergency_sheet.dart';
 import 'import_model.dart';
 import 'overlays.dart';
 import 'rotation.dart';
@@ -629,6 +630,28 @@ class TomSecretsSession extends ChangeNotifier {
       repositoryKey: newOuter,
       compacted: compacted,
       compactFailures: failures,
+    );
+  }
+
+  /// The emergency sheet of the primary (BP-37) as the keys are now: the
+  /// primary's key file and repository key as the service holds them, every
+  /// further vault the primary lists with its key file and repository key,
+  /// and the outer cipher of each file open here. No password is read into
+  /// it.
+  Future<TomSecretsEmergencySheet> emergencySheet() async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final keys = (await _heldKeys([primary.store]))[primary.store]!;
+    final keyFile = keys['keyFile'];
+    final listed = TomSecretsPrimaryVaults(primary.file).list();
+    return TomSecretsEmergencySheet.of(
+      primaryName: primary.store,
+      primaryLocator: primary.location,
+      primaryKeyFile: keyFile is String ? base64.decode(keyFile) : null,
+      primaryOuterKey: keys['outerKey'] as String?,
+      primaryCipher: primary.cipher,
+      listed: listed,
+      ciphers: {for (final v in listed) v.name: _vaultOf(v.name)?.cipher},
     );
   }
 

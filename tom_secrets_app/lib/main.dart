@@ -77,6 +77,7 @@ Future<void> main(List<String> args) async {
     ),
     keyFiles: files,
     files: files,
+    printer: const TomSecretsDesktopPrinter(),
     clipboard: tomSecretsDesktopClipboard(),
     startedHidden: hidden,
     // The First run wizard's last step offers the import (part-app).

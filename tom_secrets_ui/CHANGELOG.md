@@ -32,6 +32,11 @@
   re-keyed, the GitHub repositories' history is cut, and copies of the new
   key file and repository key are offered. A rotation whose re-keyed save
   failed is finished from a banner.
+- The emergency sheet (BP-37): the vaults with their locators,
+  repositories, formats and ciphers, a blank line for the master password,
+  and every key file and repository key as a QR code with its key id;
+  printed through the host's print path or saved as a PDF, offered in the
+  First run wizard and after a key rotation.
 - The First run wizard: the primary vault created or opened, local or in a
   GitHub repository, its key file and outer encryption, the machine's
   settings; then the service started and unlocked.

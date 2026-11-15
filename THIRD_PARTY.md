@@ -19,6 +19,8 @@ A package that adds a shipped dependency adds its row here.
 | [dbus](https://pub.dev/packages/dbus) | MPL-2.0 | `tom_secrets_desktop`, `tom_secrets_app` on Linux, through `flutter_local_notifications_linux`; unmodified; source: https://github.com/canonical/dbus.dart. The one named exception of the licence boundary (`secretsLicenceExceptions`) |
 | [launch_at_startup](https://pub.dev/packages/launch_at_startup) | MIT | `tom_secrets_desktop`: start at login on Windows and Linux |
 | [file_selector](https://pub.dev/packages/file_selector) | BSD-3-Clause | `tom_secrets_desktop`: key files and attachments |
+| [pdf](https://pub.dev/packages/pdf) | Apache-2.0 | `tom_secrets_ui`: the emergency sheet as a PDF (its QR codes through `barcode`, Apache-2.0, and `qr`, BSD-3-Clause) |
+| [printing](https://pub.dev/packages/printing) | Apache-2.0 | `tom_secrets_desktop`: the system print dialog for the emergency sheet; on Windows and Linux its build downloads the PDFium library (BSD-3-Clause and Apache-2.0, [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries), version 5200), which the application then bundles |
 
 The app's distribution also carries the command line `tsm` and the secrets
 service (its `tsm` folder), built from the product's other two repositories

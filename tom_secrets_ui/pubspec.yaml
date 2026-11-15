@@ -30,6 +30,7 @@ dependencies:
   tom_core_storage: ^0.1.2
   # The sync states the top bar's indicator presents.
   tom_core_sync: ^0.1.0
+  pdf: ^3.13.1
 
 dev_dependencies:
   flutter_test:

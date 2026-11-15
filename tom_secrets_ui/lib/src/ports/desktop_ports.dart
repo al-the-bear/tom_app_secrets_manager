@@ -144,6 +144,13 @@ abstract interface class TomSecretsFiles {
   Future<bool> delete(String path);
 }
 
+/// The platform's print path: a PDF handed to the system print dialog.
+abstract interface class TomSecretsPrinter {
+  /// Shows the print dialog for [pdf], named [name]; answers whether it was
+  /// printed (false when the user cancelled).
+  Future<bool> printPdf(String name, Uint8List pdf);
+}
+
 /// What the last step of the First run wizard offers to start (part-app,
 /// First run, step 4), by its id in [TomSecretsFirstRunActions].
 typedef TomSecretsFirstRunAction = Future<void> Function(BuildContext context);
@@ -203,6 +210,7 @@ final class TomSecretsHost {
     required this.preferences,
     this.keyFiles,
     this.files,
+    this.printer,
     this.clipboard = const TomFlutterClipboardPort(),
     this.startedHidden = false,
     this.firstRunActions = const {},
@@ -243,6 +251,9 @@ final class TomSecretsHost {
 
   /// Attachments: picking and saving files.
   final TomSecretsFiles? files;
+
+  /// The print path (the emergency sheet), where the platform has one.
+  final TomSecretsPrinter? printer;
 
   /// The clipboard protected values are copied to.
   final TomClipboardPort clipboard;

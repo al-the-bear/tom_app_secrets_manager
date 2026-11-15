@@ -6,7 +6,7 @@
 /// a `.tsmx` vault a new repository key and the outer cipher (DP-80). The
 /// session writes the new keys into the primary, saves the vaults re-keyed
 /// and cuts the repositories' history; the dialog then offers copies of the
-/// new key file and repository key for the user's recovery papers.
+/// new key file and repository key and the new emergency sheet (BP-37).
 library;
 
 import 'dart:async';
@@ -21,6 +21,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 import '../ports/desktop_ports.dart';
 import '../state/rotation.dart';
 import '../state/session_state.dart';
+import '../widgets/emergency_sheet_offer.dart';
 import '../widgets/generator_dialog.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 
@@ -365,6 +366,13 @@ class _RotateState extends State<TomSecretsRotateDialog> {
               style: theme.textTheme.bodySmall,
             ),
           ),
+        const SizedBox(height: 12),
+        // BP-37: the sheet as the keys are now; the old one is outdated.
+        Text(
+          'Your emergency sheet names the old keys: replace it.',
+          style: theme.textTheme.bodySmall,
+        ),
+        TomSecretsEmergencySheetOffer(sheet: _session.emergencySheet),
       ],
     );
   }

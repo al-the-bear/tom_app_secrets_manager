@@ -44,6 +44,7 @@ dependencies:
   launch_at_startup: 0.5.1
   # Key files and attachments.
   file_selector: ^1.0.3
+  printing: ^5.15.1
 
 dev_dependencies:
   flutter_test:

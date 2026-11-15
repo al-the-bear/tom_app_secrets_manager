@@ -9,6 +9,7 @@
 /// only.
 library;
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -39,6 +40,16 @@ Directory _scratch() {
     if (dir.existsSync()) dir.deleteSync(recursive: true);
   });
   return Directory(dir.absolute.path);
+}
+
+final class _Printer implements TomSecretsPrinter {
+  final Map<String, Uint8List> printed = {};
+
+  @override
+  Future<bool> printPdf(String name, Uint8List pdf) async {
+    printed[name] = pdf;
+    return true;
+  }
 }
 
 final class _Files implements TomSecretsFiles {
@@ -349,6 +360,72 @@ void main() {
       await tester.tap(find.byKey(const Key('tsm-fr-finish')));
       await settle(tester);
       expect(find.byKey(const Key('tsm-rail')), findsOneWidget);
+    });
+
+    testWidgets('the protection step offers the emergency sheet: printed '
+        'and saved, with the new key file and repository key and no '
+        'password', (tester) async {
+      await tester.runAsync(prepare);
+      final files = _Files();
+      final printer = _Printer();
+      await pumpApp(
+        tester,
+        TomSecretsHost(
+          service: host,
+          preferences: TomSecretsMemoryPreferences(),
+          files: files,
+          printer: printer,
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const Key('tsm-fr-path')),
+        '${dir.path}/primary.kdbx',
+      );
+      await tester.enterText(
+        find.byKey(const Key('tsm-fr-password')),
+        demoPassword,
+      );
+      await tester.enterText(
+        find.byKey(const Key('tsm-fr-repeat')),
+        demoPassword,
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('tsm-fr-next')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('tsm-fr-keyfile-switch')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('tsm-fr-outer-switch')));
+      await tester.tap(find.byKey(const Key('tsm-fr-outer-switch')));
+      await tester.pump();
+
+      await tester.ensureVisible(find.byKey(const Key('tsm-sheet-print')));
+      await tester.tap(find.byKey(const Key('tsm-sheet-print')));
+      await settle(tester, rounds: 5);
+      final printed = printer.printed['primary-emergency-sheet.pdf']!;
+      expect(latin1.decode(printed.sublist(0, 5)), '%PDF-');
+      await tester.ensureVisible(find.byKey(const Key('tsm-sheet-save')));
+      await tester.tap(find.byKey(const Key('tsm-sheet-save')));
+      await settle(tester, rounds: 5);
+      expect(files.saved['primary-emergency-sheet.pdf'], isNotNull);
+
+      final m = tester
+          .widget<TomSecretsFirstRunWizard>(
+            find.byType(TomSecretsFirstRunWizard),
+          )
+          .model;
+      final sheet = m.emergencySheet;
+      final vault = sheet.vaults.single;
+      expect(vault.locator, 'file:${dir.path}/primary.kdbx.tsmx');
+      expect(vault.keyFileId, TomSecretsKeyFile.parse(m.newKeyFile!).hash);
+      expect(vault.repositoryKeyId, m.newRepositoryKey!.keyIdHex);
+      expect(vault.cipherName, 'XChaCha20-Poly1305');
+      expect(sheet.keys, hasLength(2));
+      final pdf = latin1.decode(
+        await tester.runAsync(() => sheet.toPdf(compress: false)) as List<int>,
+      );
+      expect(pdf, contains(m.newRepositoryKey!.keyIdHex));
+      expect(pdf, isNot(contains(demoPassword)));
+      expect(sheet.lines.join('\n'), isNot(contains(demoPassword)));
     });
 
     testWidgets('the last step starts what the host offers', (tester) async {
