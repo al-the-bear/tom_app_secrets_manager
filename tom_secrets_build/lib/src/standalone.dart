@@ -40,31 +40,18 @@ const Map<String, String> secretsWorkspaceMarkers = {
 /// `SecretsCiWorkspace.roleOf` names them), each with why and the todo that
 /// ends it.
 const Map<String, String> secretsStandaloneExceptions = {
-  // The packages take each other by path until they are on pub.dev
-  // (tom_secrets_manager tsm_a_alone3), and the apps take tom_reusable_ui by
-  // path until it is published (webwork wrui1).
-  'secrets_manager:tom_secrets_core/pubspec.yaml':
-      'tom_secrets_client by path until its admin library is republished '
-      '(tsm_a_alone3)',
-  'secrets_manager:tom_secrets_service/pubspec.yaml':
-      'tom_secrets_client by path until republished (tsm_a_alone3)',
-  'secrets_clients:clients/dart/tsm/pubspec.yaml':
-      'the service and the core by path for the integration suite until '
-      'published (tsm_a_alone3)',
+  // The apps take tom_reusable_ui by path until it is published (webwork
+  // wrui1); every other dependency comes from pub.dev.
   'apps:tom_secrets_ui/pubspec.yaml':
-      'the core and the client by path until published (tsm_a_alone3); '
-      'tom_reusable_ui until published (webwork wrui1)',
+      'tom_reusable_ui by path until it is published (webwork wrui1)',
   'apps:tom_secrets_ui/pubspec_overrides.yaml':
       'source unification while tom_reusable_ui is taken by path '
       '(webwork wrui1)',
   'apps:tom_secrets_desktop/pubspec.yaml':
-      'the core, the client and the service by path until published '
-      '(tsm_a_alone3); tom_reusable_ui until published (webwork wrui1)',
+      'tom_reusable_ui by path until it is published (webwork wrui1)',
   'apps:tom_secrets_desktop/pubspec_overrides.yaml':
       'source unification while tom_reusable_ui is taken by path '
       '(webwork wrui1)',
-  'apps:tom_secrets_app/pubspec.yaml':
-      'the client by path until republished (tsm_a_alone3)',
   'apps:tom_secrets_app/pubspec_overrides.yaml':
       'source unification while tom_reusable_ui is taken by path '
       '(webwork wrui1)',

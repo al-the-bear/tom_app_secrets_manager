@@ -21,12 +21,10 @@ dependencies:
     path: ../tom_secrets_ui
   # The admin client, the runtime directory, the starter with its admin-key
   # handover, the data directory and the keychain names (shared with tsm).
-  tom_secrets_client:
-    path: ../../tom_ai/secrets_clients/clients/dart/tom_secrets_client
+  tom_secrets_client: ^0.2.0
   # The First run (TomSecretsFirstRun) the desktop hands the wizard, writing
   # into this device's data directory and keychain.
-  tom_secrets_core:
-    path: ../../tom_ai/secrets_manager/tom_secrets_core
+  tom_secrets_core: ^0.1.0
   # The OS keychain tsm keeps the admin key in (TomDesktopSecretStore), so
   # the app and tsm share it.
   tom_core_storage: ^0.1.2
@@ -53,8 +51,7 @@ dev_dependencies:
   # The service host's tests run the real service in this process, on demo
   # vaults (dev dependencies are not linked: the app reaches no KDBX but
   # through tom_secrets_core).
-  tom_secrets_service:
-    path: ../../tom_ai/secrets_manager/tom_secrets_service
+  tom_secrets_service: ^0.1.0
   tom_kdbx_store: ^0.2.4
   flutter_lints: ^6.0.0
 

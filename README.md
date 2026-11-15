@@ -73,11 +73,13 @@ the other two repositories are elsewhere,
 `tom_secrets_build/repositories.yaml` names them (see
 [`tom_secrets_build/README.md`](tom_secrets_build/README.md)).
 
-The packages take each other and their dependencies from pub.dev, or by
-path inside one repository. Not yet: the packages of the three repositories
-still take each other by path across the repositories, and the apps take
-`tom_reusable_ui` by path from the `tom_app_webwork` repository, which is not
-published yet; `ci.sh :standalone` lists every such place that is left.
+The packages take their dependencies from pub.dev (the core, the service,
+the client and `tsm` are there: `tom_secrets_core`, `tom_secrets_service`,
+`tom_secrets_client`, `tom_secrets_tsm`), or by path inside one repository.
+One exception is left: the apps take `tom_reusable_ui` by path from the
+`tom_app_webwork` repository, which is not published yet, so building the
+apps needs that checkout beside this one until it is; `ci.sh :standalone`
+lists it.
 
 ## Packages
 

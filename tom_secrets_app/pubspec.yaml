@@ -19,8 +19,7 @@ dependencies:
   tom_secrets_desktop:
     path: ../tom_secrets_desktop
   # The data directory the app keeps its own files in (TSM_DATA_DIR).
-  tom_secrets_client:
-    path: ../../tom_ai/secrets_clients/clients/dart/tom_secrets_client
+  tom_secrets_client: ^0.2.0
 
 dev_dependencies:
   flutter_test:

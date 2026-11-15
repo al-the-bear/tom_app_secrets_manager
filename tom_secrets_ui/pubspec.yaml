@@ -18,11 +18,9 @@ dependencies:
   provider: ^6.1.5
   # The vaults: KDBX through the one gateway (DP-29), the TOTP, the password
   # generator, the stored-file codec and the entry fields.
-  tom_secrets_core:
-    path: ../../tom_ai/secrets_manager/tom_secrets_core
+  tom_secrets_core: ^0.1.0
   # The admin errors and the reference grammar ("How clients name it").
-  tom_secrets_client:
-    path: ../../tom_ai/secrets_clients/clients/dart/tom_secrets_client
+  tom_secrets_client: ^0.2.0
   # The key fields, notices, sync indicator and the masked editing surface.
   tom_reusable_ui:
     path: ../../app_webwork/reusable/tom_reusable_ui
