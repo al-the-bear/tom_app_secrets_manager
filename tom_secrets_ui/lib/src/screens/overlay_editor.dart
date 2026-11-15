@@ -700,7 +700,7 @@ class _WhichBox extends StatelessWidget {
                     child: Text(
                       '${step.entry.store}/${step.entry.pathText}'
                       '${step.entry.bindings.isEmpty ? '' : '  ${_bindings(step.entry)}'}'
-                      '  —  ${step.kept ? 'kept, rank ${step.vector!.join(' ')}' : 'dropped: ${step.dropReason}'}',
+                      '  —  ${step.kept ? 'kept, rank ${step.vector!.join(' ')}' : 'dropped: ${answer.dropReasonOf(step)}'}',
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),

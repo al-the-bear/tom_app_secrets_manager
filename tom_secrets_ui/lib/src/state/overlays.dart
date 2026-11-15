@@ -14,8 +14,7 @@ import 'package:tom_secrets_client/tom_secrets_client.dart'
         TomSecretKeyTarget,
         TomSecretPathTarget,
         TomSecretReference,
-        TomSecretsClientException,
-        TomSecretsErrorKind;
+        TomSecretsClientException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 /// Where the value a request gets comes from.
@@ -39,29 +38,6 @@ enum TomSecretsValueSource {
   malformed,
 }
 
-/// The field resolution is asked for when only the winning entry matters:
-/// every entry has a title (the overlays copy it).
-const String _probeField = 'Title';
-
-/// One step of "which value does … get?": a candidate and what resolution
-/// did with it.
-final class TomSecretsCandidateStep {
-  const TomSecretsCandidateStep._(this.entry, this.vector, this.dropReason);
-
-  /// The candidate.
-  final TomSecretsIndexedEntry entry;
-
-  /// Its rank vector (one rank per dimension in priority order), or null
-  /// when it was dropped.
-  final List<int>? vector;
-
-  /// Why it was dropped: the binding the request does not match.
-  final String? dropReason;
-
-  /// Whether it was kept.
-  bool get kept => vector != null;
-}
-
 /// What one request resolves to, with the steps that led there.
 final class TomSecretsResolved {
   const TomSecretsResolved._({
@@ -83,8 +59,10 @@ final class TomSecretsResolved {
   /// The entry that serves it, or null.
   final TomSecretsIndexedEntry? winner;
 
-  /// Every candidate, kept ones first in rank order, then the dropped.
-  final List<TomSecretsCandidateStep> steps;
+  /// Every candidate as the core's resolver explains it
+  /// (`TomSecretsResolver.explain`): kept ones first in rank order, then the
+  /// dropped ones.
+  final List<TomSecretsExplainedCandidate> steps;
 
   /// The entries ranking equal when [source] is ambiguous.
   final List<TomSecretsIndexedEntry> tied;
@@ -94,6 +72,18 @@ final class TomSecretsResolved {
 
   /// Where the value comes from.
   final TomSecretsValueSource source;
+
+  /// Why [step] was dropped, for the user: the binding the request does not
+  /// match; null for a kept candidate.
+  String? dropReasonOf(TomSecretsExplainedCandidate step) {
+    if (step.kept) return null;
+    final requested = request[step.dropDimension];
+    return requested == null
+        ? 'bound ${step.dropDimension}:${step.dropBound}, a dimension not '
+              'declared'
+        : 'bound ${step.dropDimension}:${step.dropBound}, the request has '
+              '$requested';
+  }
 }
 
 /// One row of the overlay matrix: a dimension value and what it gets.
@@ -286,61 +276,34 @@ final class TomSecretsResolutionModel {
     List<TomSecretBinding> qualifiers = const [],
   ]) {
     final String reference;
-    final TomSecretReference parsed;
     try {
       reference = referenceOf(base, qualifiers);
-      parsed = TomSecretReference.parse(reference);
     } on TomSecretsClientException catch (e) {
       return _failed(base, e.message);
     }
-    final resolver = TomSecretsResolver(
-      stores: stores,
-      config: config,
-      machine: _machine(const {}),
-    );
-    final Map<String, String> request;
+    final TomSecretsExplanation explanation;
     try {
-      request = resolver.requestValues(parsed, const {});
+      explanation = TomSecretsResolver(
+        stores: stores,
+        config: config,
+        machine: _machine(const {}),
+      ).explain(reference);
     } on TomSecretsResolveException catch (e) {
       return _failed(base, e.message, reference: reference);
     }
-    final steps = _steps(base, request);
-    TomSecretsIndexedEntry? winner;
-    var tied = const <TomSecretsIndexedEntry>[];
-    TomSecretsValueSource source;
-    try {
-      winner = resolver.resolve(reference, field: _probeField).entry;
-      source = _sourceOf(base, winner);
-    } on TomSecretsResolveException catch (e) {
-      switch (e.kind) {
-        case TomSecretsErrorKind.ambiguous:
-          tied = [
-            for (final c
-                in (e.details['candidates'] as List? ?? const []).cast<Map>())
-              ?_byUuidHex(c['store'] as String?, c['uuid'] as String?),
-          ];
-          source = TomSecretsValueSource.ambiguous;
-        case TomSecretsErrorKind.notFound:
-          // The winner lacks the probe field: resolution names it.
-          final entry = e.details['entry'];
-          winner = entry is Map
-              ? _byUuidHex(entry['store'] as String?, entry['uuid'] as String?)
-              : null;
-          source = winner == null
-              ? TomSecretsValueSource.none
-              : _sourceOf(base, winner);
-        default:
-          return _failed(base, e.message, reference: reference);
-      }
-    }
+    final winner = explanation.winner;
     return TomSecretsResolved._(
       reference: reference,
-      request: request,
+      request: explanation.requestValues,
       winner: winner,
-      steps: steps,
-      tied: tied,
+      steps: explanation.candidates,
+      tied: explanation.tied,
       error: null,
-      source: source,
+      source: switch (explanation.outcome) {
+        TomSecretsExplainOutcome.resolved => _sourceOf(base, winner!),
+        TomSecretsExplainOutcome.ambiguous => TomSecretsValueSource.ambiguous,
+        TomSecretsExplainOutcome.notFound => TomSecretsValueSource.none,
+      },
     );
   }
 
@@ -358,9 +321,6 @@ final class TomSecretsResolutionModel {
     source: TomSecretsValueSource.malformed,
   );
 
-  TomSecretsIndexedEntry? _byUuidHex(String? storeName, String? uuid) =>
-      store(storeName ?? '')?.entries.where((e) => e.uuid == uuid).firstOrNull;
-
   TomSecretsValueSource _sourceOf(
     TomSecretsIndexedEntry base,
     TomSecretsIndexedEntry winner,
@@ -372,87 +332,6 @@ final class TomSecretsResolutionModel {
     return winner.isOverlay
         ? TomSecretsValueSource.overlay
         : TomSecretsValueSource.otherFile;
-  }
-
-  /// The candidates of [base]'s reference with what ranking does to each.
-  ///
-  /// Why: the resolver reports only the kept candidates; the steps also show
-  /// the dropped ones and why. Candidates and ranks follow part-structure's
-  /// rules as `TomSecretsResolver` implements them (step 1: the entries at
-  /// the path, or with the key and their overlays; step 2: drop a candidate
-  /// bound to another value than the request's, unless bound to `default`
-  /// with the fallback on; rank 2 bound to the request's value, 1 to
-  /// `default`, 0 unbound).
-  List<TomSecretsCandidateStep> _steps(
-    TomSecretsIndexedEntry base,
-    Map<String, String> request,
-  ) {
-    final candidates = <TomSecretsIndexedEntry>[];
-    void add(TomSecretsIndexedEntry e) {
-      if (!candidates.any((c) => identical(c, e))) candidates.add(e);
-    }
-
-    final key = base.key;
-    if (key == null) {
-      store(
-        base.store,
-      )?.entries.where((e) => e.hasPath(base.path)).forEach(add);
-    } else {
-      for (final s in stores) {
-        for (final keyed in s.entries.where((e) => e.key == key)) {
-          add(keyed);
-          s.entries
-              .where(
-                (e) =>
-                    e.isOverlay &&
-                    e.hasPath(keyed.path) &&
-                    (e.key == null || e.key == key),
-              )
-              .forEach(add);
-        }
-      }
-    }
-    final kept = <TomSecretsCandidateStep>[];
-    final dropped = <TomSecretsCandidateStep>[];
-    for (final c in candidates) {
-      String? reason;
-      for (final MapEntry(key: dimension, value: bound) in c.bindings.entries) {
-        final d = config.dimension(dimension);
-        final requested = request[dimension];
-        if (d == null) {
-          reason = 'bound $dimension:$bound, a dimension not declared';
-          break;
-        }
-        if (bound != requested &&
-            !(bound == tomSecretsDefaultValue && d.fallbackToDefault)) {
-          reason = 'bound $dimension:$bound, the request has $requested';
-          break;
-        }
-      }
-      if (reason != null) {
-        dropped.add(TomSecretsCandidateStep._(c, null, reason));
-        continue;
-      }
-      kept.add(
-        TomSecretsCandidateStep._(c, [
-          for (final d in config.dimensions)
-            switch (c.bindings[d.name]) {
-              null => 0,
-              final bound when bound == request[d.name] => 2,
-              _ => 1,
-            },
-        ], null),
-      );
-    }
-    int compare(List<int> a, List<int> b) {
-      for (var i = 0; i < a.length; i++) {
-        if (a[i] != b[i]) return b[i] - a[i];
-      }
-      return 0;
-    }
-
-    kept.sort((a, b) => compare(a.vector!, b.vector!));
-    return [...kept, ...dropped];
   }
 
   /// The clients granted [base] on any host (`allow` grants of the primary
@@ -500,8 +379,10 @@ final class TomSecretsResolutionModel {
         stores: stores,
         config: config,
         machine: _machine({'host': host}),
-      ).resolve(secret, field: _probeField).entry;
-      return winner.store == base.store && winner.hasPath(base.path);
+      ).explain(secret).winner;
+      return winner != null &&
+          winner.store == base.store &&
+          winner.hasPath(base.path);
     } on TomSecretsResolveException {
       return false;
     }

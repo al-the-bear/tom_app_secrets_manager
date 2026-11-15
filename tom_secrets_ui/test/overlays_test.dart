@@ -152,7 +152,7 @@ void main() {
       );
       expect(mbp.source, TomSecretsValueSource.shared);
       final dropped = mbp.steps.where((s) => !s.kept).toList();
-      expect(dropped.map((s) => s.dropReason), [
+      expect(dropped.map(mbp.dropReasonOf), [
         'bound host:bomber, the request has mbp',
         'bound env:prod, the request has dev',
       ]);
