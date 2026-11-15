@@ -8,7 +8,10 @@
 /// expired, overdue or soon-due key is marked. A vault's keys get a due
 /// date of their own (the entry's Expires in the primary). The rotation
 /// ages and reminder starts (DP-85) are this machine's device settings. The
-/// product only reminds: a rotation is always the user's click.
+/// product only reminds: a rotation is always the user's click — every
+/// vault's master password, key file and repository key are rotated here by
+/// hand (part-key-rotation), and a rotation whose re-keyed save failed is
+/// finished here.
 library;
 
 import 'dart:async';
@@ -19,10 +22,12 @@ import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../state/clients.dart';
+import '../state/rotation.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
+import 'rotate_dialog.dart';
 import 'vault_browser.dart' show tomSecretsGuarded;
 
 /// The Keys screen.
@@ -40,6 +45,8 @@ class _KeysState extends State<TomSecretsKeysView> {
   Map<String, Object?> _draft = const {};
   String? _error;
   String? _agesMessage;
+  List<TomSecretsPendingRotation> _pending = const [];
+  String? _finishMessage;
 
   TomSecretsClientsApi get _api =>
       TomSecretsClientsApi(context.read<TomSecretsServiceConnection>());
@@ -52,12 +59,15 @@ class _KeysState extends State<TomSecretsKeysView> {
 
   Future<void> _load() async {
     try {
+      final session = context.read<TomSecretsSession>();
       final keys = await _api.keys();
       final settings = await _api.settings();
+      final pending = await session.pendingRotations();
       if (!mounted) return;
       setState(() {
         _keys = keys;
         _settings = settings;
+        _pending = pending;
         _draft = settings.device.toJson();
         _error = null;
       });
@@ -86,6 +96,30 @@ class _KeysState extends State<TomSecretsKeysView> {
       await c.reload();
       await c.refreshStatus();
     });
+    await _load();
+  }
+
+  Future<void> _rotate(String store) async {
+    final c = context.read<TomSecretsServiceConnection>();
+    // Read again whatever the outcome: a failed rotation leaves a pending
+    // one to finish.
+    await tomSecretsShowRotateDialog(context, store);
+    await c.refreshStatus();
+    await _load();
+  }
+
+  Future<void> _finish() async {
+    final session = context.read<TomSecretsSession>();
+    try {
+      final done = await session.finishRotations();
+      if (mounted) {
+        setState(() => _finishMessage = 'Re-keyed: ${done.join(', ')}.');
+      }
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) {
+        setState(() => _finishMessage = tomSecretsDescribeAdminError(e));
+      }
+    }
     await _load();
   }
 
@@ -120,6 +154,8 @@ class _KeysState extends State<TomSecretsKeysView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_pending.isNotEmpty || _finishMessage != null)
+                  _pendingBanner(context),
                 TomSecretsSection(
                   title: 'Keys and their dates',
                   icon: Icons.key_rounded,
@@ -143,6 +179,7 @@ class _KeysState extends State<TomSecretsKeysView> {
                     for (final k in keys) _keyRow(context, k),
                   ],
                 ),
+                _vaults(context),
                 _ages(context),
               ],
             ),
@@ -192,12 +229,94 @@ class _KeysState extends State<TomSecretsKeysView> {
               onPressed: () => unawaited(_setDue(k)),
               child: const Text('Due date…'),
             ),
-          Tooltip(
-            message: 'Not available in this version yet',
-            child: TextButton(onPressed: null, child: Text(rotation)),
-          ),
+          if (k.kind == 'vault_keys' && k.vault != null)
+            TextButton(
+              key: Key('tsm-key-rotate-${k.key}'),
+              onPressed: () => unawaited(_rotate(k.vault!)),
+              child: Text(rotation),
+            )
+          else
+            Tooltip(
+              message: 'Not available in this version yet',
+              child: TextButton(onPressed: null, child: Text(rotation)),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _pendingBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      key: const Key('tsm-rotate-pending'),
+      color: theme.colorScheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.sync_problem_outlined),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _pending.isEmpty
+                    ? _finishMessage!
+                    : 'The rotation of ${_pending.map((p) => p.store).join(', ')} '
+                          'is not finished: the primary holds the new keys, the '
+                          'vault still has its old ones and is served with them.',
+              ),
+            ),
+            if (_pending.isNotEmpty)
+              FilledButton(
+                key: const Key('tsm-rotate-finish'),
+                onPressed: () => unawaited(_finish()),
+                child: const Text('Finish the rotation'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Every vault the primary lists, the primary first, with its Rotate….
+  Widget _vaults(BuildContext context) {
+    final session = context.watch<TomSecretsSession>();
+    final primary = session.vaults.firstOrNull;
+    if (primary == null) return const SizedBox.shrink();
+    final listed = TomSecretsPrimaryVaults(primary.file).list();
+    return TomSecretsSection(
+      title: 'Rotate a vault\'s keys',
+      icon: Icons.autorenew_rounded,
+      children: [
+        Text(
+          'A new master password, key file or repository key, written into '
+          'the primary and then into the vault.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        for (final (store, location) in [
+          (primary.store, primary.location),
+          for (final v in listed) (v.name, v.locator),
+        ])
+          ListTile(
+            key: Key('tsm-vault-keys-$store'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              location.endsWith(tomSecretsOuterSuffix)
+                  ? Icons.enhanced_encryption_outlined
+                  : Icons.lock_outline,
+            ),
+            title: Text(
+              store == primary.store ? '$store (primary)' : store,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+            subtitle: Text(location, overflow: TextOverflow.ellipsis),
+            trailing: TextButton(
+              key: Key('tsm-rotate-$store'),
+              onPressed: () => unawaited(_rotate(store)),
+              child: const Text('Rotate…'),
+            ),
+          ),
+      ],
     );
   }
 

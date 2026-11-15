@@ -25,6 +25,13 @@
   Settings screen (the device settings through `settings.get` /
   `settings.set`, command-line approvals, screen capture, start at login,
   stopping the service, the shared `tsm.config`).
+- Key rotation by hand: from the Keys screen, a vault's master password, its
+  key file (new, added or removed) and for a `.tsmx` vault its repository
+  key and outer cipher, across every vault of the repository under that
+  key; the new keys go into the primary first, the vaults are saved
+  re-keyed, the GitHub repositories' history is cut, and copies of the new
+  key file and repository key are offered. A rotation whose re-keyed save
+  failed is finished from a banner.
 - The First run wizard: the primary vault created or opened, local or in a
   GitHub repository, its key file and outer encryption, the machine's
   settings; then the service started and unlocked.

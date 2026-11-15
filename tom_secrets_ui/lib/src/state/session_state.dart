@@ -17,6 +17,7 @@ import '../ports/desktop_ports.dart';
 import 'conflicts.dart';
 import 'import_model.dart';
 import 'overlays.dart';
+import 'rotation.dart';
 import 'service_connection.dart';
 
 /// A vault open in the app's memory.
@@ -42,11 +43,13 @@ final class TomSecretsOpenVault {
   /// The opened file.
   KdbxFile file;
 
-  /// The repository's outer key of a `.tsmx` file (base64), or null.
-  final String? outerKey;
+  /// The repository's outer key of a `.tsmx` file (base64), or null; a
+  /// rotation sets the new one before the re-keyed save.
+  String? outerKey;
 
-  /// The outer cipher of a `.tsmx` file, kept by every save, or null.
-  final TomSecretsOuterCipher? cipher;
+  /// The outer cipher of a `.tsmx` file, kept by every save, or null; a
+  /// rotation may set another.
+  TomSecretsOuterCipher? cipher;
 }
 
 /// An entry by its store and UUID.
@@ -432,6 +435,274 @@ class TomSecretsSession extends ChangeNotifier {
     await save(primary.store);
   }
 
+  /// Rotates the keys of [store] by hand (part-key-rotation) as [rotation]
+  /// says, through the service (DP-13):
+  ///
+  /// 1. makes the new keys: a master password given, a new key file, a new
+  ///    repository key (for a `.tsmx` vault: every vault of the same
+  ///    repository under the same key, and the primary when it is one of
+  ///    them, is re-encrypted with a single slot for the new key);
+  /// 2. writes them into the primary: each affected vault's entry with
+  ///    Expires = now + `vaultKeyAgeMonths`, for the primary its metadata's
+  ///    `tsm.keys-due` = now + `primaryKeyAgeMonths`; saves the primary
+  ///    (re-keyed, carrying its new keys, when its own keys change);
+  /// 3. saves every affected vault re-keyed (the service takes the keys from
+  ///    the primary);
+  /// 4. cuts the history of every `github:` repository written (retention
+  ///    0), so no commit keeps a file under the old keys.
+  ///
+  /// Answers the new key material for the user's recovery copies. Throws
+  /// [ArgumentError] for a rotation that changes nothing or leaves a vault
+  /// with neither a password nor a key file, or a new repository key for a
+  /// vault without outer encryption; `TomSecretsAdminException` when a save
+  /// is refused. A failure after the primary was saved leaves the vaults
+  /// not yet re-keyed served with their old keys: [pendingRotations] names
+  /// them and [finishRotations] makes their re-keyed saves.
+  Future<TomSecretsRotated> rotateKeys(
+    String store,
+    TomSecretsRotation rotation, {
+    DateTime? now,
+  }) async {
+    if (rotation.isEmpty) {
+      throw ArgumentError.value(rotation, 'rotation', 'changes nothing');
+    }
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final at = (now ?? DateTime.now()).toUtc();
+    final list = TomSecretsPrimaryVaults(primary.file);
+    final isPrimary = store == primary.store;
+    final listed = isPrimary ? null : list.byName(store);
+    if (!isPrimary && listed == null) {
+      throw StateError('the primary lists no $store');
+    }
+    final held = await _heldKeys([primary.store, if (!isPrimary) store]);
+    final old = held[store]!;
+    final location = isPrimary ? primary.location : listed!.locator;
+
+    // 1. The new keys.
+    final password = rotation.password ?? old['password'] as String?;
+    final oldKeyFile = old['keyFile'] is String
+        ? base64.decode(old['keyFile']! as String)
+        : null;
+    final newKeyFile = rotation.keyFile == TomSecretsKeyFileChange.renew
+        ? TomSecretsKeyFile.generate().toBytes()
+        : null;
+    final keyFile = switch (rotation.keyFile) {
+      TomSecretsKeyFileChange.keep => oldKeyFile,
+      TomSecretsKeyFileChange.renew => newKeyFile,
+      TomSecretsKeyFileChange.remove => null,
+    };
+    if ((password == null || password.isEmpty) && keyFile == null) {
+      throw ArgumentError('a vault needs a master password or a key file');
+    }
+    final oldOuter = old['outerKey'] as String?;
+    final outer = location.endsWith(tomSecretsOuterSuffix);
+    if ((rotation.newRepositoryKey || rotation.cipher != null) &&
+        (!outer || oldOuter == null)) {
+      throw ArgumentError('$store is not outer encrypted');
+    }
+    final newOuter = rotation.newRepositoryKey
+        ? TomSecretsRepositoryKey.generate().toBase64()
+        : null;
+
+    // The vaults a new repository key re-encrypts: every one of the same
+    // repository under the same key.
+    final repository = tomSecretsRepositoryOf(location);
+    final others = <String>[
+      if (rotation.newRepositoryKey)
+        for (final v in list.list())
+          if (v.name != store &&
+              v.outerKey == oldOuter &&
+              tomSecretsRepositoryOf(v.locator) == repository)
+            v.name,
+    ];
+    final primaryAffected =
+        isPrimary ||
+        (rotation.newRepositoryKey &&
+            held[primary.store]!['outerKey'] == oldOuter &&
+            tomSecretsRepositoryOf(primary.location) == repository);
+    final further = [if (!isPrimary) store, ...others];
+    final opened = <String>[];
+    for (final name in further) {
+      if (_vaultOf(name) == null) {
+        await openUnserved(name);
+        opened.add(name);
+      }
+    }
+
+    // 2. Into the primary.
+    final device = await _deviceSettings();
+    for (final name in further) {
+      final entry = list.byName(name)!;
+      final target = name == store;
+      list.put(
+        TomSecretsVaultKeys(
+          name: entry.name,
+          locator: entry.locator,
+          password: target ? password : entry.password,
+          keyFile: target ? keyFile : entry.keyFile,
+          outerKey: newOuter ?? entry.outerKey,
+          githubToken: entry.githubToken,
+          githubTokenExpires: entry.githubTokenExpires,
+          expires: tomSecretsAddMonths(at, device.vaultKeyAgeMonths),
+        ),
+      );
+    }
+    Map<String, Object?>? primaryKeys;
+    if (primaryAffected) {
+      final m = TomSecretsMetadata.read(primary.file);
+      TomSecretsMetadata(
+        format: m.format,
+        store: m.store,
+        kind: m.kind,
+        purpose: m.purpose,
+        binding: m.binding,
+        configYaml: m.configYaml,
+        keysDue: tomSecretsAddMonths(at, device.primaryKeyAgeMonths),
+      ).writeTo(primary.file);
+      final keys = held[primary.store]!;
+      final pw = isPrimary ? password : keys['password'] as String?;
+      final kf = isPrimary
+          ? keyFile
+          : (keys['keyFile'] is String
+                ? base64.decode(keys['keyFile']! as String)
+                : null);
+      primary.file.credentials = tomSecretsVaultCredentials(
+        password: pw,
+        keyFile: kf,
+      );
+      if (newOuter != null) primary.outerKey = newOuter;
+      if (rotation.cipher != null) primary.cipher = rotation.cipher;
+      primaryKeys = {
+        'password': pw ?? '',
+        if (kf != null) 'keyFile': base64.encode(kf),
+        'outerKey': ?primary.outerKey,
+      };
+    }
+    await save(primary.store, keys: primaryKeys);
+
+    // 3. The vaults, re-keyed.
+    final rekeyed = [if (primaryAffected) primary.store];
+    for (final name in further) {
+      final vault = _vaultOf(name)!;
+      final keys = list.byName(name)!;
+      vault.file.credentials = tomSecretsVaultCredentials(
+        password: keys.password,
+        keyFile: keys.keyFile == null
+            ? null
+            : Uint8List.fromList(keys.keyFile!),
+      );
+      if (newOuter != null) vault.outerKey = newOuter;
+      if (rotation.cipher != null) vault.cipher = rotation.cipher;
+      await save(name);
+      rekeyed.add(name);
+    }
+    for (final name in opened) {
+      closeEditOnly(name);
+    }
+
+    // 4. The history of the repositories written.
+    final compacted = <String>[];
+    final failures = <String, String>{};
+    final repositories = {
+      for (final name in rekeyed)
+        ?tomSecretsGitHubRepositoryOf(
+          name == primary.store ? primary.location : list.byName(name)!.locator,
+        ),
+    };
+    for (final slug in repositories) {
+      try {
+        await connection.request('compact', {
+          'repository': slug,
+          'retentionDays': 0,
+        });
+        compacted.add(slug);
+      } on TomSecretsAdminException catch (e) {
+        failures[slug] = e.message;
+      }
+    }
+    return TomSecretsRotated(
+      store: store,
+      primary: primary.store,
+      rekeyed: rekeyed,
+      keyFile: newKeyFile,
+      repositoryKey: newOuter,
+      compacted: compacted,
+      compactFailures: failures,
+    );
+  }
+
+  /// The vaults the primary lists with other keys than the service holds:
+  /// a rotation whose re-keyed save failed (or was made elsewhere and not
+  /// finished). [finishRotations] completes them.
+  Future<List<TomSecretsPendingRotation>> pendingRotations() async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) return const [];
+    final listed = TomSecretsPrimaryVaults(primary.file).list();
+    if (listed.isEmpty) return const [];
+    final held = await _heldKeys([for (final v in listed) v.name]);
+    return [
+      for (final v in listed)
+        if (held[v.name] != null && !_sameKeys(v, held[v.name]!))
+          (store: v.name, location: v.locator),
+    ];
+  }
+
+  /// Saves every vault of [pendingRotations] re-keyed with the keys the
+  /// primary lists for it; answers the vaults written.
+  Future<List<String>> finishRotations() async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) return const [];
+    final list = TomSecretsPrimaryVaults(primary.file);
+    final done = <String>[];
+    for (final pending in await pendingRotations()) {
+      final name = pending.store;
+      final opened = _vaultOf(name) == null;
+      final vault = _vaultOf(name) ?? await openUnserved(name);
+      final keys = list.byName(name)!;
+      vault.file.credentials = tomSecretsVaultCredentials(
+        password: keys.password,
+        keyFile: keys.keyFile == null
+            ? null
+            : Uint8List.fromList(keys.keyFile!),
+      );
+      vault.outerKey = keys.outerKey;
+      await save(name);
+      if (opened) closeEditOnly(name);
+      done.add(name);
+    }
+    return done;
+  }
+
+  static bool _sameKeys(TomSecretsVaultKeys listed, Map<String, Object?> held) {
+    final keyFile = held['keyFile'];
+    final listedKeyFile = listed.keyFile == null
+        ? null
+        : base64.encode(listed.keyFile!);
+    return listed.password == held['password'] &&
+        listed.outerKey == held['outerKey'] &&
+        listedKeyFile == keyFile;
+  }
+
+  /// The keys the service holds for [stores] (`vaultKeys`), by store.
+  Future<Map<String, Map<String, Object?>>> _heldKeys(
+    List<String> stores,
+  ) async {
+    final set = await connection.request('vaultKeys', {'stores': stores});
+    return {
+      for (final s in (set['stores'] as List).cast<Map>())
+        s['store'] as String: (s['keys'] as Map? ?? const {})
+            .cast<String, Object?>(),
+    };
+  }
+
+  Future<TomSecretsDeviceSettings> _deviceSettings() async {
+    final answer = await connection.request('settings.get');
+    return TomSecretsDeviceSettings.fromJson(
+      (answer['device'] as Map? ?? const {}).cast<String, Object?>(),
+    );
+  }
+
   /// The shared configuration's YAML (`tsm.config` in the primary's
   /// metadata entry, BP-43), or null when the primary has none.
   String? get sharedConfigYaml {
@@ -717,7 +988,10 @@ class TomSecretsSession extends ChangeNotifier {
   /// revision it was read at, then reads back what was written. Throws
   /// `TomSecretsAdminException`; on `stale_base` the vault is read again and
   /// the edit has to be made once more.
-  Future<void> save(String store) async {
+  ///
+  /// [keys] are the primary's new keys when its file is re-keyed (`save`'s
+  /// `keys`, protocol.md 6.4).
+  Future<void> save(String store, {Map<String, Object?>? keys}) async {
     final vault = _vaultOf(store);
     if (vault == null) throw StateError('$store is not open');
     final bytes = await tomSecretsEncodeStored(
@@ -732,6 +1006,7 @@ class TomSecretsSession extends ChangeNotifier {
         'store': store,
         'bytes': base64.encode(bytes),
         'baseRevision': vault.revision,
+        'keys': ?keys,
       });
       await _reopen(store);
     } on TomSecretsAdminException catch (e) {

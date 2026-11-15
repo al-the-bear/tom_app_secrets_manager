@@ -29,11 +29,23 @@ const testArgon2 = KdbxArgon2(
 
 /// One demo store.
 final class FakeStore {
-  FakeStore(this.name, this.password, this.stored, {this.state = 'current'})
-    : revision = tomSecretsBlobId(stored);
+  FakeStore(
+    this.name,
+    this.password,
+    this.stored, {
+    this.state = 'current',
+    String? location,
+    this.keyFile,
+    this.outerKey,
+  }) : revision = tomSecretsBlobId(stored),
+       location = location ?? 'file:/demo/$name.kdbx';
 
   final String name;
-  final String password;
+
+  /// The keys the service holds (a re-keyed save replaces them).
+  String password;
+  Uint8List? keyFile;
+  String? outerKey;
   Uint8List stored;
   String revision;
   String state;
@@ -49,7 +61,15 @@ final class FakeStore {
   /// The refused edit the service holds meanwhile.
   Uint8List? held;
 
-  String get location => 'file:/demo/$name.kdbx';
+  /// Its locator.
+  final String location;
+
+  /// The keys as `vaultKeySet` carries them.
+  Map<String, Object?> get wireKeys => {
+    'password': password,
+    if (keyFile != null) 'keyFile': base64.encode(keyFile!),
+    'outerKey': ?outerKey,
+  };
 }
 
 /// A vault [name] under [password] with entries added by [fill].
@@ -308,18 +328,14 @@ final class FakeService implements TomSecretsAdminChannel {
           'stores': [
             for (final s in stores)
               if (only == null || only.contains(s.name))
-                {
-                  'store': s.name,
-                  'location': s.location,
-                  'keys': {'password': s.password},
-                },
+                {'store': s.name, 'location': s.location, 'keys': s.wireKeys},
             for (final s in unserved)
               if (only != null && only.contains(s.name))
                 {
                   'store': s.name,
                   'location': s.location,
                   'served': false,
-                  'keys': {'password': s.password},
+                  'keys': s.wireKeys,
                 },
           ],
           'unserved': [
@@ -362,8 +378,20 @@ final class FakeService implements TomSecretsAdminChannel {
             details: {'reason': 'stale_base'},
           );
         }
+        if (failNextSaveOf == s.name) {
+          failNextSaveOf = null;
+          throw TomSecretsAdminException(
+            'offline',
+            'the store cannot be reached',
+            details: {
+              'stores': [s.name],
+            },
+          );
+        }
+        final bytes = base64.decode(args['bytes']! as String);
+        await _takeKeys(s, bytes, args['keys'] as Map?);
         saves.add({'op': op, ...args});
-        s.stored = base64.decode(args['bytes']! as String);
+        s.stored = bytes;
         s.revision = tomSecretsBlobId(s.stored);
         emit({'op': 'store_changed', 'store': s.name, 'revision': s.revision});
         return {'op': 'ok'};
@@ -442,6 +470,17 @@ final class FakeService implements TomSecretsAdminChannel {
       case 'keys':
         _unlocked();
         return {'op': 'keyList', 'keys': keys};
+      case 'compact':
+        _unlocked();
+        compactions.add(args);
+        return {
+          'op': 'compacted',
+          'repository': args['repository'],
+          'compacted': true,
+          'oldHead': 'a' * 40,
+          'newHead': 'b' * 40,
+          'kept': 0,
+        };
       case 'reload':
         _unlocked();
         reloads++;
@@ -474,6 +513,90 @@ final class FakeService implements TomSecretsAdminChannel {
         return {'op': 'ok'};
     }
   }
+
+  /// The keys a save of [s] is written with (protocol.md 6.4): the keys
+  /// held; the primary's [newKeys]; or, for a further vault, the keys the
+  /// primary lists for it now (a re-keyed save). Else `malformed`. A saved
+  /// primary's vault list is what the further vaults' re-keyed saves take.
+  Future<void> _takeKeys(FakeStore s, Uint8List bytes, Map? newKeys) async {
+    final primary = s == stores.first;
+    if (newKeys != null && !primary) {
+      throw TomSecretsAdminException(
+        'malformed',
+        'keys',
+        details: {'reason': 'keys'},
+      );
+    }
+    Future<KdbxFile?> open(String? pw, Uint8List? kf, String? outer) async {
+      try {
+        return await tomSecretsDecodeStored(
+          s.location,
+          bytes,
+          tomSecretsVaultCredentials(password: pw, keyFile: kf),
+          outerKey: outer,
+        );
+      } on Object {
+        return null;
+      }
+    }
+
+    Never malformed() => throw TomSecretsAdminException(
+      'malformed',
+      'the file does not open with the store\'s keys',
+      details: {'reason': 'bytes'},
+    );
+    KdbxFile? file;
+    if (newKeys != null) {
+      final kf = newKeys['keyFile'] as String?;
+      final keyFile = kf == null ? null : base64.decode(kf);
+      file = await open(
+        newKeys['password'] as String?,
+        keyFile,
+        newKeys['outerKey'] as String?,
+      );
+      if (file == null) malformed();
+      s
+        ..password = newKeys['password']! as String
+        ..keyFile = keyFile
+        ..outerKey = newKeys['outerKey'] as String?;
+      rekeyedSaves.add(s.name);
+    } else {
+      file = await open(s.password, s.keyFile, s.outerKey);
+      final entry = listed[s.name];
+      if (file == null && entry != null) {
+        final kf = entry.keyFile == null
+            ? null
+            : Uint8List.fromList(entry.keyFile!);
+        file = await open(entry.password, kf, entry.outerKey);
+        if (file != null) {
+          s
+            ..password = entry.password ?? ''
+            ..keyFile = kf
+            ..outerKey = entry.outerKey;
+          rekeyedSaves.add(s.name);
+        }
+      }
+      if (file == null) malformed();
+    }
+    if (primary) {
+      listed = {
+        for (final v in TomSecretsPrimaryVaults(file).list()) v.name: v,
+      };
+    }
+  }
+
+  /// The vaults the saved primary lists, by name (empty until the primary
+  /// is saved).
+  Map<String, TomSecretsVaultKeys> listed = {};
+
+  /// The stores whose save was re-keyed, in order.
+  final List<String> rekeyedSaves = [];
+
+  /// The next save of this store fails as offline (once).
+  String? failNextSaveOf;
+
+  /// The `compact` requests.
+  final List<Map<String, Object?>> compactions = [];
 
   void _unlocked() {
     if (locked) throw TomSecretsAdminException('locked', 'locked');
