@@ -40,6 +40,10 @@
 - Renewing a GitHub token from the Keys screen: GitHub's new-token page
   opened filled in, the pasted token checked and kept by the service
   (`token.set`), the result, and the page where the old token is deleted.
+- Adding or removing a vault's outer encryption from the rotate dialog: the
+  vault moved to `.kdbx.tsmx` or `.kdbx` through the service (`vault.move`),
+  under a new repository key or one its repository's other vaults use, the
+  history cut, a copy of a new key and the emergency sheet offered.
 - Rotating this device's approver and approval-link key pairs from the Keys
   screen (`keys.rotate`), with the hosts reached and not reached.
 - The First run wizard: the primary vault created or opened, local or in a

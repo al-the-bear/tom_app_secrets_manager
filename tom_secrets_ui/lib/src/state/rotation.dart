@@ -131,3 +131,50 @@ DateTime tomSecretsAddMonths(DateTime from, int months) {
   final at = from.toUtc();
   return DateTime.utc(at.year, at.month + months, at.day, at.hour, at.minute);
 }
+
+/// A repository key a vault of the same repository already uses, offered
+/// when the outer encryption is added to another vault there.
+typedef TomSecretsKnownRepositoryKey = ({
+  String keyId,
+  String key,
+  List<String> vaults,
+});
+
+/// What adding or removing a vault's outer encryption did (`vault.move`).
+final class TomSecretsOuterMoved {
+  /// The result.
+  const TomSecretsOuterMoved({
+    required this.store,
+    required this.from,
+    required this.to,
+    this.repositoryKey,
+    this.reusedKeyId,
+    this.compacted = const [],
+    this.compactFailures = const {},
+  });
+
+  /// The vault moved.
+  final String store;
+
+  /// Its locator before.
+  final String from;
+
+  /// Its locator now.
+  final String to;
+
+  /// A new repository key made for it (base64), for the user's copy; null
+  /// when the outer encryption was removed or an existing key was taken.
+  final String? repositoryKey;
+
+  /// The id of the repository key taken from another vault, or null.
+  final String? reusedKeyId;
+
+  /// The `github:` repositories whose history was cut.
+  final List<String> compacted;
+
+  /// The repositories whose cut failed, with why.
+  final Map<String, String> compactFailures;
+
+  /// Whether the outer encryption is on now.
+  bool get outer => to.endsWith(tomSecretsOuterSuffix);
+}

@@ -655,6 +655,125 @@ class TomSecretsSession extends ChangeNotifier {
     );
   }
 
+  /// The repository keys the vaults in [store]'s repository already use
+  /// (the primary's included), each with the vaults under it: what adding
+  /// the outer encryption to [store] may take instead of a new key.
+  Future<List<TomSecretsKnownRepositoryKey>> repositoryKeysFor(
+    String store,
+  ) async {
+    final primary = _vaults.values.firstOrNull;
+    final vault = _vaultOf(store);
+    if (primary == null || vault == null) return const [];
+    final repository = tomSecretsRepositoryOf(vault.location);
+    final byKey = <String, List<String>>{};
+    void take(String name, String locator, String? key) {
+      if (key == null || name == store) return;
+      if (tomSecretsRepositoryOf(locator) != repository) return;
+      (byKey[key] ??= []).add(name);
+    }
+
+    final held = (await _heldKeys([primary.store]))[primary.store]!;
+    take(primary.store, primary.location, held['outerKey'] as String?);
+    for (final v in TomSecretsPrimaryVaults(primary.file).list()) {
+      take(v.name, v.locator, v.outerKey);
+    }
+    return [
+      for (final MapEntry(:key, :value) in byKey.entries)
+        (
+          keyId: TomSecretsRepositoryKey.fromBase64(key).keyIdHex,
+          key: key,
+          vaults: value,
+        ),
+    ];
+  }
+
+  /// Adds ([add]) or removes the outer encryption of [store] through the
+  /// service (`vault.move`, protocol.md 6.4): the vault moves to its locator
+  /// with `.kdbx.tsmx` added or removed, encrypted under [outerKey] (a key
+  /// another vault of the repository uses, [repositoryKeysFor]) or a new
+  /// repository key, with [cipher]; its other keys stay. Then the vaults are
+  /// read again and the `github:` repository's history is cut (retention
+  /// 0), so no commit keeps the file without the outer layer. Throws
+  /// [StateError] for a vault not served here and [ArgumentError] when it
+  /// already is as asked; `TomSecretsAdminException` when the service
+  /// refuses.
+  Future<TomSecretsOuterMoved> moveOuter(
+    String store, {
+    required bool add,
+    String? outerKey,
+    TomSecretsOuterCipher cipher = TomSecretsOuterCipher.xchacha20Poly1305,
+  }) async {
+    final vault = _vaults[store];
+    if (vault == null) {
+      throw StateError('$store is not served on this machine');
+    }
+    final from = vault.location;
+    if (add == from.endsWith(tomSecretsOuterSuffix)) {
+      throw ArgumentError(
+        add
+            ? '$store is outer encrypted already'
+            : '$store has no outer '
+                  'encryption',
+      );
+    }
+    final to = add
+        ? '$from$tomSecretsOuterSuffix'
+        : from.substring(0, from.length - tomSecretsOuterSuffix.length);
+    final key = add
+        ? (outerKey ?? TomSecretsRepositoryKey.generate().toBase64())
+        : null;
+    final held = (await _heldKeys([store]))[store]!;
+    final bytes = await tomSecretsEncodeStored(
+      to,
+      vault.file,
+      outerKey: key,
+      cipher: cipher,
+    );
+    _ownSaves.add(store);
+    try {
+      await connection.request('vault.move', {
+        'store': store,
+        'location': to,
+        'bytes': base64.encode(bytes),
+        'baseRevision': vault.revision,
+        'keys': {
+          'password': held['password'] as String? ?? '',
+          'keyFile': ?held['keyFile'],
+          'outerKey': ?key,
+        },
+      });
+    } finally {
+      bytes.fillRange(0, bytes.length, 0);
+      _ownSaves.remove(store);
+    }
+    await load();
+    final compacted = <String>[];
+    final failures = <String, String>{};
+    final slug = tomSecretsGitHubRepositoryOf(to);
+    if (slug != null) {
+      try {
+        await connection.request('compact', {
+          'repository': slug,
+          'retentionDays': 0,
+        });
+        compacted.add(slug);
+      } on TomSecretsAdminException catch (e) {
+        failures[slug] = e.message;
+      }
+    }
+    return TomSecretsOuterMoved(
+      store: store,
+      from: from,
+      to: to,
+      repositoryKey: add && outerKey == null ? key : null,
+      reusedKeyId: outerKey == null
+          ? null
+          : TomSecretsRepositoryKey.fromBase64(outerKey).keyIdHex,
+      compacted: compacted,
+      compactFailures: failures,
+    );
+  }
+
   /// The vaults the primary lists with other keys than the service holds:
   /// a rotation whose re-keyed save failed (or was made elsewhere and not
   /// finished). [finishRotations] completes them.

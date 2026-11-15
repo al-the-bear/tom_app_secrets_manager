@@ -61,8 +61,8 @@ final class FakeStore {
   /// The refused edit the service holds meanwhile.
   Uint8List? held;
 
-  /// Its locator.
-  final String location;
+  /// Its locator (`vault.move` changes it).
+  String location;
 
   /// The keys as `vaultKeySet` carries them.
   Map<String, Object?> get wireKeys => {
@@ -470,6 +470,93 @@ final class FakeService implements TomSecretsAdminChannel {
       case 'keys':
         _unlocked();
         return {'op': 'keyList', 'keys': keys};
+      case 'vault.move':
+        _unlocked();
+        final s = store(args['store']! as String);
+        moves.add(args);
+        final to = args['location']! as String;
+        final expected = s.location.endsWith(tomSecretsOuterSuffix)
+            ? s.location.substring(
+                0,
+                s.location.length - tomSecretsOuterSuffix.length,
+              )
+            : '${s.location}$tomSecretsOuterSuffix';
+        if (to != expected) {
+          throw TomSecretsAdminException(
+            'malformed',
+            'location',
+            details: {'reason': 'location'},
+          );
+        }
+        if (args['baseRevision'] != s.revision) {
+          throw TomSecretsAdminException(
+            'denied',
+            'stale',
+            details: {'reason': 'stale_base'},
+          );
+        }
+        final keys = (args['keys']! as Map).cast<String, Object?>();
+        final kf = keys['keyFile'] as String?;
+        final bytes = base64.decode(args['bytes']! as String);
+        try {
+          await tomSecretsDecodeStored(
+            to,
+            bytes,
+            tomSecretsVaultCredentials(
+              password: keys['password'] as String?,
+              keyFile: kf == null ? null : base64.decode(kf),
+            ),
+            outerKey: keys['outerKey'] as String?,
+          );
+        } on Object {
+          throw TomSecretsAdminException(
+            'malformed',
+            'bytes',
+            details: {'reason': 'bytes'},
+          );
+        }
+        s
+          ..location = to
+          ..outerKey = keys['outerKey'] as String?
+          ..stored = bytes
+          ..revision = tomSecretsBlobId(bytes);
+        final primary = stores.first;
+        if (s != primary) {
+          // The service writes the vault's entry in the primary.
+          final file = await tomSecretsDecodeStored(
+            primary.location,
+            primary.stored,
+            tomSecretsVaultCredentials(
+              password: primary.password,
+              keyFile: primary.keyFile,
+            ),
+            outerKey: primary.outerKey,
+          );
+          final list = TomSecretsPrimaryVaults(file);
+          final old = list.byName(s.name);
+          if (old != null) {
+            list.put(
+              TomSecretsVaultKeys(
+                name: old.name,
+                locator: to,
+                password: old.password,
+                keyFile: old.keyFile,
+                outerKey: s.outerKey,
+                githubToken: old.githubToken,
+                expires: old.expires,
+              ),
+            );
+          }
+          primary
+            ..stored = await tomSecretsEncodeStored(
+              primary.location,
+              file,
+              outerKey: primary.outerKey,
+            )
+            ..revision = tomSecretsBlobId(primary.stored);
+        }
+        emit({'op': 'store_changed', 'store': s.name, 'revision': s.revision});
+        return {'op': 'ok', 'location': to, 'revision': s.revision};
       case 'keys.rotate':
         _unlocked();
         pairRotations.add(args);
@@ -624,6 +711,9 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// The `compact` requests.
   final List<Map<String, Object?>> compactions = [];
+
+  /// The `vault.move` requests.
+  final List<Map<String, Object?>> moves = [];
 
   /// The `keys.rotate` requests.
   final List<Map<String, Object?>> pairRotations = [];

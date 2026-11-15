@@ -58,6 +58,15 @@ class _RotateState extends State<TomSecretsRotateDialog> {
   bool _running = false;
   String? _error;
   TomSecretsRotated? _done;
+
+  // Adding or removing the outer encryption (`vault.move`): the mode
+  // (`add` / `remove`), the keys the repository's other vaults use, the one
+  // chosen (null: a new key), the cipher, and what it did.
+  String? _outerMode;
+  List<TomSecretsKnownRepositoryKey> _known = const [];
+  String? _outerKey;
+  TomSecretsOuterCipher _outerCipher = TomSecretsOuterCipher.xchacha20Poly1305;
+  TomSecretsOuterMoved? _moved;
   final Set<String> _saved = {};
 
   @override
@@ -111,6 +120,43 @@ class _RotateState extends State<TomSecretsRotateDialog> {
     }
   }
 
+  Future<void> _startOuter(String mode) async {
+    final known = mode == 'add'
+        ? await _session.repositoryKeysFor(widget.store)
+        : const <TomSecretsKnownRepositoryKey>[];
+    if (!mounted) return;
+    setState(() {
+      _outerMode = mode;
+      _known = known;
+      _outerKey = null;
+      _error = null;
+    });
+  }
+
+  Future<void> _moveOuter() async {
+    setState(() {
+      _running = true;
+      _error = null;
+    });
+    try {
+      final moved = await _session.moveOuter(
+        widget.store,
+        add: _outerMode == 'add',
+        outerKey: _outerKey,
+        cipher: _outerCipher,
+      );
+      if (mounted) setState(() => _moved = moved);
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) setState(() => _error = tomSecretsDescribeAdminError(e));
+    } on ArgumentError catch (e) {
+      if (mounted) setState(() => _error = '${e.message}');
+    } on StateError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
   Future<void> _saveCopy(String what, String name, Uint8List bytes) async {
     final files = context.read<TomSecretsHost>().files;
     if (files == null) return;
@@ -122,6 +168,52 @@ class _RotateState extends State<TomSecretsRotateDialog> {
   @override
   Widget build(BuildContext context) {
     final done = _done;
+    final moved = _moved;
+    if (moved != null || _outerMode != null) {
+      return AlertDialog(
+        key: const Key('tsm-rotate'),
+        title: Text(
+          _outerMode == 'add'
+              ? 'Add outer encryption to ${widget.store}'
+              : 'Remove the outer encryption of ${widget.store}',
+        ),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: moved == null
+                ? _outerForm(context)
+                : _movedResult(context, moved),
+          ),
+        ),
+        actions: moved == null
+            ? [
+                TextButton(
+                  onPressed: _running
+                      ? null
+                      : () => setState(() => _outerMode = null),
+                  child: const Text('Back'),
+                ),
+                FilledButton(
+                  key: const Key('tsm-outer-go'),
+                  onPressed: _running ? null : () => unawaited(_moveOuter()),
+                  child: Text(
+                    _running
+                        ? 'Moving…'
+                        : _outerMode == 'add'
+                        ? 'Add outer encryption'
+                        : 'Remove outer encryption',
+                  ),
+                ),
+              ]
+            : [
+                FilledButton(
+                  key: const Key('tsm-rotate-done'),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Done'),
+                ),
+              ],
+      );
+    }
     return AlertDialog(
       key: const Key('tsm-rotate'),
       title: Text('Rotate the keys of ${widget.store}'),
@@ -274,6 +366,35 @@ class _RotateState extends State<TomSecretsRotateDialog> {
             onChanged: _running ? null : (v) => setState(() => _cipher = v),
           ),
         ],
+        const Divider(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                outer
+                    ? 'Outer encryption is on (.kdbx.tsmx).'
+                    : 'Outer encryption is off (.kdbx).',
+              ),
+            ),
+            TextButton(
+              key: Key(
+                outer ? 'tsm-rotate-outer-remove' : 'tsm-rotate-outer-add',
+              ),
+              onPressed: _running || _session.vault(widget.store) == null
+                  ? null
+                  : () => unawaited(_startOuter(outer ? 'remove' : 'add')),
+              child: Text(
+                outer ? 'Remove outer encryption…' : 'Add outer encryption…',
+              ),
+            ),
+          ],
+        ),
+        if (_session.vault(widget.store) == null)
+          Text(
+            'Only a machine that serves this vault adds or removes its outer '
+            'encryption.',
+            style: theme.textTheme.bodySmall,
+          ),
         const SizedBox(height: 12),
         Text(
           'The new keys are written into the primary first, then the vault is '
@@ -292,6 +413,142 @@ class _RotateState extends State<TomSecretsRotateDialog> {
             style: TextStyle(color: theme.colorScheme.error),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _outerForm(BuildContext context) {
+    final theme = Theme.of(context);
+    final add = _outerMode == 'add';
+    final location = _location;
+    final to = add
+        ? '$location$tomSecretsOuterSuffix'
+        : location.substring(0, location.length - tomSecretsOuterSuffix.length);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('The vault moves from $location to $to.'),
+        const SizedBox(height: 8),
+        if (add) ...[
+          Text('Repository key', style: theme.textTheme.titleSmall),
+          RadioGroup<String?>(
+            groupValue: _outerKey,
+            onChanged: (v) {
+              if (!_running) setState(() => _outerKey = v);
+            },
+            child: Column(
+              children: [
+                const RadioListTile<String?>(
+                  key: Key('tsm-outer-key-new'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  value: null,
+                  title: Text('A new repository key'),
+                ),
+                for (final k in _known)
+                  RadioListTile<String?>(
+                    key: Key('tsm-outer-key-${k.keyId}'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    value: k.key,
+                    title: Text(
+                      'The key of ${k.vaults.join(', ')} (${k.keyId})',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          DropdownButtonFormField<TomSecretsOuterCipher>(
+            key: const Key('tsm-outer-cipher'),
+            initialValue: _outerCipher,
+            decoration: const InputDecoration(labelText: 'Outer cipher'),
+            items: const [
+              DropdownMenuItem(
+                value: TomSecretsOuterCipher.xchacha20Poly1305,
+                child: Text('XChaCha20-Poly1305'),
+              ),
+              DropdownMenuItem(
+                value: TomSecretsOuterCipher.aes256Gcm,
+                child: Text('AES-256-GCM'),
+              ),
+            ],
+            onChanged: _running
+                ? null
+                : (v) => setState(() => _outerCipher = v!),
+          ),
+        ] else
+          const Text(
+            'Without the outer layer the file is a plain KDBX vault: anyone '
+            'who can read the repository sees its structure and can try its '
+            'master password.',
+          ),
+        const SizedBox(height: 12),
+        Text(
+          'The new file is written before the old one is removed (on GitHub '
+          'in one commit); then the repository\'s history is cut, so no '
+          'commit keeps the file ${add ? 'without' : 'with'} the outer layer.'
+          '${_isPrimary ? ' Your other devices name the primary in their '
+                    'own settings: tell them its new place by pairing or by '
+                    'hand.' : ''}',
+          style: theme.textTheme.bodySmall,
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            key: const Key('tsm-rotate-error'),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _movedResult(BuildContext context, TomSecretsOuterMoved moved) {
+    final theme = Theme.of(context);
+    final files = context.read<TomSecretsHost>().files;
+    final key = moved.repositoryKey;
+    return Column(
+      key: const Key('tsm-outer-result'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('${moved.store} is at ${moved.to} now.'),
+        if (moved.reusedKeyId != null)
+          Text('It uses the repository key ${moved.reusedKeyId}.'),
+        if (moved.compacted.isNotEmpty)
+          Text('History cut: ${moved.compacted.join(', ')}.'),
+        for (final MapEntry(key: repo, :value) in moved.compactFailures.entries)
+          Text(
+            'The history of $repo was not cut ($value); run `tsm compact '
+            '$repo` later.',
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        if (key != null && files != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('tsm-outer-save-repokey'),
+              icon: Icon(
+                _saved.contains('repositoryKey') ? Icons.check : Icons.save_alt,
+              ),
+              label: const Text('Save a copy of the new repository key…'),
+              onPressed: () => unawaited(
+                _saveCopy(
+                  'repositoryKey',
+                  '${moved.store}.repository-key.txt',
+                  Uint8List.fromList(utf8.encode('$key\n')),
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        Text(
+          'Your emergency sheet names the old place and keys: replace it.',
+          style: theme.textTheme.bodySmall,
+        ),
+        TomSecretsEmergencySheetOffer(sheet: _session.emergencySheet),
       ],
     );
   }

@@ -403,4 +403,124 @@ void main() {
     expect(service.store('team').password, 'team-demo-pw-2');
     expect(find.text('Re-keyed: team.'), findsOneWidget);
   });
+
+  group('the outer encryption added or removed (vault.move)', () {
+    Future<void> openRotate(WidgetTester tester, String store) async {
+      await tester.tap(find.byKey(Key('tsm-rotate-$store')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a further vault: added under the key its repository\'s '
+        'other vaults use, then removed; the history cut each time', (
+      tester,
+    ) async {
+      final session = await keysScreen(tester);
+      await openRotate(tester, 'team');
+      expect(find.byKey(const Key('tsm-rotate-outer-remove')), findsNothing);
+      await tester.tap(find.byKey(const Key('tsm-rotate-outer-add')));
+      await wait(tester);
+      final keyId = TomSecretsRepositoryKey.fromBase64(repoKey).keyIdHex;
+      expect(find.textContaining('secrets, certs ($keyId)'), findsOneWidget);
+      await tester.tap(find.byKey(Key('tsm-outer-key-$keyId')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('tsm-outer-go')));
+      await wait(tester, 15);
+      expect(find.byKey(const Key('tsm-outer-result')), findsOneWidget);
+      final move = service.moves.single;
+      expect(move['location'], '$_team$tomSecretsOuterSuffix');
+      expect((move['keys']! as Map)['outerKey'], repoKey);
+      expect((move['keys']! as Map)['password'], 'team-demo-pw');
+      expect(service.store('team').location, '$_team$tomSecretsOuterSuffix');
+      expect(service.compactions, [
+        {'repository': _repo, 'retentionDays': 0},
+      ]);
+      expect(
+        find.textContaining('It uses the repository key $keyId'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('tsm-outer-save-repokey')),
+        findsNothing,
+        reason: 'no new key to keep',
+      );
+      expect(find.byKey(const Key('tsm-sheet')), findsOneWidget);
+      expect(
+        session.vault('team')!.location,
+        '$_team$tomSecretsOuterSuffix',
+        reason: 'read again from its new place',
+      );
+      final entry = TomSecretsPrimaryVaults(
+        session.vault('primary')!.file,
+      ).byName('team')!;
+      expect(entry.locator, '$_team$tomSecretsOuterSuffix');
+      await openStored(tester, service.store('team'));
+      await tester.tap(find.byKey(const Key('tsm-rotate-done')));
+      await tester.pumpAndSettle();
+
+      // And removed again.
+      await openRotate(tester, 'team');
+      await tester.tap(find.byKey(const Key('tsm-rotate-outer-remove')));
+      await wait(tester);
+      expect(find.textContaining('plain KDBX vault'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('tsm-outer-go')));
+      await wait(tester, 15);
+      expect(service.moves.last['location'], _team);
+      expect(
+        (service.moves.last['keys']! as Map).containsKey('outerKey'),
+        isFalse,
+      );
+      expect(service.store('team').location, _team);
+      expect(service.compactions, hasLength(2));
+      expect(session.vault('team')!.location, _team);
+    });
+
+    testWidgets('the primary: added with a new repository key (a copy '
+        'offered), then removed', (tester) async {
+      final session = await keysScreen(tester);
+      await openRotate(tester, 'primary');
+      expect(find.textContaining('by pairing or by hand'), findsWidgets);
+      await tester.tap(find.byKey(const Key('tsm-rotate-outer-add')));
+      await wait(tester);
+      await tester.tap(find.byKey(const Key('tsm-outer-go')));
+      await wait(tester, 15);
+      final move = service.moves.single;
+      expect(move['store'], 'primary');
+      expect(move['location'], 'file:/demo/primary.kdbx$tomSecretsOuterSuffix');
+      final key = (move['keys']! as Map)['outerKey']! as String;
+      expect((move['keys']! as Map)['password'], demoPassword);
+      expect(service.compactions, isEmpty, reason: 'a file: primary');
+      await tester.tap(find.byKey(const Key('tsm-outer-save-repokey')));
+      await wait(tester);
+      expect(
+        utf8.decode(files.saved['primary.repository-key.txt']!).trim(),
+        key,
+      );
+      expect(
+        session.vault('primary')!.location,
+        'file:/demo/primary.kdbx$tomSecretsOuterSuffix',
+      );
+      await tester.tap(find.byKey(const Key('tsm-rotate-done')));
+      await tester.pumpAndSettle();
+
+      await openRotate(tester, 'primary');
+      await tester.tap(find.byKey(const Key('tsm-rotate-outer-remove')));
+      await wait(tester);
+      await tester.tap(find.byKey(const Key('tsm-outer-go')));
+      await wait(tester, 15);
+      expect(service.moves.last['location'], 'file:/demo/primary.kdbx');
+      expect(session.vault('primary')!.location, 'file:/demo/primary.kdbx');
+    });
+
+    testWidgets('a vault this machine does not serve: no move offered', (
+      tester,
+    ) async {
+      await keysScreen(tester);
+      await openRotate(tester, 'certs');
+      final remove = tester.widget<TextButton>(
+        find.byKey(const Key('tsm-rotate-outer-remove')),
+      );
+      expect(remove.onPressed, isNull);
+      expect(find.textContaining('Only a machine that serves'), findsOneWidget);
+    });
+  });
 }
