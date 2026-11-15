@@ -8,6 +8,7 @@
 /// `tom_secrets_desktop`; [TomSecretsHost.headless] is the set for tests.
 library;
 
+import 'dart:io' show InternetAddress;
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart' show BuildContext;
@@ -212,6 +213,8 @@ final class TomSecretsHost {
     this.files,
     this.printer,
     this.openUrl,
+    this.pairingAddresses,
+    this.pairingAllowsLoopback = false,
     this.clipboard = const TomFlutterClipboardPort(),
     this.startedHidden = false,
     this.firstRunActions = const {},
@@ -259,6 +262,13 @@ final class TomSecretsHost {
   /// Opens a web page in the system browser (GitHub's token pages); answers
   /// whether it was opened. Without one the app shows the address to copy.
   final Future<bool> Function(Uri url)? openUrl;
+
+  /// The addresses a pairing window listens on; null: this machine's LAN and
+  /// VPN addresses (`tomSecretsPairingAddresses`).
+  final Future<List<InternetAddress>> Function()? pairingAddresses;
+
+  /// Whether a pairing window may listen on loopback: tests only.
+  final bool pairingAllowsLoopback;
 
   /// The clipboard protected values are copied to.
   final TomClipboardPort clipboard;

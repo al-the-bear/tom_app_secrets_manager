@@ -584,6 +584,58 @@ final class FakeService implements TomSecretsAdminChannel {
           'where': 'keychain',
           'expiresAt': '2027-02-13T09:00:00.000Z',
         };
+      case 'pair.identity':
+        _unlocked();
+        return {'op': 'pairIdentity', 'device': 'mbp', ...?pairIdentity};
+      case 'pair.record':
+        _unlocked();
+        pairRecords.add(args);
+        final record = (args['record'] as Map?)?.cast<String, Object?>();
+        pairedDevices
+          ..removeWhere((d) => d.device == args['device'])
+          ..add(
+            TomSecretsDeviceRecord(
+              device: args['device']! as String,
+              platform: record?['platform'] as String?,
+              paired: DateTime.utc(2026, 11, 15),
+              pairedBy: 'mbp',
+              keyIds: [
+                for (final k in (record?['keyIds'] as List? ?? [])) '$k',
+              ],
+              approverKeyId: args['approver'] == null ? null : 'a1b2c3d4',
+              linkKeySince: DateTime.utc(2026, 11, 15),
+            ),
+          );
+        return {'op': 'ok'};
+      case 'pair.revoke':
+        _unlocked();
+        final at = pairedDevices.indexWhere((d) => d.device == args['device']);
+        if (at < 0) {
+          throw TomSecretsAdminException(
+            'not_found',
+            'no such device',
+            details: {'device': args['device']},
+          );
+        }
+        final d = pairedDevices[at];
+        pairedDevices[at] = TomSecretsDeviceRecord(
+          device: d.device,
+          platform: d.platform,
+          paired: d.paired,
+          pairedBy: d.pairedBy,
+          keyIds: d.keyIds,
+          approverKeyId: d.approverKeyId,
+          approverKeySince: d.approverKeySince,
+          linkKeySince: d.linkKeySince,
+          revoked: DateTime.utc(2026, 11, 16),
+        );
+        return {'op': 'ok'};
+      case 'pair.list':
+        _unlocked();
+        return {
+          'op': 'pairedDevices',
+          'devices': [for (final d in pairedDevices) d.toJson()],
+        };
       case 'compact':
         _unlocked();
         compactions.add(args);
@@ -720,6 +772,16 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// The `token.set` requests.
   final List<Map<String, Object?>> tokenRequests = [];
+
+  /// This device's public keys (`pair.identity`), set by a pairing test.
+  Map<String, Object?>? pairIdentity;
+
+  /// The `pair.record` requests.
+  final List<Map<String, Object?>> pairRecords = [];
+
+  /// The device records (`pair.list`); `pair.record` and `pair.revoke`
+  /// change them.
+  final List<TomSecretsDeviceRecord> pairedDevices = [];
 
   /// Tokens `token.set` refuses, with the `denied` reason.
   final Map<String, String> refusedTokens = {};

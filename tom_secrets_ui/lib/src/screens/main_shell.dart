@@ -27,6 +27,7 @@ import 'clients_view.dart';
 import 'conflicts_view.dart';
 import 'import_view.dart';
 import 'keys_view.dart';
+import 'pairing_view.dart';
 import 'environments_view.dart';
 import 'settings_view.dart';
 import 'status_view.dart';
@@ -48,6 +49,9 @@ enum TomSecretsDestination {
 
   /// The keys with their dates, the rotation ages.
   keys,
+
+  /// Pairing another device, the paired devices (part-sharing).
+  pairing,
 
   /// Importing an export of another password manager.
   import,
@@ -224,6 +228,11 @@ class _MainShellState extends State<TomSecretsMainShell> {
                     label: const Text('Keys'),
                   ),
                   const NavigationRailDestination(
+                    icon: Icon(Icons.devices_other_outlined),
+                    selectedIcon: Icon(Icons.devices_other_rounded),
+                    label: Text('Pairing'),
+                  ),
+                  const NavigationRailDestination(
                     icon: Icon(Icons.download_outlined),
                     selectedIcon: Icon(Icons.download_rounded),
                     label: Text('Import'),
@@ -390,6 +399,8 @@ class _MainShellState extends State<TomSecretsMainShell> {
                           const TomSecretsClientsView(),
                         TomSecretsDestination.keys =>
                           const TomSecretsKeysView(),
+                        TomSecretsDestination.pairing =>
+                          const TomSecretsPairingView(),
                         TomSecretsDestination.import =>
                           const TomSecretsImportView(),
                         TomSecretsDestination.settings =>

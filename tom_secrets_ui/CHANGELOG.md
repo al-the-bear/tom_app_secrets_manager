@@ -46,6 +46,13 @@
   history cut, a copy of a new key and the emergency sheet offered.
 - Rotating this device's approver and approval-link key pairs from the Keys
   screen (`keys.rotate`), with the hosts reached and not reached.
+- The Pairing screen, giving side: the pairing window on this machine's LAN
+  and VPN addresses for five minutes with its code, addresses, port and
+  countdown; once the other device proved the code, the bundle chosen (the
+  vaults the primary lists with their key files and repository keys, the
+  shared configuration, a GitHub token pasted for that device), sent or
+  declined; `pair.record` afterwards; the paired devices (`pair.list`) with
+  Revoke (`pair.revoke`). Locking the app closes the window.
 - The First run wizard: the primary vault created or opened, local or in a
   GitHub repository, its key file and outer encryption, the machine's
   settings; then the service started and unlocked.
