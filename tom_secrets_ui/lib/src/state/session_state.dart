@@ -159,27 +159,10 @@ abstract final class TomSecretsPreferenceKeys {
   static const vaults = 'view.vaults';
 }
 
-/// A file opened for editing only, beside the served vaults (part-app,
-/// Environments, BP-15): another environment's file this machine does not
-/// serve, picked by the user and saved back where the user chooses.
-final class TomSecretsExtraFile {
-  TomSecretsExtraFile._(this.name, this.file, this.outerKey, this.cipher);
-
-  /// Its file name, which also names its column.
-  final String name;
-
-  /// The opened file.
-  final KdbxFile file;
-
-  /// The outer key of a `.tsmx` file (base64), or null.
-  final String? outerKey;
-
-  /// The outer cipher of a `.tsmx` file, kept by a save, or null.
-  final TomSecretsOuterCipher? cipher;
-
-  /// Whether it was changed since it was opened or saved.
-  bool dirty = false;
-}
+/// A vault the primary lists that this machine does not serve, by its store
+/// name and locator (`vaultKeySet.unserved`, protocol.md 6.4): opened for
+/// editing on request, never served (part-app, Environments, BP-15).
+typedef TomSecretsUnservedVault = ({String store, String location});
 
 /// A vault that could not be opened for editing, with why.
 final class TomSecretsVaultFailure {
@@ -219,7 +202,8 @@ class TomSecretsSession extends ChangeNotifier {
   bool _listView = false;
   bool _vaultAware = true;
   TomSecretsResolutionModel? _resolution;
-  final Map<String, TomSecretsExtraFile> _extra = {};
+  final Map<String, TomSecretsOpenVault> _editOnly = {};
+  List<TomSecretsUnservedVault> _unserved = const [];
   String _query = '';
   String? _filterTag;
   TomSecretsEntryType? _filterType;
@@ -361,61 +345,41 @@ class TomSecretsSession extends ChangeNotifier {
         );
       });
 
-  /// The files opened for editing only (Environments), by name.
-  List<TomSecretsExtraFile> get extraFiles => _extra.values.toList();
+  /// The vaults the primary lists that this machine does not serve.
+  List<TomSecretsUnservedVault> get unserved => _unserved;
 
-  /// Opens [bytes], a file named [name] this machine does not serve, with
-  /// [credentials] (and the [outerKey] of a `.tsmx` file), for editing only.
-  /// Throws `KdbxInvalidKeyException` on wrong keys.
-  Future<TomSecretsExtraFile> openExtraFile(
-    String name,
-    Uint8List bytes,
-    Credentials credentials, {
-    String? outerKey,
-  }) async {
-    final file = await tomSecretsDecodeStored(
-      _extraLocator(name),
-      bytes,
-      credentials,
-      outerKey: outerKey,
+  /// The vaults not served that are open for editing (Environments), in the
+  /// order they were opened. They take no part in the index or resolution.
+  List<TomSecretsOpenVault> get editOnly => _editOnly.values.toList();
+
+  /// Whether [store] is a vault not served, open for editing.
+  bool isEditOnly(String store) => _editOnly.containsKey(store);
+
+  /// Opens the vault not served [store] for editing through the service:
+  /// its keys (`vaultKeys` naming it) and the copy the service reads from its
+  /// location (`vaultFile`); its saves go through the service like every
+  /// other (`save`). Throws `TomSecretsAdminException` (`needs_unlock`,
+  /// `offline`, `token_expired`, `unavailable`, `not_found`).
+  Future<TomSecretsOpenVault> openUnserved(String store) async {
+    final set = await connection.request('vaultKeys', {
+      'stores': [store],
+    });
+    final s = (set['stores'] as List).cast<Map>().single;
+    final vault = await _open(
+      store,
+      (s['keys'] as Map? ?? const {}).cast<String, Object?>(),
     );
-    final extra = TomSecretsExtraFile._(
-      name,
-      file,
-      outerKey,
-      name.endsWith(tomSecretsOuterSuffix)
-          ? tomSecretsOuterCipherOf(bytes)
-          : null,
-    );
-    _extra[name] = extra;
+    _editOnly[store] = vault;
+    _resolution = null;
     notifyListeners();
-    return extra;
+    return vault;
   }
 
-  /// The bytes the opened file [name] saves to, with its own keys.
-  Future<Uint8List> encodeExtraFile(String name) {
-    final extra = _extra[name]!;
-    return tomSecretsEncodeStored(
-      _extraLocator(extra.name),
-      extra.file,
-      outerKey: extra.outerKey,
-      cipher: extra.cipher ?? TomSecretsOuterCipher.xchacha20Poly1305,
-    );
-  }
-
-  /// A locator for a picked file: only its name matters (the outer layer
-  /// of a `.tsmx` file), the bytes come from the user.
-  static String _extraLocator(String name) =>
-      'file:/${name.split(RegExp(r'[/\\]')).last}';
-
-  /// Closes the opened file [name] without saving.
-  void closeExtraFile(String name) {
-    _extra.remove(name);
+  /// Closes the vault not served [store] (its saves are written already).
+  void closeEditOnly(String store) {
+    _editOnly.remove(store);
     notifyListeners();
   }
-
-  /// Tells the listeners an opened file changed in memory.
-  void extraFileChanged() => notifyListeners();
 
   /// The search over every open vault.
   String get query => _query;
@@ -554,7 +518,12 @@ class TomSecretsSession extends ChangeNotifier {
     try {
       final set = await connection.request('vaultKeys');
       _vaults.clear();
+      _editOnly.clear();
       _failures.clear();
+      _unserved = [
+        for (final u in (set['unserved'] as List? ?? const []).cast<Map>())
+          (store: u['store'] as String, location: u['location'] as String),
+      ];
       for (final s in (set['stores'] as List? ?? const []).cast<Map>()) {
         final store = s['store'] as String;
         try {
@@ -611,18 +580,27 @@ class TomSecretsSession extends ChangeNotifier {
       'stores': [store],
     });
     final s = (set['stores'] as List).cast<Map>().single;
-    _vaults[store] = await _open(
+    final vault = await _open(
       store,
       (s['keys'] as Map? ?? const {}).cast<String, Object?>(),
     );
+    if (_editOnly.containsKey(store)) {
+      _editOnly[store] = vault;
+    } else {
+      _vaults[store] = vault;
+    }
   }
+
+  /// The open vault [store], served or open for editing only, or null.
+  TomSecretsOpenVault? _vaultOf(String store) =>
+      _vaults[store] ?? _editOnly[store];
 
   /// Saves [store]'s file through the service (protocol.md 6.4) against the
   /// revision it was read at, then reads back what was written. Throws
   /// `TomSecretsAdminException`; on `stale_base` the vault is read again and
   /// the edit has to be made once more.
   Future<void> save(String store) async {
-    final vault = _vaults[store];
+    final vault = _vaultOf(store);
     if (vault == null) throw StateError('$store is not open');
     final bytes = await tomSecretsEncodeStored(
       vault.location,
@@ -652,7 +630,7 @@ class TomSecretsSession extends ChangeNotifier {
   }
 
   /// The entry [ref] in its open vault, or null.
-  KdbxEntry? entryOf(TomSecretsEntryRef ref) => _vaults[ref.store]
+  KdbxEntry? entryOf(TomSecretsEntryRef ref) => _vaultOf(ref.store)
       ?.file
       .body
       .rootGroup
@@ -672,14 +650,17 @@ class TomSecretsSession extends ChangeNotifier {
   }
 
   /// A new entry of [type] titled [title] in [group] of [store] (its root
-  /// when null), saved; answers it.
+  /// when null), saved, and opened in the editor unless [select] is false
+  /// (an entry of a vault open for editing only has no editor pane);
+  /// answers it.
   Future<TomSecretsEntryRef> createEntry(
     String store, {
     KdbxUuid? group,
     required String title,
     TomSecretsEntryType type = TomSecretsEntryType.login,
+    bool select = true,
   }) async {
-    final file = _vaults[store]!.file;
+    final file = _vaultOf(store)!.file;
     final parent = group == null
         ? file.body.rootGroup
         : _groupOf(file, group) ?? file.body.rootGroup;
@@ -690,7 +671,7 @@ class TomSecretsSession extends ChangeNotifier {
     parent.addEntry(entry);
     final ref = TomSecretsEntryRef(store, entry.uuid);
     await save(store);
-    _selectedEntry = ref;
+    if (select) _selectedEntry = ref;
     notifyListeners();
     return ref;
   }
@@ -726,7 +707,7 @@ class TomSecretsSession extends ChangeNotifier {
     for (final ref in refs.toList()) {
       final entry = entryOf(ref);
       if (entry == null) continue;
-      change(_vaults[ref.store]!.file, entry);
+      change(_vaultOf(ref.store)!.file, entry);
       stores.add(ref.store);
     }
     _marked.clear();
@@ -737,7 +718,7 @@ class TomSecretsSession extends ChangeNotifier {
 
   /// A new group [name] under [parent] of [store] (its root when null).
   Future<void> createGroup(String store, KdbxUuid? parent, String name) async {
-    final file = _vaults[store]!.file;
+    final file = _vaultOf(store)!.file;
     file.createGroup(
       parent: parent == null
           ? file.body.rootGroup
@@ -749,13 +730,13 @@ class TomSecretsSession extends ChangeNotifier {
 
   /// Renames [group] of [store].
   Future<void> renameGroup(String store, KdbxUuid group, String name) async {
-    _groupOf(_vaults[store]!.file, group)?.name.set(name);
+    _groupOf(_vaultOf(store)!.file, group)?.name.set(name);
     await save(store);
   }
 
   /// Moves [group] of [store] under [parent] (the root when null).
   Future<void> moveGroup(String store, KdbxUuid group, KdbxUuid? parent) async {
-    final file = _vaults[store]!.file;
+    final file = _vaultOf(store)!.file;
     final moving = _groupOf(file, group);
     if (moving == null) return;
     file.moveGroup(
@@ -830,7 +811,8 @@ class TomSecretsSession extends ChangeNotifier {
   void clear() {
     _vaults.clear();
     _failures.clear();
-    _extra.clear();
+    _editOnly.clear();
+    _unserved = const [];
     _resolution = null;
     _index = const [];
     _selectedEntry = null;
@@ -855,7 +837,7 @@ class TomSecretsSession extends ChangeNotifier {
     if (event['op'] != 'store_changed') return;
     final store = event['store'];
     if (store is! String || _ownSaves.contains(store)) return;
-    final vault = _vaults[store];
+    final vault = _vaultOf(store);
     if (vault == null || event['revision'] == vault.revision) return;
     unawaited(_changed(store));
   }

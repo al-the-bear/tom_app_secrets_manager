@@ -86,9 +86,13 @@ KdbxEntry addEntry(
 
 /// The fake service.
 final class FakeService implements TomSecretsAdminChannel {
-  FakeService(this.stores, {this.locked = true});
+  FakeService(this.stores, {this.locked = true, this.unserved = const []});
 
   final List<FakeStore> stores;
+
+  /// The vaults the primary lists that this machine does not serve
+  /// (protocol.md 6.4): editable by name, never in `status`.
+  final List<FakeStore> unserved;
   bool locked;
   final StreamController<Map<String, Object?>> _events =
       StreamController.broadcast();
@@ -96,7 +100,8 @@ final class FakeService implements TomSecretsAdminChannel {
   final List<Map<String, Object?>> saves = [];
   bool closed = false;
 
-  FakeStore store(String name) => stores.firstWhere((s) => s.name == name);
+  FakeStore store(String name) =>
+      [...stores, ...unserved].firstWhere((s) => s.name == name);
 
   @override
   Stream<Map<String, Object?>> get events => _events.stream;
@@ -181,6 +186,17 @@ final class FakeService implements TomSecretsAdminChannel {
                   'location': s.location,
                   'keys': {'password': s.password},
                 },
+            for (final s in unserved)
+              if (only != null && only.contains(s.name))
+                {
+                  'store': s.name,
+                  'location': s.location,
+                  'served': false,
+                  'keys': {'password': s.password},
+                },
+          ],
+          'unserved': [
+            for (final s in unserved) {'store': s.name, 'location': s.location},
           ],
         };
       case 'vaultFile':
@@ -191,6 +207,7 @@ final class FakeService implements TomSecretsAdminChannel {
           'store': s.name,
           'location': s.location,
           'revision': s.revision,
+          if (unserved.contains(s)) 'served': false,
           'bytes': base64.encode(s.stored),
         };
       case 'save':
@@ -324,9 +341,10 @@ final demoLastUsed = DateTime.utc(2026, 11, 14, 9);
 /// `Api/Stripe` (key `stripe.key`, an overlay for bomber), `Api/Twin` (two
 /// overlays for bomber: ambiguous) and `Box` (a conflict on Password and
 /// Notes, the older side in its history); `prod` (bound `env:prod`) with
-/// `Stripe` (key `stripe.key`). The staging file is returned beside them,
-/// not served. Demo data only.
-Future<({List<FakeStore> stores, Uint8List staging})> systemStores() async {
+/// `Stripe` (key `stripe.key`). The staging vault (bound `env:staging`) is
+/// returned beside them: the primary lists it, this machine does not serve
+/// it. Demo data only.
+Future<({List<FakeStore> stores, FakeStore staging})> systemStores() async {
   final primary = await demoVault('primary', demoPassword, (f) {
     TomSecretsMetadata(
       store: 'primary',
@@ -407,7 +425,7 @@ Future<({List<FakeStore> stores, Uint8List staging})> systemStores() async {
       FakeStore('primary', demoPassword, await _withConflict(primary)),
       FakeStore('prod', 'prod-demo-pw', prod),
     ],
-    staging: staging,
+    staging: FakeStore('staging', 'staging-demo-pw', staging),
   );
 }
 

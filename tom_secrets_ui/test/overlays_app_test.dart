@@ -8,8 +8,6 @@
 /// merge view. Demo data only.
 library;
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -31,40 +29,19 @@ final class _Clipboard implements TomClipboardPort {
   Future<bool> clearIfHolding(TomClipboardReceipt receipt) async => true;
 }
 
-final class _Files implements TomSecretsFiles {
-  _Files(this.picked);
-
-  final ({String name, Uint8List bytes}) picked;
-  final Map<String, Uint8List> saved = {};
-
-  @override
-  Future<({String name, Uint8List bytes})?> pick() async => picked;
-
-  @override
-  Future<bool> save(String name, Uint8List bytes) async {
-    saved[name] = Uint8List.fromList(bytes);
-    return true;
-  }
-
-  @override
-  Future<String?> choosePath({required bool save, String? suggestedName}) =>
-      throw UnimplementedError();
-}
-
 void main() {
   late FakeService service;
-  late _Files files;
+  late FakeStore staging;
   late TomSecretsHost host;
 
   setUp(() async {
     final demo = await systemStores();
-    service = FakeService(demo.stores);
-    files = _Files((name: 'staging.kdbx', bytes: demo.staging));
+    staging = demo.staging;
+    service = FakeService(demo.stores, unserved: [staging]);
     host = TomSecretsHost(
       service: FakeHost(service),
       preferences: TomSecretsMemoryPreferences(),
       clipboard: _Clipboard(),
-      files: files,
     );
   });
 
@@ -191,46 +168,38 @@ void main() {
     );
   });
 
-  testWidgets('environments: the key across the files, a file opened for '
-      'editing only, changed and saved', (tester) async {
+  testWidgets('environments: the key across the files; a vault not served '
+      'opened through the service, edited in place and saved there', (
+    tester,
+  ) async {
     await unlocked(tester);
     await tester.tap(find.text('Environments'));
     await tester.pump();
     expect(find.byKey(const Key('tsm-env-column-primary')), findsOneWidget);
     expect(find.byKey(const Key('tsm-env-column-prod')), findsOneWidget);
-    expect(find.text('staging (env:staging)'), findsOneWidget);
     expect(find.text('stripe.key'), findsOneWidget);
+    expect(find.byKey(const Key('tsm-env-column-staging')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('tsm-env-open')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('tsm-extra-passphrase')),
-      'staging-demo-pw',
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('tsm-extra-open')));
+    await tester.tap(find.byKey(const Key('tsm-env-open-staging')));
     await wait(tester);
-    expect(
-      find.byKey(const Key('tsm-env-column-staging.kdbx')),
-      findsOneWidget,
-    );
-    await tester.tap(
-      find.byKey(const Key('tsm-env-cell-staging.kdbx|stripe.key')),
-    );
+    expect(find.byKey(const Key('tsm-env-column-staging')), findsOneWidget);
+    expect(find.byKey(const Key('tsm-env-open-staging')), findsNothing);
+    expect(find.text('env:staging · not served: editing only'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tsm-env-cell-staging|stripe.key')));
     await tester.pump();
     await tester.enterText(
-      find.byKey(const Key('tsm-env-edit-staging.kdbx|stripe.key')),
+      find.byKey(const Key('tsm-env-edit-staging|stripe.key')),
       'demo-stripe-staging-2',
     );
     await tester.tap(
-      find.byKey(const Key('tsm-env-commit-staging.kdbx|stripe.key')),
+      find.byKey(const Key('tsm-env-commit-staging|stripe.key')),
     );
-    await wait(tester, 2);
-    await tester.tap(find.byKey(const Key('tsm-env-save-staging.kdbx')));
     await wait(tester);
+    // Written through the service, where the vault lives.
+    expect(service.saves.single['store'], 'staging');
     final back = await tester.runAsync(
       () => KdbxFormat().read(
-        files.saved['staging.kdbx']!,
+        staging.stored,
         tomSecretsVaultCredentials(password: 'staging-demo-pw'),
       ),
     );
@@ -242,8 +211,10 @@ void main() {
           .getText(),
       'demo-stripe-staging-2',
     );
-    // The served files were not written.
-    expect(service.saves, isEmpty);
+    await tester.tap(find.byKey(const Key('tsm-env-close-staging')));
+    await tester.pump();
+    expect(find.byKey(const Key('tsm-env-column-staging')), findsNothing);
+    expect(find.byKey(const Key('tsm-env-open-staging')), findsOneWidget);
   });
 
   testWidgets('conflicts: listed, resolved in the merge view, the record '

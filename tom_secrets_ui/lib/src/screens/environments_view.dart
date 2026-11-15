@@ -3,46 +3,36 @@
 
 /// The Environments screen (part-app, Screens › Environments, BP-15): the
 /// same key across several environments' files side by side — the files the
-/// service serves, and files this machine does not serve, opened for editing
-/// only with their own keys and saved back where the user chooses. A cell is
-/// edited in place; an empty cell of a served file creates the entry.
+/// service serves, and the vaults the primary lists that this machine does
+/// not serve, opened for editing only through the service (it reads them
+/// from their location with their listed keys and writes their saves there,
+/// protocol.md 6.4). A cell is edited in place and saved; an empty cell
+/// creates the entry.
 library;
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
-import 'package:tom_core_storage/tom_core_storage.dart'
-    show TomKeyRequiredException;
-import 'package:tom_reusable_ui/tom_reusable_ui.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
-import '../ports/desktop_ports.dart';
 import '../state/session_state.dart';
 import '../widgets/protected_field.dart';
 import '../widgets/style.dart';
 import 'vault_browser.dart' show tomSecretsGuarded;
 
-/// One file of the table: a served vault or a file opened for editing only.
+/// One file of the table: a served vault, or one not served open for
+/// editing only.
 final class _FileColumn {
-  _FileColumn.served(TomSecretsStore this.store)
-    : extra = null,
-      index = store,
-      binding = store.metadata.binding;
+  _FileColumn(this.index, {this.editOnly = false})
+    : binding = index.metadata.binding;
 
-  _FileColumn.extra(TomSecretsExtraFile this.extra)
-    : store = null,
-      index = TomSecretsStore.fromFile(extra.file, name: 'opened'),
-      binding = TomSecretsMetadata.read(extra.file).binding;
-
-  final TomSecretsStore? store;
-  final TomSecretsExtraFile? extra;
   final TomSecretsStore index;
+  final bool editOnly;
   final Map<String, String> binding;
 
-  String get title => store?.name ?? extra!.name;
+  String get title => index.name;
 
   List<TomSecretsIndexedEntry> entriesFor(String key) => [
     for (final e in index.entries)
@@ -82,40 +72,25 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
 
   Future<void> _commit(_FileColumn column, TomSecretsIndexedEntry entry) async {
     final session = context.read<TomSecretsSession>();
-    final text = _edit.text;
-    if (column.store case final store?) {
-      await tomSecretsGuarded(
-        context,
-        () => session.setField(
-          TomSecretsEntryRef(store.name, entry.entry.uuid),
-          _field,
-          text,
-        ),
-      );
-    } else {
-      final key = KdbxKey(_field);
-      final protected =
-          entry.entry.getString(key) is ProtectedValue ||
-          key == KdbxKeyCommon.PASSWORD;
-      entry.entry.setString(
-        key,
-        protected ? ProtectedValue.fromString(text) : PlainValue(text),
-      );
-      column.extra!.dirty = true;
-      session.extraFileChanged();
-    }
+    await tomSecretsGuarded(
+      context,
+      () => session.setField(
+        TomSecretsEntryRef(column.title, entry.entry.uuid),
+        _field,
+        _edit.text,
+      ),
+    );
     if (mounted) setState(() => _editing = null);
   }
 
   Future<void> _create(_FileColumn column, String key) async {
     final session = context.read<TomSecretsSession>();
-    final store = column.store;
-    if (store == null) return;
     await tomSecretsGuarded(context, () async {
       final ref = await session.createEntry(
-        store.name,
+        column.title,
         title: key.split('.').last,
         type: TomSecretsEntryType.apiToken,
+        select: !column.editOnly,
       );
       await session.updateEntry(
         ref,
@@ -124,29 +99,10 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
     });
   }
 
-  Future<void> _saveExtra(TomSecretsExtraFile extra) async {
-    final session = context.read<TomSecretsSession>();
-    final files = context.read<TomSecretsHost>().files;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (files == null) {
-      tomShowNotice(
-        messenger,
-        kind: 'environments',
-        message: 'This app cannot save files.',
-      );
-      return;
-    }
-    final bytes = await session.encodeExtraFile(extra.name);
-    try {
-      if (await files.save(extra.name, bytes)) {
-        extra.dirty = false;
-        session.extraFileChanged();
-        tomShowNotice(messenger, kind: 'environments', message: 'Saved');
-      }
-    } finally {
-      bytes.fillRange(0, bytes.length, 0);
-    }
-  }
+  Future<void> _open(String store) => tomSecretsGuarded(
+    context,
+    () => context.read<TomSecretsSession>().openUnserved(store),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -154,8 +110,12 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
     final model = session.resolution;
     final theme = Theme.of(context);
     final columns = [
-      for (final s in model.stores) _FileColumn.served(s),
-      for (final x in session.extraFiles) _FileColumn.extra(x),
+      for (final s in model.stores) _FileColumn(s),
+      for (final v in session.editOnly)
+        _FileColumn(
+          TomSecretsStore.fromFile(v.file, name: v.store),
+          editOnly: true,
+        ),
     ];
     final filter = _filter.text.trim().toLowerCase();
     final keys = {
@@ -164,11 +124,21 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
           if (e.key case final k? when k.contains(filter)) k,
     }.toList()..sort();
     final served = {for (final s in model.stores) s.name};
-    final notHere = [
+    final listed = {for (final u in session.unserved) u.store};
+    final envOf = {
       for (final MapEntry(key: env, value: specs)
           in model.config.stores.entries)
-        for (final spec in specs)
-          if (!served.contains(spec.name)) (env, spec),
+        for (final spec in specs) spec.name: env,
+    };
+    // Openable: the vaults the primary lists that are not served and not
+    // open yet. Without keys: configured files the primary does not list.
+    final openable = [
+      for (final u in session.unserved)
+        if (!session.isEditOnly(u.store)) u,
+    ];
+    final noKeys = [
+      for (final name in envOf.keys)
+        if (!served.contains(name) && !listed.contains(name)) name,
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -214,17 +184,10 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
                   _editing = null;
                 }),
               ),
-              const Spacer(),
-              OutlinedButton.icon(
-                key: const Key('tsm-env-open'),
-                icon: const Icon(Icons.file_open_outlined),
-                label: const Text('Open a file…'),
-                onPressed: () => unawaited(tomSecretsOpenExtraFile(context)),
-              ),
             ],
           ),
         ),
-        if (notHere.isNotEmpty)
+        if (openable.isNotEmpty || noKeys.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Wrap(
@@ -236,21 +199,36 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
                   'Not served on this machine:',
                   style: theme.textTheme.bodySmall,
                 ),
-                for (final (env, spec) in notHere)
+                for (final u in openable)
                   Tooltip(
-                    message: switch (spec.location) {
-                      TomSecretsGitHubLocation(
-                        :final repository,
-                        :final path,
-                      ) =>
-                        'github: $repository $path — open a copy of the file',
-                      TomSecretsLocalLocation(:final path) =>
-                        '$path — open the file',
-                    },
+                    message:
+                        '${u.location} — open it for editing; saves are '
+                        'written there',
+                    child: ActionChip(
+                      key: Key('tsm-env-open-${u.store}'),
+                      visualDensity: VisualDensity.compact,
+                      avatar: Icon(
+                        Icons.edit_document,
+                        size: 16,
+                        color: tomSecretsVaultColour(u.store),
+                      ),
+                      label: Text(
+                        envOf[u.store] == null
+                            ? 'Open ${u.store}'
+                            : 'Open ${u.store} (env:${envOf[u.store]})',
+                      ),
+                      onPressed: () => unawaited(_open(u.store)),
+                    ),
+                  ),
+                for (final name in noKeys)
+                  Tooltip(
+                    message:
+                        'The primary vault lists no keys for $name: add the '
+                        'vault there to edit it here',
                     child: TomSecretsChip(
-                      '${spec.name} (env:$env)',
-                      colour: tomSecretsVaultColour(spec.name),
-                      icon: Icons.cloud_off_outlined,
+                      '$name (env:${envOf[name]}): no keys',
+                      colour: theme.colorScheme.outline,
+                      icon: Icons.key_off_outlined,
                     ),
                   ),
               ],
@@ -308,9 +286,9 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
                   TomSecretsChip(
                     c.title,
                     colour: tomSecretsVaultColour(c.title),
-                    icon: c.extra == null
-                        ? Icons.inventory_2_outlined
-                        : Icons.edit_document,
+                    icon: c.editOnly
+                        ? Icons.edit_document
+                        : Icons.inventory_2_outlined,
                   ),
                   const SizedBox(width: 4),
                   Flexible(
@@ -318,34 +296,23 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
                       [
                         for (final MapEntry(:key, :value) in c.binding.entries)
                           '$key:$value',
-                        if (c.extra != null) 'editing only',
+                        if (c.editOnly) 'not served: editing only',
                       ].join(' · '),
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
-                  if (c.extra case final x?) ...[
+                  if (c.editOnly)
                     IconButton(
-                      key: Key('tsm-env-save-${x.name}'),
-                      tooltip: 'Save the file…',
-                      iconSize: 18,
-                      visualDensity: VisualDensity.compact,
-                      icon: Icon(
-                        Icons.save_outlined,
-                        color: x.dirty ? theme.colorScheme.tertiary : null,
-                      ),
-                      onPressed: () => unawaited(_saveExtra(x)),
-                    ),
-                    IconButton(
-                      tooltip: x.dirty ? 'Close without saving' : 'Close',
+                      key: Key('tsm-env-close-${c.title}'),
+                      tooltip: 'Close (its saves are written)',
                       iconSize: 18,
                       visualDensity: VisualDensity.compact,
                       icon: const Icon(Icons.close),
                       onPressed: () => context
                           .read<TomSecretsSession>()
-                          .closeExtraFile(x.name),
+                          .closeEditOnly(c.title),
                     ),
-                  ],
                 ],
               ),
             ),
@@ -392,13 +359,11 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
     final theme = Theme.of(context);
     final cell = '${column.title}|$key';
     final entries = column.entriesFor(key);
-    final readOnly = column.store == null
-        ? null
-        : session.readOnlyReason(column.store!.name);
+    final readOnly = session.readOnlyReason(column.title);
     if (entries.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(right: 8),
-        child: column.store == null || readOnly != null
+        child: readOnly != null
             ? Text('—', style: TextStyle(color: theme.colorScheme.outline))
             : TextButton.icon(
                 key: Key('tsm-env-create-$cell'),
@@ -519,162 +484,4 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
       },
     );
   }
-}
-
-/// Picks a file this machine does not serve and opens it for editing only,
-/// asking for its password, key file and (for a `.tsmx` file) its
-/// repository key.
-Future<void> tomSecretsOpenExtraFile(BuildContext context) async {
-  final host = context.read<TomSecretsHost>();
-  final files = host.files;
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  if (files == null) {
-    tomShowNotice(
-      messenger,
-      kind: 'environments',
-      message: 'This app cannot open files.',
-    );
-    return;
-  }
-  final picked = await files.pick();
-  if (picked == null || !context.mounted) return;
-  await showDialog<void>(
-    context: context,
-    builder: (_) => _OpenFileDialog(
-      name: picked.name,
-      bytes: picked.bytes,
-      session: context.read<TomSecretsSession>(),
-      keyFiles: host.keyFiles,
-      pickerContext: context,
-    ),
-  );
-}
-
-class _OpenFileDialog extends StatefulWidget {
-  const _OpenFileDialog({
-    required this.name,
-    required this.bytes,
-    required this.session,
-    required this.keyFiles,
-    required this.pickerContext,
-  });
-
-  final String name;
-  final Uint8List bytes;
-  final TomSecretsSession session;
-  final TomKeyFilePicker? keyFiles;
-  final BuildContext pickerContext;
-
-  @override
-  State<_OpenFileDialog> createState() => _OpenFileDialogState();
-}
-
-class _OpenFileDialogState extends State<_OpenFileDialog> {
-  final TomKeyStepController _key = TomKeyStepController();
-  final TextEditingController _outer = TextEditingController();
-  String? _error;
-  bool _opening = false;
-
-  bool get _outerLayer => widget.name.endsWith(tomSecretsOuterSuffix);
-
-  @override
-  void initState() {
-    super.initState();
-    _key.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _key.dispose();
-    _outer.dispose();
-    super.dispose();
-  }
-
-  Future<void> _open() async {
-    final material = _key.material;
-    setState(() {
-      _opening = true;
-      _error = null;
-    });
-    try {
-      await widget.session.openExtraFile(
-        widget.name,
-        widget.bytes,
-        tomSecretsVaultCredentials(
-          password: material.passphrase,
-          keyFile: material.keyFileBytes,
-        ),
-        outerKey: _outerLayer ? _outer.text.trim() : null,
-      );
-      if (mounted) Navigator.of(context).pop();
-    } on KdbxInvalidKeyException {
-      if (mounted) setState(() => _error = 'Wrong password or key file.');
-    } on TomKeyRequiredException {
-      if (mounted) {
-        setState(() => _error = 'The repository key does not open it.');
-      }
-    } on TomSecretsOuterException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } on KdbxFormatException catch (e) {
-      if (mounted) setState(() => _error = 'Not a vault file: ${e.message}');
-    } finally {
-      if (mounted) setState(() => _opening = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text('Open ${widget.name}'),
-    content: SizedBox(
-      width: 420,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'The file is opened for editing only: this machine does not '
-            'serve it. Save it where it belongs when you are done.',
-          ),
-          const SizedBox(height: 12),
-          TomKeyFields(
-            controller: _key,
-            keyPrefix: 'tsm-extra',
-            keyFiles: widget.keyFiles,
-            pickerContext: widget.pickerContext,
-            offersRemember: false,
-            autofocus: true,
-            onSubmitted: _open,
-          ),
-          if (_outerLayer)
-            TextField(
-              key: const Key('tsm-extra-outer'),
-              controller: _outer,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Repository key (base64)',
-              ),
-            ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-        ],
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const Key('tsm-extra-open'),
-        onPressed: _opening ? null : _open,
-        child: const Text('Open'),
-      ),
-    ],
-  );
 }

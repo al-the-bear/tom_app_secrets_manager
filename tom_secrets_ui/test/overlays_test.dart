@@ -9,8 +9,6 @@
 /// editing only. Demo data only.
 library;
 
-import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tom_secrets_client/tom_secrets_client.dart'
     show TomSecretBinding;
@@ -26,12 +24,12 @@ void main() {
   late TomSecretsServiceConnection connection;
   late TomSecretsSession session;
   late TomSecretsMemoryPreferences prefs;
-  late Uint8List staging;
+  late FakeStore staging;
 
   setUp(() async {
     final demo = await systemStores();
     staging = demo.staging;
-    service = FakeService(demo.stores);
+    service = FakeService(demo.stores, unserved: [staging]);
     connection = TomSecretsServiceConnection(FakeHost(service));
     prefs = TomSecretsMemoryPreferences();
     session = TomSecretsSession(connection, prefs);
@@ -275,35 +273,33 @@ void main() {
     });
   });
 
-  group('a file opened for editing only', () {
-    test('wrong keys are refused; opened, changed and encoded with its own '
-        'keys; the lock drops it', () async {
-      await expectLater(
-        session.openExtraFile(
-          'staging.kdbx',
-          staging,
-          tomSecretsVaultCredentials(password: 'wrong'),
-        ),
-        throwsA(isA<KdbxInvalidKeyException>()),
+  group('a vault this machine does not serve (BP-15)', () {
+    test('listed; opened through the service, edited and saved there; never '
+        'resolved; closed and dropped by the lock', () async {
+      expect(session.unserved, [
+        (store: 'staging', location: staging.location),
+      ]);
+      expect(session.editOnly, isEmpty);
+      final vault = await session.openUnserved('staging');
+      expect(session.isEditOnly('staging'), isTrue);
+      expect(session.editOnly.map((v) => v.store), ['staging']);
+      expect(
+        service.requests.where((r) => r['op'] == 'vaultFile').last['store'],
+        'staging',
       );
-      final extra = await session.openExtraFile(
-        'staging.kdbx',
-        staging,
-        tomSecretsVaultCredentials(password: 'staging-demo-pw'),
-      );
-      expect(session.extraFiles.map((x) => x.name), ['staging.kdbx']);
-      // Not served: resolution does not see it.
+      // Not served: neither the index nor resolution see it.
       expect(session.resolution.stores.map((s) => s.name), ['primary', 'prod']);
-      final stripe = extra.file.body.rootGroup.getAllEntries().firstWhere(
+      expect(session.index.where((v) => v.ref.store == 'staging'), isEmpty);
+
+      final stripe = vault.file.body.rootGroup.getAllEntries().firstWhere(
         (e) => e.label == 'Stripe',
       );
-      stripe.setString(
-        KdbxKeyCommon.PASSWORD,
-        ProtectedValue.fromString('demo-stripe-staging-2'),
-      );
-      final bytes = await session.encodeExtraFile('staging.kdbx');
+      final ref = TomSecretsEntryRef('staging', stripe.uuid);
+      await session.setField(ref, 'Password', 'demo-stripe-staging-2');
+      final saved = service.saves.single;
+      expect(saved['store'], 'staging');
       final back = await KdbxFormat().read(
-        bytes,
+        staging.stored,
         tomSecretsVaultCredentials(password: 'staging-demo-pw'),
       );
       expect(
@@ -314,9 +310,20 @@ void main() {
             .getText(),
         'demo-stripe-staging-2',
       );
+      // Read back after the save: the session holds the written revision.
+      expect(session.editOnly.single.revision, staging.revision);
+      expect(
+        session.entryOf(ref)!.getString(KdbxKeyCommon.PASSWORD)!.getText(),
+        'demo-stripe-staging-2',
+      );
+
+      session.closeEditOnly('staging');
+      expect(session.editOnly, isEmpty);
+      await session.openUnserved('staging');
       await connection.lock();
       await settle();
-      expect(session.extraFiles, isEmpty);
+      expect(session.editOnly, isEmpty);
+      expect(session.unserved, isEmpty);
     });
   });
 }
