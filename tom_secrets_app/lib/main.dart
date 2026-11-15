@@ -79,6 +79,8 @@ Future<void> main(List<String> args) async {
     files: files,
     clipboard: tomSecretsDesktopClipboard(),
     startedHidden: hidden,
+    // The First run wizard's last step offers the import (part-app).
+    firstRunActions: {TomSecretsFirstRunActions.import: tomSecretsShowImport},
   );
   runApp(TomSecretsApp(host: host));
 }

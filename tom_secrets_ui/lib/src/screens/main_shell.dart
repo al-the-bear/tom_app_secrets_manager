@@ -17,12 +17,16 @@ import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
 import 'package:tom_core_sync/tom_core_sync.dart' show TomSyncState;
 import 'package:tom_reusable_ui/tom_reusable_ui.dart';
 
+import '../ports/desktop_ports.dart';
+import '../state/reminders.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../widgets/style.dart';
 import 'approval_prompt.dart';
 import 'clients_view.dart';
 import 'conflicts_view.dart';
+import 'import_view.dart';
+import 'keys_view.dart';
 import 'environments_view.dart';
 import 'settings_view.dart';
 import 'status_view.dart';
@@ -41,6 +45,12 @@ enum TomSecretsDestination {
 
   /// The approvals, the allow list, approval codes and the audit log.
   clients,
+
+  /// The keys with their dates, the rotation ages.
+  keys,
+
+  /// Importing an export of another password manager.
+  import,
 
   /// The settings.
   settings,
@@ -139,6 +149,10 @@ class _MainShellState extends State<TomSecretsMainShell> {
     final c = context.watch<TomSecretsServiceConnection>();
     final session = context.watch<TomSecretsSession>();
     if (_query.text != session.query) _query.text = session.query;
+    final reminders = TomSecretsReminders(
+      c,
+      context.read<TomSecretsHost>().preferences,
+    );
     final conflicts = {for (final r in session.conflictRows) r.ref}.length;
     final github = c.stores.values.where(
       (s) => s.source == 'github' || s.source == 'cache',
@@ -198,6 +212,21 @@ class _MainShellState extends State<TomSecretsMainShell> {
                     ),
                     selectedIcon: const Icon(Icons.how_to_reg_rounded),
                     label: const Text('Clients'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Badge.count(
+                      key: const Key('tsm-keys-rail-badge'),
+                      count: reminders.shown.length,
+                      isLabelVisible: reminders.shown.isNotEmpty,
+                      child: const Icon(Icons.key_outlined),
+                    ),
+                    selectedIcon: const Icon(Icons.key_rounded),
+                    label: const Text('Keys'),
+                  ),
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.download_outlined),
+                    selectedIcon: Icon(Icons.download_rounded),
+                    label: Text('Import'),
                   ),
                   const NavigationRailDestination(
                     icon: Icon(Icons.settings_outlined),
@@ -311,10 +340,14 @@ class _MainShellState extends State<TomSecretsMainShell> {
                               ),
                             ),
                           if (c.expiringKeys.isNotEmpty)
-                            Tooltip(
-                              message:
-                                  '${c.expiringKeys.length} keys expire soon',
-                              child: Badge.count(
+                            IconButton(
+                              tooltip:
+                                  '${c.expiringKeys.length} keys due: open '
+                                  'Keys',
+                              onPressed: () => setState(
+                                () => _destination = TomSecretsDestination.keys,
+                              ),
+                              icon: Badge.count(
                                 key: const Key('tsm-keys-badge'),
                                 count: c.expiringKeys.length,
                                 child: const Icon(Icons.key_outlined),
@@ -330,6 +363,18 @@ class _MainShellState extends State<TomSecretsMainShell> {
                       ),
                     ),
                     const Divider(height: 1),
+                    if (reminders.shown.isNotEmpty &&
+                        _destination != TomSecretsDestination.keys)
+                      _ReminderBanner(
+                        keys: reminders.shown,
+                        onOpen: () => setState(
+                          () => _destination = TomSecretsDestination.keys,
+                        ),
+                        onSnooze: () async {
+                          await reminders.snooze(reminders.shown);
+                          if (mounted) setState(() {});
+                        },
+                      ),
                     Expanded(
                       child: switch (_destination) {
                         TomSecretsDestination.vaults => TomSecretsVaultBrowser(
@@ -343,6 +388,10 @@ class _MainShellState extends State<TomSecretsMainShell> {
                           const TomSecretsConflictsView(),
                         TomSecretsDestination.clients =>
                           const TomSecretsClientsView(),
+                        TomSecretsDestination.keys =>
+                          const TomSecretsKeysView(),
+                        TomSecretsDestination.import =>
+                          const TomSecretsImportView(),
                         TomSecretsDestination.settings =>
                           const TomSecretsSettingsView(),
                         TomSecretsDestination.status =>
@@ -376,3 +425,51 @@ TomSyncSummary tomSecretsSyncSummary(TomSecretsStoreState s) => TomSyncSummary(
   nounPlural: 'changes',
   applicationName: 'the secrets service',
 );
+
+/// The banner of the keys due (part-key-rotation, Reminders): what is due,
+/// Open Keys, and Snooze until each key's next reminder step.
+class _ReminderBanner extends StatelessWidget {
+  const _ReminderBanner({
+    required this.keys,
+    required this.onOpen,
+    required this.onSnooze,
+  });
+
+  final List<TomSecretsDueKey> keys;
+  final VoidCallback onOpen;
+  final Future<void> Function() onSnooze;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final expired = keys.any((k) => k.daysLeft < 0);
+    return MaterialBanner(
+      key: const Key('tsm-reminder-banner'),
+      dividerColor: Colors.transparent,
+      backgroundColor: expired
+          ? theme.colorScheme.errorContainer
+          : theme.colorScheme.tertiaryContainer,
+      leading: Icon(
+        Icons.key_rounded,
+        color: expired ? theme.colorScheme.error : theme.colorScheme.tertiary,
+      ),
+      content: Text(
+        '${keys.length == 1 ? 'A key is due' : '${keys.length} keys are due'}: '
+        '${keys.take(3).map((k) => k.label).join(', ')}'
+        '${keys.length > 3 ? ', …' : ''}',
+      ),
+      actions: [
+        TextButton(
+          key: const Key('tsm-reminder-snooze'),
+          onPressed: () => unawaited(onSnooze()),
+          child: const Text('Snooze'),
+        ),
+        FilledButton.tonal(
+          key: const Key('tsm-reminder-open'),
+          onPressed: onOpen,
+          child: const Text('Open Keys'),
+        ),
+      ],
+    );
+  }
+}

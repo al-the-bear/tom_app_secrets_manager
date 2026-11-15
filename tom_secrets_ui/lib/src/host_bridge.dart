@@ -12,6 +12,7 @@ library;
 import 'dart:async';
 
 import 'ports/desktop_ports.dart';
+import 'state/reminders.dart';
 import 'state/service_connection.dart';
 
 /// The device preference keys the bridge keeps.
@@ -37,7 +38,12 @@ final class TomSecretsHostBridge {
   final TomSecretsServiceConnection connection;
 
   StreamSubscription<Map<String, Object?>>? _events;
+  Timer? _daily;
+  bool _reminding = false;
   bool _started = false;
+
+  /// The clock of the daily reminder (tests set it).
+  DateTime Function() clock = DateTime.now;
 
   /// Applies the device's settings and starts following the connection.
   void start() {
@@ -47,7 +53,35 @@ final class TomSecretsHostBridge {
     _events = connection.events.listen(_onEvent);
     unawaited(applyCaptureSetting());
     unawaited(_initLoginItem());
+    // While the app runs, a due key is notified once a day (part-key-
+    // rotation, Reminders); the hour checks for the next day's.
+    _daily = Timer.periodic(
+      const Duration(hours: 1),
+      (_) => unawaited(remind()),
+    );
     _update();
+  }
+
+  /// Notifies the keys due, once a day; a click opens the window.
+  Future<bool> remind() async {
+    final notifier = host.notifier;
+    if (notifier == null || connection.expiringKeys.isEmpty || _reminding) {
+      return false;
+    }
+    _reminding = true;
+    try {
+      final window = host.window;
+      return await TomSecretsReminders(
+        connection,
+        host.preferences,
+      ).notifyDaily(
+        notifier,
+        now: clock(),
+        onClick: window == null ? null : () => unawaited(window.show()),
+      );
+    } finally {
+      _reminding = false;
+    }
   }
 
   /// Whether the window is to be kept out of capture (default on, DP-33).
@@ -75,6 +109,8 @@ final class TomSecretsHostBridge {
   }
 
   void _update() {
+    // The keys due arrive with the status at the unlock, too.
+    if (connection.expiringKeys.isNotEmpty) unawaited(remind());
     final tray = host.tray;
     if (tray == null) return;
     final c = connection;
@@ -159,6 +195,10 @@ final class TomSecretsHostBridge {
 
   Future<void> _onEvent(Map<String, Object?> event) async {
     final op = event['op'];
+    if (op == 'key_expiry') {
+      await remind();
+      return;
+    }
     if (op != 'unlock_needed' && op != 'approval_needed') return;
     final notifier = host.notifier;
     final window = host.window;
@@ -192,6 +232,7 @@ final class TomSecretsHostBridge {
   /// Stops following the connection.
   void dispose() {
     connection.removeListener(_update);
+    _daily?.cancel();
     unawaited(_events?.cancel());
   }
 }

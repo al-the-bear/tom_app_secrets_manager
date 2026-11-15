@@ -15,6 +15,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
 import 'conflicts.dart';
+import 'import_model.dart';
 import 'overlays.dart';
 import 'service_connection.dart';
 
@@ -344,6 +345,92 @@ class TomSecretsSession extends ChangeNotifier {
           protected ? ProtectedValue.fromString(text) : PlainValue(text),
         );
       });
+
+  /// Imports [source] (part-password-manager, Import): each source vault
+  /// into its [mappings] entry by vault id (default the first vault, group
+  /// `<source>/<vault name>`), archived items only with [includeArchived].
+  /// With [dryRun] nothing changes and the report is the preview; else the
+  /// vaults written are saved through the service, and when a save is
+  /// refused every vault is read again (the import is not half kept) and
+  /// the admin error is thrown.
+  Future<TomSecretsImportReport> importExport(
+    TomSecretsImportSource source, {
+    required Map<String, TomSecretsImportMapping> mappings,
+    bool includeArchived = false,
+    bool dryRun = false,
+  }) async {
+    final first = _vaults.values.firstOrNull;
+    if (first == null) throw StateError('no vault is open');
+    final targets = <String, TomSecretsImportTarget>{};
+    final touched = <String>{};
+    for (final v in source.vaults) {
+      final m = mappings[v.id];
+      final store = m?.store ?? first.store;
+      final vault = _vaults[store];
+      if (vault == null) throw StateError('$store is not open');
+      targets[v.id] = TomSecretsImportTarget(
+        vault.file,
+        m?.group ?? [source.displayName, v.name],
+      );
+      touched.add(store);
+    }
+    final report = tomSecretsImport(
+      source,
+      file: first.file,
+      targets: targets,
+      includeArchived: includeArchived,
+      dryRun: dryRun,
+    );
+    if (dryRun) return report;
+    try {
+      for (final store in touched) {
+        await save(store);
+      }
+    } on TomSecretsAdminException {
+      await load();
+      rethrow;
+    }
+    return report;
+  }
+
+  /// Sets when the key file and repository key of [store] are due for
+  /// rotation (DP-85): the primary's `tsm.keys-due`, else the Expires of the
+  /// vault's entry in the primary; saves the primary. The service reminds
+  /// of the new date after its next refresh.
+  Future<void> setVaultKeysDue(String store, DateTime due) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final at = due.toUtc();
+    if (store == primary.store) {
+      final m = TomSecretsMetadata.read(primary.file);
+      TomSecretsMetadata(
+        format: m.format,
+        store: m.store,
+        kind: m.kind,
+        purpose: m.purpose,
+        binding: m.binding,
+        configYaml: m.configYaml,
+        keysDue: at,
+      ).writeTo(primary.file);
+    } else {
+      final list = TomSecretsPrimaryVaults(primary.file);
+      final keys = list.byName(store);
+      if (keys == null) throw StateError('the primary lists no $store');
+      list.put(
+        TomSecretsVaultKeys(
+          name: keys.name,
+          locator: keys.locator,
+          password: keys.password,
+          keyFile: keys.keyFile,
+          outerKey: keys.outerKey,
+          githubToken: keys.githubToken,
+          githubTokenExpires: keys.githubTokenExpires,
+          expires: at,
+        ),
+      );
+    }
+    await save(primary.store);
+  }
 
   /// The shared configuration's YAML (`tsm.config` in the primary's
   /// metadata entry, BP-43), or null when the primary has none.

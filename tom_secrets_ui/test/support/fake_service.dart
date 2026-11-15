@@ -151,6 +151,12 @@ final class FakeService implements TomSecretsAdminChannel {
     },
   ];
 
+  /// The keys with a date (`keys`), as the service would compute them.
+  List<Map<String, Object?>> keys = [];
+
+  /// How many times `reload` was asked for.
+  int reloads = 0;
+
   /// The hosts paired with this device (an approval token can be made).
   final Set<String> pairedHosts = {'bomber'};
 
@@ -236,7 +242,17 @@ final class FakeService implements TomSecretsAdminChannel {
           ],
           'admins': 1,
           'hardening': {'noCoreDumps': true},
-          'expiring': <Object?>[],
+          'expiring': [
+            for (final k in keys)
+              if (k['reminding'] == true)
+                {
+                  'kind': k['kind'],
+                  'key': k['key'],
+                  'vault': ?k['vault'],
+                  'expiresAt': k['expiresAt'],
+                  'daysLeft': k['daysLeft'],
+                },
+          ],
         };
       case 'unlock':
         if (args['password'] != demoPassword) {
@@ -361,6 +377,13 @@ final class FakeService implements TomSecretsAdminChannel {
       case 'approvers.cliSwitch':
         _unlocked();
         cliApprovals = args['on']! as bool;
+        return {'op': 'ok'};
+      case 'keys':
+        _unlocked();
+        return {'op': 'keyList', 'keys': keys};
+      case 'reload':
+        _unlocked();
+        reloads++;
         return {'op': 'ok'};
       case 'settings.get':
         _unlocked();

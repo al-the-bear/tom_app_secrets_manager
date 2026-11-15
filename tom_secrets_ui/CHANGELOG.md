@@ -11,6 +11,11 @@
   step), the vault-aware and uniform views, the Environments screen (the
   keys across the files, the vaults this machine does not serve opened for
   editing through the service) and the Conflicts screen over `TomMergeView`.
+- Import, keys and reminders: the Import screen (1Password 1PUX/CSV,
+  Enpass JSON/CSV: mapping, preview, import, report, deleting the export),
+  the Keys screen (every key with its date, a vault's keys' due date, the
+  DP-85 rotation ages), the reminder banner with its snooze and the daily
+  notification, and the warning when an offline copy is over a week old.
 - Clients and settings: the approval prompt (shown on top, a notification
   while the window is closed), the Clients screen (approvals, the allow list
   with Revoke, pre-approval, the approval code, the audit log) and the

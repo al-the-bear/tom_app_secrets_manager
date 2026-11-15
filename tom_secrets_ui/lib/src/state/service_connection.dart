@@ -13,6 +13,9 @@ import 'package:flutter/foundation.dart';
 import 'package:tom_secrets_client/admin.dart'
     show TomSecretsAdminException, tomSecretsRandomBytes;
 
+import 'package:tom_secrets_core/tom_secrets_core.dart'
+    show TomSecretsOfflineCache;
+
 import '../ports/service_host.dart';
 
 /// Where the connection stands.
@@ -88,6 +91,16 @@ final class TomSecretsStoreState {
   /// Whether it is served from its offline copy.
   bool get isOffline =>
       state == 'offline' || state == 'token_expired' || source == 'cache';
+
+  /// Whether it is served from an offline copy older than the stale age
+  /// (`TomSecretsOfflineCache.defaultStaleAfter`, 7 days) at [now]: the
+  /// app warns that the copy may be out of date (part-key-rotation).
+  bool isStaleAt(DateTime now) {
+    final at = fetchedAt;
+    return isOffline &&
+        at != null &&
+        now.difference(at) > TomSecretsOfflineCache.defaultStaleAfter;
+  }
 
   /// Why it is offline, for the user, or null.
   String? get offlineReason => switch (state) {

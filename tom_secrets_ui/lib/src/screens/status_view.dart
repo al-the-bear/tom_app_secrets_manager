@@ -88,6 +88,8 @@ class TomSecretsStatusView extends StatelessWidget {
                 if (s.source != null) 'from ${s.source}',
                 if (s.fetchedAt != null)
                   'fetched ${tomSecretsAge(s.fetchedAt!)}',
+                if (s.isStaleAt(DateTime.now()))
+                  'the offline copy is over a week old and may be out of date',
                 if (s.notPushed > 0) '${s.notPushed} changes not yet on GitHub',
               ].join(' · '),
             ),

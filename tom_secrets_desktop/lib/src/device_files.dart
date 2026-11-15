@@ -93,6 +93,16 @@ final class TomSecretsDesktopFiles
   }
 
   @override
+  Future<Uint8List> read(String path) => File(path).readAsBytes();
+
+  @override
+  Future<bool> delete(String path) async {
+    final file = File(path);
+    if (await file.exists()) await file.delete();
+    return !await file.exists();
+  }
+
+  @override
   Future<TomKeyFile?> pickKeyFile(BuildContext context) async {
     final file = await openFile(confirmButtonText: 'Use as key file');
     if (file == null) return null;

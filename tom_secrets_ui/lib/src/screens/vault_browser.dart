@@ -257,8 +257,12 @@ class _VaultHeader extends StatelessWidget {
       subtitle: offline
           ? Text(
               'offline copy: ${state!.offlineReason}'
-              '${state!.fetchedAt == null ? '' : ', from ${tomSecretsAge(state!.fetchedAt!)}'}',
+              '${state!.fetchedAt == null ? '' : ', from ${tomSecretsAge(state!.fetchedAt!)}'}'
+              '${state!.isStaleAt(DateTime.now()) ? ' — it may be out of date' : ''}',
               key: Key('tsm-offline-${vault.store}'),
+              style: state!.isStaleAt(DateTime.now())
+                  ? TextStyle(color: Theme.of(context).colorScheme.error)
+                  : null,
             )
           : null,
       onTap: () => session.selectGroup(vault.store, null),

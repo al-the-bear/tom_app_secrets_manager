@@ -121,7 +121,8 @@ abstract interface class TomSecretsPreferences {
   Future<void> write(String key, String? value);
 }
 
-/// A file a user picks or saves, for an entry's attachments.
+/// A file a user picks or saves: an entry's attachments, an export to
+/// import.
 abstract interface class TomSecretsFiles {
   /// A file the user picks: its name and bytes, or null when cancelled.
   Future<({String name, Uint8List bytes})?> pick();
@@ -134,6 +135,13 @@ abstract interface class TomSecretsFiles {
   /// create ([save], suggesting [suggestedName]) or one that exists; null
   /// when cancelled.
   Future<String?> choosePath({required bool save, String? suggestedName});
+
+  /// The bytes of the file at [path] (one [choosePath] answered).
+  Future<Uint8List> read(String path);
+
+  /// Deletes the file at [path] (an export the user imported, which holds
+  /// every password in plaintext); answers whether it is gone.
+  Future<bool> delete(String path);
 }
 
 /// What the last step of the First run wizard offers to start (part-app,

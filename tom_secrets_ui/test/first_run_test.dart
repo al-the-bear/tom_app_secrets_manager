@@ -58,6 +58,12 @@ final class _Files implements TomSecretsFiles {
     required bool save,
     String? suggestedName,
   }) async => null;
+
+  @override
+  Future<Uint8List> read(String path) async => Uint8List(0);
+
+  @override
+  Future<bool> delete(String path) async => false;
 }
 
 void main() {

@@ -123,6 +123,82 @@ final class TomSecretsAuditEntry {
   String? get approver => wire['approver'] as String?;
 }
 
+/// A key the service knows a due date of (`keys`, protocol.md 6.3;
+/// part-key-rotation, Keys and their expiry).
+@immutable
+final class TomSecretsKeyInfo {
+  const TomSecretsKeyInfo._({
+    required this.kind,
+    required this.key,
+    required this.vault,
+    required this.expiresAt,
+    required this.daysLeft,
+    required this.reminding,
+  });
+
+  /// From a `keyList.keys[]` item.
+  factory TomSecretsKeyInfo.fromWire(Map<String, Object?> wire) =>
+      TomSecretsKeyInfo._(
+        kind: wire['kind'] as String? ?? '',
+        key: wire['key'] as String? ?? '',
+        vault: wire['vault'] as String?,
+        expiresAt:
+            DateTime.tryParse(wire['expiresAt'] as String? ?? '') ??
+            DateTime(0),
+        daysLeft: wire['daysLeft'] is int ? wire['daysLeft']! as int : 0,
+        reminding: wire['reminding'] == true,
+      );
+
+  /// `github_token`, `vault_keys`, `approver_key` or `link_key`.
+  final String kind;
+
+  /// Its id: `github-token:<owner>/<repository>`, `vault-keys:<vault>`,
+  /// `approver-key:<device>`, `link-key:<device>`.
+  final String key;
+
+  /// The vault it belongs to, when one.
+  final String? vault;
+
+  /// When it expires or is due for rotation.
+  final DateTime expiresAt;
+
+  /// Whole days left (negative once expired).
+  final int daysLeft;
+
+  /// Whether a reminder is due now.
+  final bool reminding;
+
+  /// What follows the kind in [key]: the repository, vault or device.
+  String get subject =>
+      key.contains(':') ? key.substring(key.indexOf(':') + 1) : key;
+
+  /// The key's use, for the user.
+  String get title => switch (kind) {
+    'github_token' => 'GitHub token for $subject',
+    'vault_keys' => 'Key file and repository key of $subject',
+    'approver_key' => 'Approver key pair of $subject',
+    'link_key' => 'Approval-link key pair of $subject',
+    _ => key,
+  };
+
+  /// Whether it is past its date.
+  bool get expired => daysLeft < 0;
+
+  /// Its reminder step now: `first`, `7`, `1` or `expired <date>` (the
+  /// service's steps; a snooze lasts until the step changes).
+  String get step => tomSecretsReminderStep(daysLeft, DateTime.now());
+}
+
+/// The reminder step of a key [daysLeft] days from its date at [now]: `first`,
+/// `7`, `1`, or `expired <date>` (once a day once expired).
+String tomSecretsReminderStep(int daysLeft, DateTime now) => daysLeft < 0
+    ? 'expired ${now.toUtc().toIso8601String().substring(0, 10)}'
+    : daysLeft <= 1
+    ? '1'
+    : daysLeft <= 7
+    ? '7'
+    : 'first';
+
 /// The device settings as `settings.get` answers them.
 @immutable
 final class TomSecretsSettingsReport {
@@ -228,6 +304,15 @@ final class TomSecretsClientsApi {
       for (final r in (answer['records'] as List? ?? const []).cast<Map>())
         TomSecretsAuditEntry.fromWire(r.cast<String, Object?>()),
     ]..sort((a, b) => b.time.compareTo(a.time));
+  }
+
+  /// Every key the service knows a due date of, soonest first.
+  Future<List<TomSecretsKeyInfo>> keys() async {
+    final answer = await connection.request('keys');
+    return [
+      for (final k in (answer['keys'] as List? ?? const []).cast<Map>())
+        TomSecretsKeyInfo.fromWire(k.cast<String, Object?>()),
+    ]..sort((a, b) => a.expiresAt.compareTo(b.expiresAt));
   }
 
   /// Switches command-line approvals on this device (DP-19).
