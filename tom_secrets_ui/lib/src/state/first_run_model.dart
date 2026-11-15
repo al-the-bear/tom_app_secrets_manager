@@ -83,6 +83,74 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
 
   // ---- Step 1 ----
 
+  bool _byPairing = false;
+
+  /// Whether the machine is set up by pairing with another desktop (the
+  /// protection step is left out: the keys come with the pairing).
+  bool get byPairing => _byPairing;
+  set byPairing(bool value) => _update(() {
+    _byPairing = value;
+    _receipt = null;
+  });
+
+  /// The giving machine's address as its Pairing screen shows it
+  /// (`host:port`).
+  String pairAddress = '';
+
+  /// The code its Pairing screen shows.
+  String pairCode = '';
+
+  TomSecretsPairingReceipt? _receipt;
+
+  /// The pairing received (held in memory until the setup), or null.
+  TomSecretsPairingReceipt? get receipt => _receipt;
+
+  bool _receiving = false;
+
+  /// Whether a pairing is being received.
+  bool get receiving => _receiving;
+
+  /// Receives the pairing from [pairAddress] with [pairCode] as [host]:
+  /// nothing is stored until [setUp]. A failure is shown as the error.
+  Future<void> receive() async {
+    if (_receiving) return;
+    final (String, int) at;
+    final TomSecretsPairingCode code;
+    try {
+      at = tomSecretsParsePairingAddress(pairAddress);
+      code = TomSecretsPairingCode.parse(pairCode);
+    } on FormatException catch (e) {
+      fail(e.message);
+      return;
+    }
+    _update(() {
+      _receiving = true;
+      _receipt = null;
+    });
+    try {
+      final receipt = await tomSecretsReceivePairingForSetup(
+        address: at.$1,
+        port: at.$2,
+        code: code,
+        device: host,
+      );
+      _update(() => _receipt = receipt);
+    } on TomSecretsPairingException catch (e) {
+      fail(switch (e.failure) {
+        TomSecretsPairingFailure.wrongCode =>
+          'Wrong code: the other machine closed its pairing window. Open a '
+              'new one there and type its new code.',
+        TomSecretsPairingFailure.declined =>
+          'The other machine declined: nothing was received.',
+        TomSecretsPairingFailure.refused => 'Not set up: ${e.message}.',
+        _ => 'The pairing failed: ${e.message}',
+      });
+    } finally {
+      _receiving = false;
+      notifyListeners();
+    }
+  }
+
   bool _create = true;
 
   /// Whether a new primary is created (else one is opened).
@@ -258,6 +326,12 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   /// What keeps the current step from going on, or null when it may.
   String? get blocker {
     switch (_step) {
+      case TomSecretsFirstRunStep.primary when _byPairing:
+        if (_receipt == null) {
+          return 'Receive the pairing from the other machine.';
+        }
+        if (password.isEmpty) return 'Type the master password.';
+        return null;
       case TomSecretsFirstRunStep.primary:
         if (locator == null) {
           return _onGitHub
@@ -305,7 +379,11 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         _step.index >= TomSecretsFirstRunStep.machine.index) {
       return;
     }
-    _update(() => _step = TomSecretsFirstRunStep.values[_step.index + 1]);
+    _update(
+      () => _step = _byPairing && _step == TomSecretsFirstRunStep.primary
+          ? TomSecretsFirstRunStep.machine
+          : TomSecretsFirstRunStep.values[_step.index + 1],
+    );
   }
 
   /// Goes back a step (not from the last: the machine is set up then).
@@ -314,8 +392,17 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         _step == TomSecretsFirstRunStep.done) {
       return;
     }
-    _update(() => _step = TomSecretsFirstRunStep.values[_step.index - 1]);
+    _update(
+      () => _step = _byPairing && _step == TomSecretsFirstRunStep.machine
+          ? TomSecretsFirstRunStep.primary
+          : TomSecretsFirstRunStep.values[_step.index - 1],
+    );
   }
+
+  /// The primary's locator as set up: the one chosen, or the one the
+  /// pairing gave.
+  String? get primaryLocatorText =>
+      _byPairing ? _receipt?.primary.locator : locator?.text;
 
   // ---- The GitHub token (TomTokenKeeper) ----
 
@@ -380,7 +467,10 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   }
 
   /// Shows [message] as the wizard's error.
-  void fail(String message) => _update(() => _error = message);
+  void fail(String message) {
+    _error = message;
+    notifyListeners();
+  }
 
   /// The emergency sheet of the primary being created (BP-37): its
   /// locator, the new key file and repository key, the outer cipher; the
@@ -407,20 +497,23 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
     cipher: cipher,
     githubToken: _onGitHub ? _token : null,
     githubTokenExpires: _onGitHub ? tokenExpires : null,
-    settings: TomSecretsDeviceSettings(
-      defaultEnvironment: defaultEnvironment.trim().isEmpty
-          ? null
-          : defaultEnvironment.trim(),
-      servedStores: servesPrimaryOnly ? const ['primary'] : null,
-      serviceLock: TomSecretsLockPolicy(
-        mode: lock == TomSecretsFirstRunLock.never
-            ? TomSecretsLockMode.never
-            : TomSecretsLockMode.idle,
-        idle: Duration(minutes: idleMinutes),
-      ),
-    ),
+    settings: settings,
     deviceKey: deviceKey,
     host: host == tomSecretsDefaultHost() ? null : host,
+  );
+
+  /// This machine's settings as step 3 has them.
+  TomSecretsDeviceSettings get settings => TomSecretsDeviceSettings(
+    defaultEnvironment: defaultEnvironment.trim().isEmpty
+        ? null
+        : defaultEnvironment.trim(),
+    servedStores: servesPrimaryOnly ? const ['primary'] : null,
+    serviceLock: TomSecretsLockPolicy(
+      mode: lock == TomSecretsFirstRunLock.never
+          ? TomSecretsLockMode.never
+          : TomSecretsLockMode.idle,
+      idle: Duration(minutes: idleMinutes),
+    ),
   );
 
   /// Sets the machine up, starts the service, attaches and unlocks it with
@@ -430,7 +523,15 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
     if (blocker != null || _busy) return;
     _update(() => _busy = true);
     try {
-      _result = await firstRun.run(setup);
+      final receipt = _receipt;
+      _result = _byPairing && receipt != null
+          ? await firstRun.runPaired(
+              receipt,
+              masterPassword: password,
+              settings: settings,
+              deviceKey: deviceKey,
+            )
+          : await firstRun.run(setup);
     } on TomSecretsFirstRunException catch (e) {
       _busy = false;
       _step = switch (e.problem) {

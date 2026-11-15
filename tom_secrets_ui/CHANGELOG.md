@@ -53,6 +53,15 @@
   shared configuration, a GitHub token pasted for that device), sent or
   declined; `pair.record` afterwards; the paired devices (`pair.list`) with
   Revoke (`pair.revoke`). Locking the app closes the window.
+- Setting a new desktop up by pairing: the First run wizard's "Pair with
+  another desktop" takes the other machine's address and code, receives
+  the pairing (nothing stored), shows what it gave, takes the master
+  password and sets the machine up from it (`TomSecretsFirstRun.runPaired`),
+  the protection step left out; the last step's "Pair another desktop"
+  opens the Pairing screen (`tomSecretsShowPairing`). The Pairing screen
+  shows IPv6 addresses in brackets and tells a bundle the device refused.
+- The First run wizard shows the errors it reports through `fail` (they
+  were cleared at once).
 - The First run wizard: the primary vault created or opened, local or in a
   GitHub repository, its key file and outer encryption, the machine's
   settings; then the service started and unlocked.

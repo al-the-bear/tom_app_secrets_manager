@@ -41,6 +41,9 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
   late final _repository = TextEditingController(text: m.repository);
   late final _repositoryPath = TextEditingController(text: m.repositoryPath);
   final _password = TextEditingController();
+  final _pairAddress = TextEditingController();
+  final _pairCode = TextEditingController();
+  final _pairPassword = TextEditingController();
   final _repeat = TextEditingController();
   final _openKey = TomKeyStepController();
   final _repositoryKey = TextEditingController();
@@ -67,6 +70,9 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
   void dispose() {
     m.removeListener(_rebuild);
     for (final c in [
+      _pairAddress,
+      _pairCode,
+      _pairPassword,
       _path,
       _owner,
       _repository,
@@ -256,7 +262,159 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
 
   // ---- Step 1 ----
 
-  Widget _primaryStep() {
+  Widget _primaryStep() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment(
+            value: false,
+            icon: Icon(Icons.inventory_2_outlined),
+            label: Text('Set up the vault here', key: Key('tsm-fr-here')),
+          ),
+          ButtonSegment(
+            value: true,
+            icon: Icon(Icons.devices_outlined),
+            label: Text('Pair with another desktop', key: Key('tsm-fr-pair')),
+          ),
+        ],
+        selected: {m.byPairing},
+        onSelectionChanged: (s) {
+          _pairPassword.clear();
+          m.password = '';
+          m.byPairing = s.single;
+        },
+      ),
+      const SizedBox(height: 16),
+      if (m.byPairing) _pairingPanel() else _vaultPanel(),
+    ],
+  );
+
+  Widget _pairingPanel() {
+    final theme = Theme.of(context);
+    final receipt = m.receipt;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'On a desktop that is set up, open Pairing and choose "Pair a '
+          'device": it shows an address and a code. This machine gets the '
+          'vaults and keys you choose there; you only type the master '
+          'password here.',
+          style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('tsm-fr-pair-address'),
+          controller: _pairAddress,
+          enabled: receipt == null && !m.receiving,
+          decoration: const InputDecoration(
+            labelText: 'Its address (as shown, e.g. 10.8.0.7:47900)',
+            prefixIcon: Icon(Icons.lan_outlined),
+          ),
+          onChanged: (v) {
+            m.pairAddress = v;
+            m.changed();
+          },
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('tsm-fr-pair-code'),
+          controller: _pairCode,
+          enabled: receipt == null && !m.receiving,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'The code (e.g. 7-guitar-orbit)',
+            prefixIcon: Icon(Icons.password_outlined),
+          ),
+          onChanged: (v) {
+            m.pairCode = v;
+            m.changed();
+          },
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('tsm-fr-pair-host'),
+          controller: _host,
+          enabled: receipt == null && !m.receiving,
+          decoration: const InputDecoration(
+            labelText: 'This machine\'s name',
+            prefixIcon: Icon(Icons.computer_outlined),
+          ),
+          onChanged: (v) {
+            m.host = v.trim();
+            m.changed();
+          },
+        ),
+        const SizedBox(height: 12),
+        if (receipt == null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: m.receiving
+                ? const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Text('Waiting for the other machine…'),
+                  )
+                : FilledButton.tonalIcon(
+                    key: const Key('tsm-fr-pair-receive'),
+                    icon: const Icon(Icons.download_outlined),
+                    label: const Text('Pair'),
+                    onPressed: () => unawaited(m.receive()),
+                  ),
+          )
+        else ...[
+          Container(
+            key: const Key('tsm-fr-pair-received'),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Paired with ${receipt.giver}. It gave:',
+                  style: theme.textTheme.titleSmall,
+                ),
+                for (final v in receipt.bundle.vaults)
+                  Text(
+                    '${v.name}${v.primary ? ' (primary)' : ''} — ${v.locator}',
+                  ),
+                if (receipt.bundle.configYaml != null)
+                  const Text('the shared configuration'),
+                for (final t in receipt.bundle.tokens)
+                  Text('a GitHub token for ${t.repository}'),
+                const SizedBox(height: 4),
+                Text(
+                  'Nothing is stored before "Set up this machine".',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('tsm-fr-pair-password'),
+            controller: _pairPassword,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(
+              labelText: 'Master password of the primary vault',
+              prefixIcon: Icon(Icons.lock_outline),
+            ),
+            onChanged: (v) {
+              m.password = v;
+              m.changed();
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _vaultPanel() {
     final files = _host0.files;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -743,6 +901,8 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
       TextField(
         key: const Key('tsm-fr-host'),
         controller: _host,
+        // A paired machine keeps the name the other machine recorded.
+        enabled: m.receipt == null,
         decoration: const InputDecoration(
           labelText: 'This machine\'s name',
           prefixIcon: Icon(Icons.computer_outlined),
@@ -895,6 +1055,9 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
                 child: Text(
                   result.created
                       ? 'This machine is set up with a new primary vault.'
+                      : m.receipt != null
+                      ? 'This machine is set up by pairing with '
+                            '${m.receipt!.giver}.'
                       : 'This machine is set up with your primary vault.',
                   style: theme.textTheme.titleMedium,
                 ),
@@ -902,7 +1065,7 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(m.locator?.text ?? '', key: const Key('tsm-fr-summary')),
+          Text(m.primaryLocatorText ?? '', key: const Key('tsm-fr-summary')),
           if (result.keysDue != null)
             Text(
               'Its key file and repository key are due on '

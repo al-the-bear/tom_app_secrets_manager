@@ -22,6 +22,18 @@ import '../state/session_state.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 
+/// Opens the Pairing screen on its own page: the First run wizard's offer
+/// to pair another desktop (`TomSecretsFirstRunActions.pair`).
+Future<void> tomSecretsShowPairing(BuildContext context) =>
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Pairing')),
+          body: const TomSecretsPairingView(),
+        ),
+      ),
+    );
+
 /// The Pairing screen.
 class TomSecretsPairingView extends StatefulWidget {
   /// The screen.

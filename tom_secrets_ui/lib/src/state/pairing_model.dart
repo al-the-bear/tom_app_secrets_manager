@@ -110,7 +110,10 @@ class TomSecretsPairingModel extends ChangeNotifier {
   /// The addresses and port the window listens on (`address:port`).
   List<String> get listening => [
     if (_window != null)
-      for (final a in _window!.addresses) '${a.address}:${_window!.port}',
+      for (final a in _window!.addresses)
+        a.type == InternetAddressType.IPv6
+            ? '[${a.address}]:${_window!.port}'
+            : '${a.address}:${_window!.port}',
   ];
 
   /// The port the window listens on, or null.
@@ -319,6 +322,7 @@ class TomSecretsPairingModel extends ChangeNotifier {
         TomSecretsPairingFailure.declined => 'Declined: nothing was sent.',
         TomSecretsPairingFailure.closed =>
           'The pairing window closed without a device.',
+        TomSecretsPairingFailure.refused => 'Not paired: ${e.message}.',
         _ => 'The pairing failed: ${e.message}',
       });
     } finally {

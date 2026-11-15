@@ -81,8 +81,12 @@ Future<void> main(List<String> args) async {
     openUrl: tomSecretsDesktopOpenUrl,
     clipboard: tomSecretsDesktopClipboard(),
     startedHidden: hidden,
-    // The First run wizard's last step offers the import (part-app).
-    firstRunActions: {TomSecretsFirstRunActions.import: tomSecretsShowImport},
+    // The First run wizard's last step offers the import and pairing
+    // another desktop (part-app).
+    firstRunActions: {
+      TomSecretsFirstRunActions.import: tomSecretsShowImport,
+      TomSecretsFirstRunActions.pair: tomSecretsShowPairing,
+    },
   );
   runApp(TomSecretsApp(host: host));
 }
