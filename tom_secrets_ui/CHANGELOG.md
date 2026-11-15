@@ -40,6 +40,8 @@
 - Renewing a GitHub token from the Keys screen: GitHub's new-token page
   opened filled in, the pasted token checked and kept by the service
   (`token.set`), the result, and the page where the old token is deleted.
+- Rotating this device's approver and approval-link key pairs from the Keys
+  screen (`keys.rotate`), with the hosts reached and not reached.
 - The First run wizard: the primary vault created or opened, local or in a
   GitHub repository, its key file and outer encryption, the machine's
   settings; then the service started and unlocked.

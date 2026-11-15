@@ -134,6 +134,7 @@ final class TomSecretsKeyInfo {
     required this.expiresAt,
     required this.daysLeft,
     required this.reminding,
+    required this.own,
   });
 
   /// From a `keyList.keys[]` item.
@@ -147,6 +148,7 @@ final class TomSecretsKeyInfo {
             DateTime(0),
         daysLeft: wire['daysLeft'] is int ? wire['daysLeft']! as int : 0,
         reminding: wire['reminding'] == true,
+        own: wire['own'] == true,
       );
 
   /// `github_token`, `vault_keys`, `approver_key` or `link_key`.
@@ -168,6 +170,10 @@ final class TomSecretsKeyInfo {
   /// Whether a reminder is due now.
   final bool reminding;
 
+  /// Whether it is one of this device's own key pairs (rotated here,
+  /// `keys.rotate`).
+  final bool own;
+
   /// What follows the kind in [key]: the repository, vault or device.
   String get subject =>
       key.contains(':') ? key.substring(key.indexOf(':') + 1) : key;
@@ -187,6 +193,51 @@ final class TomSecretsKeyInfo {
   /// Its reminder step now: `first`, `7`, `1` or `expired <date>` (the
   /// service's steps; a snooze lasts until the step changes).
   String get step => tomSecretsReminderStep(daysLeft, DateTime.now());
+}
+
+/// What `keys.rotate` did.
+@immutable
+final class TomSecretsPairsRotation {
+  /// The result.
+  const TomSecretsPairsRotation({
+    required this.approverKeyId,
+    required this.resigned,
+    required this.delivered,
+    required this.pending,
+  });
+
+  /// The new approver key's id, or null.
+  final String? approverKeyId;
+
+  /// The grants and revocations signed again with the new key.
+  final int resigned;
+
+  /// The hosts that took the new keys over the approval link.
+  final List<String> delivered;
+
+  /// The hosts not reached: they take the key change from the vault at
+  /// their next refresh, and the new link key is sent again later.
+  final List<String> pending;
+
+  /// The result in words.
+  String get description {
+    final parts = [
+      'New approver and approval-link key pairs are in use'
+          '${approverKeyId == null ? '' : ' (approver key $approverKeyId)'}.',
+      if (resigned > 0)
+        '$resigned grant${resigned == 1 ? '' : 's'} and revocations signed '
+            'again.',
+      if (delivered.isNotEmpty)
+        'Taken over the approval link by ${delivered.join(', ')}.',
+      if (pending.isNotEmpty)
+        'Not reached: ${pending.join(', ')}. They take the key change from '
+            'the vault at their next refresh; the new link key is sent when '
+            'their link answers, and the old one works for 14 days.',
+      if (delivered.isEmpty && pending.isEmpty)
+        'No host is paired with this device.',
+    ];
+    return parts.join(' ');
+  }
 }
 
 /// The reminder step of a key [daysLeft] days from its date at [now]: `first`,
@@ -313,6 +364,25 @@ final class TomSecretsClientsApi {
       for (final k in (answer['keys'] as List? ?? const []).cast<Map>())
         TomSecretsKeyInfo.fromWire(k.cast<String, Object?>()),
     ]..sort((a, b) => a.expiresAt.compareTo(b.expiresAt));
+  }
+
+  /// Rotates this device's own approver and approval-link key pairs
+  /// (`keys.rotate`, part-key-rotation §4): both together, as an approver
+  /// device does.
+  Future<TomSecretsPairsRotation> rotateKeyPairs() async {
+    final answer = await connection.request('keys.rotate', {
+      'approver': true,
+      'link': true,
+    });
+    List<String> names(String key) => [
+      for (final h in (answer[key] as List? ?? const [])) '$h',
+    ];
+    return TomSecretsPairsRotation(
+      approverKeyId: answer['approverKeyId'] as String?,
+      resigned: answer['resigned'] as int? ?? 0,
+      delivered: names('delivered'),
+      pending: names('pending'),
+    );
   }
 
   /// Switches command-line approvals on this device (DP-19).

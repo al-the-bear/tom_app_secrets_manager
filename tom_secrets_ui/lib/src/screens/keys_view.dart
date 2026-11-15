@@ -48,6 +48,7 @@ class _KeysState extends State<TomSecretsKeysView> {
   String? _agesMessage;
   List<TomSecretsPendingRotation> _pending = const [];
   String? _finishMessage;
+  String? _pairsMessage;
 
   TomSecretsClientsApi get _api =>
       TomSecretsClientsApi(context.read<TomSecretsServiceConnection>());
@@ -119,6 +120,50 @@ class _KeysState extends State<TomSecretsKeysView> {
     await _load();
   }
 
+  Future<void> _rotatePairs() async {
+    final c = context.read<TomSecretsServiceConnection>();
+    final api = _api;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('tsm-pairs-rotate'),
+        title: const Text('Rotate this device\'s key pairs'),
+        content: const SizedBox(
+          width: 520,
+          child: Text(
+            'This device gets a new approver key pair and a new approval-link '
+            'key pair, together. What the old approver key signed (grants, '
+            'revocations, pre-approvals) is signed again, and every paired '
+            'host is told: over the approval link now, or from the vault at '
+            'its next refresh. The old link key keeps working for 14 days '
+            'for the hosts not reached yet.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('tsm-pairs-rotate-go'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Rotate'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    String message;
+    try {
+      message = (await api.rotateKeyPairs()).description;
+    } on TomSecretsAdminException catch (e) {
+      message = tomSecretsDescribeAdminError(e);
+    }
+    await c.refreshStatus();
+    await _load();
+    if (mounted) setState(() => _pairsMessage = message);
+  }
+
   Future<void> _finish() async {
     final session = context.read<TomSecretsSession>();
     try {
@@ -167,6 +212,16 @@ class _KeysState extends State<TomSecretsKeysView> {
               children: [
                 if (_pending.isNotEmpty || _finishMessage != null)
                   _pendingBanner(context),
+                if (_pairsMessage != null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        _pairsMessage!,
+                        key: const Key('tsm-pairs-message'),
+                      ),
+                    ),
+                  ),
                 TomSecretsSection(
                   title: 'Keys and their dates',
                   icon: Icons.key_rounded,
@@ -240,7 +295,13 @@ class _KeysState extends State<TomSecretsKeysView> {
               onPressed: () => unawaited(_setDue(k)),
               child: const Text('Due date…'),
             ),
-          if (k.kind == 'github_token')
+          if (k.own && (k.kind == 'approver_key' || k.kind == 'link_key'))
+            TextButton(
+              key: Key('tsm-key-rotate-${k.key}'),
+              onPressed: () => unawaited(_rotatePairs()),
+              child: Text(rotation),
+            )
+          else if (k.kind == 'github_token')
             TextButton(
               key: Key('tsm-key-renew-${k.key}'),
               onPressed: () => unawaited(_renew(k.key)),

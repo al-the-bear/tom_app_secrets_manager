@@ -470,6 +470,16 @@ final class FakeService implements TomSecretsAdminChannel {
       case 'keys':
         _unlocked();
         return {'op': 'keyList', 'keys': keys};
+      case 'keys.rotate':
+        _unlocked();
+        pairRotations.add(args);
+        return {
+          'op': 'keysRotated',
+          'approverKeyId': 'fedcba98765432100123456789abcdef',
+          'resigned': 2,
+          'delivered': ['bigbeast'],
+          'pending': ['legiondary01'],
+        };
       case 'token.set':
         _unlocked();
         tokenRequests.add(args);
@@ -614,6 +624,9 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// The `compact` requests.
   final List<Map<String, Object?>> compactions = [];
+
+  /// The `keys.rotate` requests.
+  final List<Map<String, Object?>> pairRotations = [];
 
   /// The `token.set` requests.
   final List<Map<String, Object?>> tokenRequests = [];
