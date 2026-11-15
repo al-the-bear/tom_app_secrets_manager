@@ -1,0 +1,575 @@
+// Copyright (c) 2026 Peter Nicolai Alexis Kyaw
+// SPDX-License-Identifier: BSD-3-Clause
+
+/// The Settings screen (part-app, Screens › Settings, phase A): each setting
+/// says whose it is.
+///
+/// - **This machine's service** (the device settings, `settings.get` /
+///   `settings.set`): the files served and the default environment, the lock
+///   mode with its timeouts, the approval timeout and the code's validity,
+///   the pull interval, the offline cache, the reminder period, the approval
+///   link; and command-line approvals (DP-19), switchable only here.
+/// - **This machine's app**: screen capture (DP-33), start at login (DP-30),
+///   stopping the service.
+/// - **Shared**, in the primary vault: the dimensions with their priority and
+///   the files per environment (`tsm.config`, BP-43).
+///
+/// The keys (protection layers, the GitHub token, rotation ages) are on the
+/// Keys screen (tsm_a26); the phase-B integrations are not here yet.
+library;
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:tom_reusable_ui/tom_reusable_ui.dart' show tomShowNotice;
+import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_core/tom_secrets_core.dart';
+
+import '../host_bridge.dart' show TomSecretsHostPreferenceKeys;
+import '../ports/desktop_ports.dart';
+import '../state/clients.dart';
+import '../state/service_connection.dart';
+import '../state/session_state.dart';
+import '../widgets/style.dart';
+import 'gate_screens.dart' show tomSecretsDescribeAdminError;
+
+/// The Settings screen.
+class TomSecretsSettingsView extends StatefulWidget {
+  /// The screen.
+  const TomSecretsSettingsView({super.key});
+
+  @override
+  State<TomSecretsSettingsView> createState() => _SettingsState();
+}
+
+class _SettingsState extends State<TomSecretsSettingsView> {
+  TomSecretsSettingsReport? _report;
+  Map<String, Object?> _draft = const {};
+  String? _error;
+  String? _deviceMessage;
+  bool? _loginItem;
+  late final TextEditingController _config;
+  String? _configError;
+  final _link = TextEditingController();
+
+  TomSecretsClientsApi get _api =>
+      TomSecretsClientsApi(context.read<TomSecretsServiceConnection>());
+
+  @override
+  void initState() {
+    super.initState();
+    _config = TextEditingController(
+      text: context.read<TomSecretsSession>().sharedConfigYaml ?? '',
+    );
+    unawaited(_load());
+    final login = context.read<TomSecretsHost>().loginItem;
+    if (login != null) {
+      unawaited(
+        login.isEnabled().then((on) {
+          if (mounted) setState(() => _loginItem = on);
+        }),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _config.dispose();
+    _link.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final report = await _api.settings();
+      if (!mounted) return;
+      setState(() {
+        _report = report;
+        _draft = report.device.toJson();
+        _link.text = report.device.approvalLink ?? '';
+        _error = null;
+      });
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) setState(() => _error = tomSecretsDescribeAdminError(e));
+    }
+  }
+
+  void _set(String key, Object? value) => setState(() {
+    _draft = {..._draft};
+    if (value == null) {
+      _draft.remove(key);
+    } else {
+      _draft[key] = value;
+    }
+    _deviceMessage = null;
+  });
+
+  Map<String, Object?> get _lock =>
+      (_draft['serviceLock'] as Map? ?? const {}).cast<String, Object?>();
+
+  void _setLock(String key, Object? value) {
+    final lock = {..._lock};
+    if (value == null) {
+      lock.remove(key);
+    } else {
+      lock[key] = value;
+    }
+    _set('serviceLock', lock);
+  }
+
+  Future<void> _saveDevice() async {
+    final link = _link.text.trim();
+    final draft = {..._draft};
+    if (link.isEmpty) {
+      draft.remove('approvalLink');
+    } else {
+      draft['approvalLink'] = link;
+    }
+    try {
+      final later = await _api.writeSettings(
+        TomSecretsDeviceSettings.fromJson(draft),
+      );
+      if (!mounted) return;
+      setState(() {
+        _draft = draft;
+        _deviceMessage = later.isEmpty
+            ? 'Saved; in effect now.'
+            : 'Saved. ${later.map(_settingName).join(', ')} '
+                  '${later.length == 1 ? 'applies' : 'apply'} at the next '
+                  'unlock.';
+      });
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) {
+        setState(() => _deviceMessage = tomSecretsDescribeAdminError(e));
+      }
+    }
+  }
+
+  static String _settingName(String key) => switch (key) {
+    'servedStores' => 'The files served',
+    'defaultEnvironment' => 'the default environment',
+    'approvalLink' => 'the approval link',
+    _ => key,
+  };
+
+  Future<void> _setCli(bool on) async {
+    try {
+      await _api.setCliApprovals(on);
+      await _load();
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) {
+        tomShowNotice(
+          ScaffoldMessenger.maybeOf(context),
+          kind: 'settings',
+          message: tomSecretsDescribeAdminError(e),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveConfig() async {
+    final session = context.read<TomSecretsSession>();
+    try {
+      await session.saveSharedConfig(_config.text);
+      if (mounted) setState(() => _configError = null);
+      if (mounted) {
+        tomShowNotice(
+          ScaffoldMessenger.maybeOf(context),
+          kind: 'settings',
+          message: 'The shared configuration is saved in the primary vault.',
+        );
+      }
+    } on TomSecretsConfigException catch (e) {
+      if (mounted) setState(() => _configError = e.message);
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) {
+        setState(() => _configError = tomSecretsDescribeAdminError(e));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final host = context.read<TomSecretsHost>();
+    final session = context.watch<TomSecretsSession>();
+    return ListView(
+      key: const Key('tsm-settings'),
+      padding: const EdgeInsets.all(12),
+      children: [
+        Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 720,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _device(context, session),
+                _app(context, host),
+                _shared(context, theme),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _whose(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    ),
+  );
+
+  Widget _device(BuildContext context, TomSecretsSession session) {
+    final report = _report;
+    if (_error != null) {
+      return TomSecretsSection(
+        title: 'This machine',
+        icon: Icons.dns_rounded,
+        children: [Text(_error!)],
+      );
+    }
+    if (report == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final served = (_draft['servedStores'] as List?)?.cast<String>();
+    final primary = report.stores.firstOrNull;
+    final envs = {
+      ...session.resolution.config.stores.keys,
+      ?_draft['defaultEnvironment'] as String?,
+    }.toList()..sort();
+    final lock = _lock;
+    final never = lock['mode'] == 'never';
+    int seconds(String key, int fallback) =>
+        _draft[key] is int ? _draft[key]! as int : fallback;
+    return TomSecretsSection(
+      title: 'This machine',
+      icon: Icons.dns_rounded,
+      children: [
+        _whose('Kept in this machine\'s device settings, by its service.'),
+        SwitchListTile(
+          key: const Key('tsm-settings-serve-all'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Serve every file the primary vault names'),
+          value: served == null,
+          onChanged: (all) => _set(
+            'servedStores',
+            all ? null : [for (final s in report.stores.skip(1)) s],
+          ),
+        ),
+        if (served != null)
+          Wrap(
+            spacing: 6,
+            children: [
+              if (primary != null)
+                FilterChip(
+                  label: Text('$primary (primary)'),
+                  selected: true,
+                  onSelected: null,
+                ),
+              for (final s in report.stores.skip(1))
+                FilterChip(
+                  key: Key('tsm-settings-serve-$s'),
+                  label: Text(s),
+                  selected: served.contains(s),
+                  onSelected: (on) => _set('servedStores', [
+                    for (final x in report.stores.skip(1))
+                      if (x == s ? on : served.contains(x)) x,
+                  ]),
+                ),
+            ],
+          ),
+        Row(
+          children: [
+            const Text('Default environment  '),
+            DropdownButton<String?>(
+              key: const Key('tsm-settings-env'),
+              value: _draft['defaultEnvironment'] as String?,
+              isDense: true,
+              items: [
+                const DropdownMenuItem(value: null, child: Text('none')),
+                for (final e in envs)
+                  DropdownMenuItem(value: e, child: Text(e)),
+              ],
+              onChanged: (e) => _set('defaultEnvironment', e),
+            ),
+          ],
+        ),
+        const Divider(),
+        Row(
+          children: [
+            const Text('The service locks  '),
+            SegmentedButton<String>(
+              key: const Key('tsm-settings-lock'),
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 'idle', label: Text('(b) when idle')),
+                ButtonSegment(value: 'never', label: Text('(a) never')),
+              ],
+              selected: {never ? 'never' : 'idle'},
+              onSelectionChanged: (s) => _setLock('mode', s.single),
+            ),
+          ],
+        ),
+        if (!never)
+          _number(
+            'tsm-settings-idle',
+            'Idle minutes before it locks',
+            ((lock['idleSeconds'] as int?) ?? 1800) ~/ 60,
+            (v) => _setLock('idleSeconds', v * 60),
+            min: 1,
+          ),
+        _number(
+          'tsm-settings-max',
+          'Longest unlocked time, hours (0: no limit)',
+          ((lock['maxUnlockedSeconds'] as int?) ?? 0) ~/ 3600,
+          (v) => _setLock('maxUnlockedSeconds', v == 0 ? null : v * 3600),
+        ),
+        _number(
+          'tsm-settings-approval-timeout',
+          'Seconds a request waits for an approval',
+          seconds('approvalTimeoutSeconds', 60),
+          (v) => _set('approvalTimeoutSeconds', v),
+          min: 5,
+        ),
+        _number(
+          'tsm-settings-code-timeout',
+          'Minutes an approval code is valid',
+          seconds('codeTimeoutSeconds', 300) ~/ 60,
+          (v) => _set('codeTimeoutSeconds', v * 60),
+          min: 1,
+        ),
+        _number(
+          'tsm-settings-refresh',
+          'Minutes between pulls of the GitHub vaults (0: off)',
+          seconds('refreshMinutes', 5),
+          (v) => _set('refreshMinutes', v),
+        ),
+        SwitchListTile(
+          key: const Key('tsm-settings-cache'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Keep the last fetched vault files as an offline '
+            'cache',
+          ),
+          value: _draft['offlineCache'] != false,
+          onChanged: (v) => _set('offlineCache', v),
+        ),
+        _number(
+          'tsm-settings-reminders',
+          'Days before a key expires that the reminders start',
+          seconds('keyExpiryWarningDays', 14),
+          (v) => _set('keyExpiryWarningDays', v),
+          min: 1,
+        ),
+        TextField(
+          key: const Key('tsm-settings-link'),
+          controller: _link,
+          decoration: const InputDecoration(
+            isDense: true,
+            labelText:
+                'Approval link address (VPN or LAN address:port; '
+                'empty: no link)',
+          ),
+          onChanged: (_) => setState(() => _deviceMessage = null),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            FilledButton(
+              key: const Key('tsm-settings-save'),
+              onPressed: () => unawaited(_saveDevice()),
+              child: const Text('Save'),
+            ),
+            const SizedBox(width: 12),
+            if (_deviceMessage != null)
+              Expanded(
+                child: Text(
+                  _deviceMessage!,
+                  key: const Key('tsm-settings-message'),
+                ),
+              ),
+          ],
+        ),
+        const Divider(),
+        SwitchListTile(
+          key: const Key('tsm-settings-cli'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Command-line approvals'),
+          subtitle: const Text(
+            'Let tsm allow and tsm approve-code on this machine pre-approve '
+            'clients and make approval tokens, so agents can set up '
+            'environments without a person. Off by default; switched only '
+            'here.',
+          ),
+          value: report.cliApprovals,
+          onChanged: (on) => unawaited(_setCli(on)),
+        ),
+      ],
+    );
+  }
+
+  Widget _number(
+    String key,
+    String label,
+    int value,
+    ValueChanged<int> onChanged, {
+    int min = 0,
+  }) => Row(
+    children: [
+      Expanded(child: Text(label)),
+      IconButton(
+        iconSize: 18,
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.remove),
+        onPressed: value <= min ? null : () => onChanged(value - 1),
+      ),
+      SizedBox(
+        width: 48,
+        child: Text(
+          '$value',
+          key: Key(key),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      IconButton(
+        key: Key('$key-more'),
+        iconSize: 18,
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.add),
+        onPressed: () => onChanged(value + 1),
+      ),
+    ],
+  );
+
+  Widget _app(BuildContext context, TomSecretsHost host) {
+    final guard = host.captureGuard;
+    final excluded =
+        host.preferences.read(TomSecretsHostPreferenceKeys.captureExcluded) !=
+        'off';
+    return TomSecretsSection(
+      title: 'This app',
+      icon: Icons.desktop_windows_rounded,
+      children: [
+        _whose('Kept in this machine\'s app preferences.'),
+        SwitchListTile(
+          key: const Key('tsm-settings-capture'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Keep the window out of screenshots and screen '
+            'sharing',
+          ),
+          subtitle: guard.supported
+              ? null
+              : const Text('This system cannot exclude a window (Linux).'),
+          value: excluded,
+          onChanged: guard.supported
+              ? (on) async {
+                  await host.preferences.write(
+                    TomSecretsHostPreferenceKeys.captureExcluded,
+                    on ? 'on' : 'off',
+                  );
+                  await guard.setExcluded(on);
+                  if (mounted) setState(() {});
+                }
+              : null,
+        ),
+        if (host.loginItem case final login?)
+          SwitchListTile(
+            key: const Key('tsm-settings-login'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Start the app at login, in the tray'),
+            value: _loginItem ?? false,
+            onChanged: _loginItem == null
+                ? null
+                : (on) async {
+                    await login.setEnabled(on);
+                    final now = await login.isEnabled();
+                    if (mounted) setState(() => _loginItem = now);
+                  },
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const Key('tsm-settings-stop'),
+            icon: const Icon(Icons.power_settings_new),
+            label: const Text('Stop the service'),
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Stop the secrets service?'),
+                  content: const Text(
+                    'Programs on this machine get no secrets until the '
+                    'service is started and unlocked again.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      key: const Key('tsm-settings-stop-confirm'),
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Stop'),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true && context.mounted) {
+                await context.read<TomSecretsServiceConnection>().stopService();
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _shared(BuildContext context, ThemeData theme) => TomSecretsSection(
+    title: 'Shared by every device',
+    icon: Icons.hub_rounded,
+    children: [
+      _whose(
+        'Kept in the primary vault (tsm.config): the dimensions in '
+        'priority order and the files per environment.',
+      ),
+      TextField(
+        key: const Key('tsm-settings-config'),
+        controller: _config,
+        maxLines: 14,
+        minLines: 6,
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        decoration: InputDecoration(
+          hintText:
+              'dimensions:\n  - name: host\n  - name: env\n'
+              '    default: dev\nstores:\n  prod:\n    - name: prod\n'
+              '      github: {repository: owner/vault, path: prod.kdbx}',
+          errorText: _configError,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.tonal(
+          key: const Key('tsm-settings-config-save'),
+          onPressed: () => unawaited(_saveConfig()),
+          child: const Text('Save in the primary vault'),
+        ),
+      ),
+    ],
+  );
+}

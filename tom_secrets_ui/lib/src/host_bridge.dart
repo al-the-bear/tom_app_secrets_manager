@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /// What the app does with the host's capabilities as the service's state
-/// changes (part-app): the tray icon and its menu, the system notification
-/// for an unlock request while the window is closed, keeping the window out
+/// changes (part-app): the tray icon and its menu, the system notifications
+/// for an unlock request and an approval prompt while the window is closed
+/// (DP-31), keeping the window out
 /// of screen capture (DP-33), and starting at login on the first start
 /// (DP-30).
 library;
@@ -157,11 +158,27 @@ final class TomSecretsHostBridge {
       : '${d.inDays} days ago';
 
   Future<void> _onEvent(Map<String, Object?> event) async {
-    if (event['op'] != 'unlock_needed') return;
+    final op = event['op'];
+    if (op != 'unlock_needed' && op != 'approval_needed') return;
     final notifier = host.notifier;
     final window = host.window;
     if (notifier == null) return;
     if (window != null && await window.isVisible()) return;
+    if (op == 'approval_needed') {
+      // The notification only opens the window, where the prompt waits on
+      // top; the decision is taken there, with the client shown in full
+      // (DP-31). It never names a secret.
+      final prompt = TomSecretsApprovalPrompt.fromEvent(event);
+      if (prompt == null) return;
+      await notifier.notify(
+        title: 'Approve a request',
+        body:
+            '${prompt.who} on ${prompt.host} asks for '
+            '${prompt.refs.length == 1 ? 'a secret' : '${prompt.refs.length} secrets'}.',
+        onClick: window == null ? null : () => unawaited(window.show()),
+      );
+      return;
+    }
     final identity = (event['identity'] as Map?)?.cast<String, Object?>();
     final who =
         identity?['exe'] ?? identity?['script'] ?? 'A program on this machine';

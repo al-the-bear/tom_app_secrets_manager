@@ -345,6 +345,37 @@ class TomSecretsSession extends ChangeNotifier {
         );
       });
 
+  /// The shared configuration's YAML (`tsm.config` in the primary's
+  /// metadata entry, BP-43), or null when the primary has none.
+  String? get sharedConfigYaml {
+    final primary = _vaults.values.firstOrNull;
+    return primary == null
+        ? null
+        : TomSecretsMetadata.read(primary.file).configYaml;
+  }
+
+  /// Writes [yaml] as the shared configuration into the primary and saves
+  /// it (every device reads it from there). Throws
+  /// `TomSecretsConfigException` when it does not read, before anything is
+  /// written; an empty text removes it (the built-in dimensions apply).
+  Future<void> saveSharedConfig(String yaml) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final text = yaml.trim();
+    if (text.isNotEmpty) TomSecretsConfig.parse(text);
+    final m = TomSecretsMetadata.read(primary.file);
+    TomSecretsMetadata(
+      format: m.format,
+      store: m.store,
+      kind: m.kind,
+      purpose: m.purpose,
+      binding: m.binding,
+      configYaml: text.isEmpty ? null : '$text\n',
+      keysDue: m.keysDue,
+    ).writeTo(primary.file);
+    await save(primary.store);
+  }
+
   /// The vaults the primary lists that this machine does not serve.
   List<TomSecretsUnservedVault> get unserved => _unserved;
 

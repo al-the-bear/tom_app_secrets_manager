@@ -97,6 +97,86 @@ final class FakeService implements TomSecretsAdminChannel {
   final StreamController<Map<String, Object?>> _events =
       StreamController.broadcast();
   final List<Map<String, Object?>> requests = [];
+
+  /// The prompts waiting (`approval_needed`), by approval id.
+  final Map<String, Map<String, Object?>> waiting = {};
+
+  /// The answers given (`approve`).
+  final List<Map<String, Object?>> approvals = [];
+
+  /// The allow list, every host.
+  final List<Map<String, Object?>> grants = [
+    {
+      'id': 'g-1',
+      'host': 'demo-host',
+      'subject': 'exe /usr/bin/demo-app',
+      'secret': 'telegram.bot_token',
+      'decision': 'allow',
+      'created': '2026-11-01T00:00:00Z',
+      'lastUsed': '2026-11-14T09:00:00Z',
+      'accepted': true,
+    },
+    {
+      'id': 'g-2',
+      'host': 'bomber',
+      'subject': 'script /usr/bin/python3 /srv/demo/job.py',
+      'secret': 'all',
+      'decision': 'never',
+      'created': '2026-11-02T00:00:00Z',
+      'accepted': true,
+    },
+  ];
+
+  /// The audit log.
+  final List<Map<String, Object?>> audit = [
+    {
+      'time': '2026-11-15T07:00:00Z',
+      'host': 'demo-host',
+      'identity': {'kind': 'exe', 'exe': '/usr/bin/demo-app'},
+      'refs': ['telegram.bot_token'],
+      'outcome': 'allowed',
+      'grantId': 'g-1',
+    },
+    {
+      'time': '2026-11-15T06:00:00Z',
+      'host': 'bomber',
+      'identity': {
+        'kind': 'script',
+        'exe': '/usr/bin/python3',
+        'interpreter': '/usr/bin/python3',
+        'script': '/srv/demo/job.py',
+      },
+      'refs': ['primary/Db/Main'],
+      'outcome': 'denied',
+    },
+  ];
+
+  /// The hosts paired with this device (an approval token can be made).
+  final Set<String> pairedHosts = {'bomber'};
+
+  /// The device settings, as the service keeps them.
+  Map<String, Object?> device = const TomSecretsDeviceSettings().toJson();
+
+  /// Whether command-line approvals are on.
+  bool cliApprovals = false;
+
+  /// A request waits for an approval: the event goes out.
+  void ask(Map<String, Object?> prompt) {
+    final event = {'op': 'approval_needed', ...prompt};
+    waiting[prompt['approvalId']! as String] = event;
+    emit(event);
+  }
+
+  /// The prompt [approvalId] ends elsewhere.
+  void endPrompt(String approvalId, String outcome) {
+    waiting.remove(approvalId);
+    emit({
+      'op': 'approval_closed',
+      'approvalId': approvalId,
+      'outcome': outcome,
+    });
+  }
+
   final List<Map<String, Object?>> saves = [];
   bool closed = false;
 
@@ -228,6 +308,84 @@ final class FakeService implements TomSecretsAdminChannel {
         s.revision = tomSecretsBlobId(s.stored);
         emit({'op': 'store_changed', 'store': s.name, 'revision': s.revision});
         return {'op': 'ok'};
+      case 'approve':
+        _unlocked();
+        final id = args['approvalId'];
+        if (waiting.remove(id) == null) {
+          throw TomSecretsAdminException('not_found', 'no prompt $id');
+        }
+        approvals.add(args);
+        return {'op': 'ok'};
+      case 'grants.list':
+        _unlocked();
+        final host = args['host'];
+        return {
+          'op': 'grantList',
+          'grants': [
+            for (final g in grants)
+              if (host == null || g['host'] == host) g,
+          ],
+        };
+      case 'grants.add':
+        _unlocked();
+        final grant = (args['grant']! as Map).cast<String, Object?>();
+        grants.add({
+          ...grant,
+          'id': 'g-${grants.length + 1}',
+          'created': '2026-11-15T08:00:00Z',
+          'accepted': true,
+        });
+        return {'op': 'ok'};
+      case 'grants.revoke':
+        _unlocked();
+        grants.removeWhere(
+          (g) => g['host'] == args['host'] && g['id'] == args['grantId'],
+        );
+        return {'op': 'ok'};
+      case 'approval.issue':
+        _unlocked();
+        if (!pairedHosts.contains(args['host'])) {
+          throw TomSecretsAdminException('not_found', 'no paired host');
+        }
+        return {'op': 'approvalToken', 'token': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'};
+      case 'audit.query':
+        _unlocked();
+        final ref = args['ref'];
+        return {
+          'op': 'auditRecords',
+          'records': [
+            for (final r in audit)
+              if (ref == null || (r['refs']! as List).contains(ref)) r,
+          ],
+        };
+      case 'approvers.cliSwitch':
+        _unlocked();
+        cliApprovals = args['on']! as bool;
+        return {'op': 'ok'};
+      case 'settings.get':
+        _unlocked();
+        return {
+          'op': 'deviceSettings',
+          'device': device,
+          'cliApprovals': cliApprovals,
+          'stores': [
+            for (final s in stores) s.name,
+            for (final s in unserved) s.name,
+          ],
+        };
+      case 'settings.set':
+        _unlocked();
+        final old = device;
+        device = (args['device']! as Map).cast<String, Object?>();
+        return {
+          'op': 'ok',
+          'nextUnlock': [
+            if ('${old['servedStores']}' != '${device['servedStores']}')
+              'servedStores',
+            if (old['defaultEnvironment'] != device['defaultEnvironment'])
+              'defaultEnvironment',
+          ],
+        };
       default:
         return {'op': 'ok'};
     }

@@ -20,8 +20,11 @@ import 'package:tom_reusable_ui/tom_reusable_ui.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../widgets/style.dart';
+import 'approval_prompt.dart';
+import 'clients_view.dart';
 import 'conflicts_view.dart';
 import 'environments_view.dart';
+import 'settings_view.dart';
 import 'status_view.dart';
 import 'vault_browser.dart';
 
@@ -35,6 +38,12 @@ enum TomSecretsDestination {
 
   /// The unsettled merge conflicts.
   conflicts,
+
+  /// The approvals, the allow list, approval codes and the audit log.
+  clients,
+
+  /// The settings.
+  settings,
 
   /// The Status screen.
   status,
@@ -56,12 +65,48 @@ class _MainShellState extends State<TomSecretsMainShell> {
   final FocusNode _search = FocusNode(debugLabel: 'search');
   final TextEditingController _query = TextEditingController();
   TomSecretsDestination _destination = TomSecretsDestination.vaults;
+  final Set<String> _prompted = {};
+  bool _promptOpen = false;
+  TomSecretsServiceConnection? _connection;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final c = context.read<TomSecretsServiceConnection>();
+    if (!identical(c, _connection)) {
+      _connection?.removeListener(_onConnection);
+      _connection = c..addListener(_onConnection);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onConnection());
+    }
+  }
 
   @override
   void dispose() {
+    _connection?.removeListener(_onConnection);
     _search.dispose();
     _query.dispose();
     super.dispose();
+  }
+
+  /// A new prompt is shown as a dialog on top at once (part-app, Approval
+  /// prompt); with the window closed the host bridge's notification opens
+  /// the window, where the dialog waits. One dialog at a time, the others
+  /// after it; a prompt dismissed with Later stays under Clients.
+  void _onConnection() {
+    final c = _connection;
+    if (c == null || _promptOpen || !mounted) return;
+    final next = c.prompts
+        .where((p) => !_prompted.contains(p.approvalId))
+        .firstOrNull;
+    if (next == null) return;
+    _prompted.add(next.approvalId);
+    _promptOpen = true;
+    unawaited(
+      tomSecretsShowApprovalPrompt(context, next.approvalId).whenComplete(() {
+        _promptOpen = false;
+        if (mounted) _onConnection();
+      }),
+    );
   }
 
   void _lock() => unawaited(
@@ -143,6 +188,21 @@ class _MainShellState extends State<TomSecretsMainShell> {
                     ),
                     selectedIcon: const Icon(Icons.call_split_rounded),
                     label: const Text('Conflicts'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Badge.count(
+                      key: const Key('tsm-clients-badge'),
+                      count: c.pendingApprovals,
+                      isLabelVisible: c.pendingApprovals > 0,
+                      child: const Icon(Icons.how_to_reg_outlined),
+                    ),
+                    selectedIcon: const Icon(Icons.how_to_reg_rounded),
+                    label: const Text('Clients'),
+                  ),
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings_rounded),
+                    label: Text('Settings'),
                   ),
                   const NavigationRailDestination(
                     icon: Icon(Icons.monitor_heart_outlined),
@@ -281,6 +341,10 @@ class _MainShellState extends State<TomSecretsMainShell> {
                           ),
                         TomSecretsDestination.conflicts =>
                           const TomSecretsConflictsView(),
+                        TomSecretsDestination.clients =>
+                          const TomSecretsClientsView(),
+                        TomSecretsDestination.settings =>
+                          const TomSecretsSettingsView(),
                         TomSecretsDestination.status =>
                           const TomSecretsStatusView(),
                       },

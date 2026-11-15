@@ -10,7 +10,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_client/admin.dart'
+    show TomSecretsAdminException, tomSecretsRandomBytes;
 
 import '../ports/service_host.dart';
 
@@ -113,7 +114,7 @@ class TomSecretsServiceConnection extends ChangeNotifier {
   String? _message;
   String? _lockMode;
   final Map<String, TomSecretsStoreState> _stores = {};
-  final Set<String> _approvals = {};
+  final Map<String, TomSecretsApprovalPrompt> _approvals = {};
   final Map<String, Map<String, Object?>> _expiring = {};
   Map<String, Object?> _report = const {};
   bool _unlockNeeded = false;
@@ -139,6 +140,42 @@ class TomSecretsServiceConnection extends ChangeNotifier {
 
   /// The approvals waiting for an answer (their ids).
   int get pendingApprovals => _approvals.length;
+
+  /// The prompts waiting for this app's answer, in the order they came.
+  List<TomSecretsApprovalPrompt> get prompts => _approvals.values.toList();
+
+  /// The waiting prompt [approvalId], or null.
+  TomSecretsApprovalPrompt? prompt(String approvalId) => _approvals[approvalId];
+
+  /// Answers the prompt [approvalId] (`approve`, protocol.md 7.2): with
+  /// [decision] (`once`, `always`, `folder`, `never`) for [secret] (`ref`,
+  /// `store`, `all`), below [folder] for `folder`, pinned by [pin]. For an
+  /// `always` of a prompt that asked for a client token the app makes the
+  /// token (32 random bytes, protocol.md 7.4) and its service signs the
+  /// grant. Throws `TomSecretsAdminException` (`not_found` when the prompt
+  /// ended meanwhile).
+  Future<void> approve(
+    String approvalId, {
+    required String decision,
+    String secret = 'ref',
+    String? folder,
+    String? pin,
+  }) async {
+    final waiting = _approvals[approvalId];
+    final token = decision == 'always' && (waiting?.wantClientToken ?? false)
+        ? base64Of(tomSecretsRandomBytes(32))
+        : null;
+    await request('approve', {
+      'approvalId': approvalId,
+      'decision': decision,
+      'secret': secret,
+      'folder': ?folder,
+      'pin': ?pin,
+      'clientToken': ?token,
+    });
+    _approvals.remove(approvalId);
+    notifyListeners();
+  }
 
   /// The keys due a reminder, by key (`statusReport.expiring`, `key_expiry`).
   Map<String, Map<String, Object?>> get expiringKeys =>
@@ -328,8 +365,8 @@ class TomSecretsServiceConnection extends ChangeNotifier {
         _unlockNeeded = true;
         notifyListeners();
       case 'approval_needed':
-        final id = event['approvalId'];
-        if (id is String) _approvals.add(id);
+        final prompt = TomSecretsApprovalPrompt.fromEvent(event);
+        if (prompt != null) _approvals[prompt.approvalId] = prompt;
         notifyListeners();
       case 'approval_closed':
         _approvals.remove(event['approvalId']);
@@ -379,3 +416,101 @@ class TomSecretsServiceConnection extends ChangeNotifier {
 }
 
 const _base64 = Base64Codec();
+
+/// A request waiting for an approval (`approval_needed`, protocol.md 6.5,
+/// 7.2): who asks, on which host, for which secrets.
+@immutable
+final class TomSecretsApprovalPrompt {
+  const TomSecretsApprovalPrompt._({
+    required this.approvalId,
+    required this.host,
+    required this.identity,
+    required this.refs,
+    required this.resolved,
+    required this.approvalCode,
+    required this.wantClientToken,
+    required this.remote,
+  });
+
+  /// The prompt of [event], or null when it names no approval.
+  static TomSecretsApprovalPrompt? fromEvent(Map<String, Object?> event) {
+    final id = event['approvalId'];
+    if (id is! String) return null;
+    return TomSecretsApprovalPrompt._(
+      approvalId: id,
+      host: event['host'] as String? ?? '',
+      identity: (event['identity'] as Map? ?? const {}).cast<String, Object?>(),
+      refs: (event['refs'] as List? ?? const []).cast<String>(),
+      resolved: [
+        for (final r in (event['resolved'] as List? ?? const []).cast<Map>())
+          (
+            store: r['store'] as String? ?? '',
+            path: r['path'] as String? ?? '',
+            kind: r['kind'] as String? ?? '',
+          ),
+      ],
+      approvalCode: event['approvalCode'] as String?,
+      wantClientToken: event['wantClientToken'] == true,
+      remote: event['hostHint'] == 'remote',
+    );
+  }
+
+  /// The approval's id.
+  final String approvalId;
+
+  /// The host the request waits on.
+  final String host;
+
+  /// Who asks, as that host's service measured it (protocol.md 7.1).
+  final Map<String, Object?> identity;
+
+  /// The references asked for, canonical.
+  final List<String> refs;
+
+  /// The entries they resolve to.
+  final List<({String store, String path, String kind})> resolved;
+
+  /// The approval code the host shows, or null.
+  final String? approvalCode;
+
+  /// Whether the client asked for a client token (protocol.md 7.4).
+  final bool wantClientToken;
+
+  /// Whether the client connected from another machine (`hostHint`).
+  final bool remote;
+
+  /// The client's executable.
+  String get exe => identity['exe'] as String? ?? '';
+
+  /// Its script, for an interpreted client, or null.
+  String? get script => identity['script'] as String?;
+
+  /// Its interpreter, for an interpreted client, or null.
+  String? get interpreter => identity['interpreter'] as String?;
+
+  /// Its working directory, or null.
+  String? get cwd => identity['cwd'] as String?;
+
+  /// Its arguments.
+  List<String> get args =>
+      (identity['args'] as List? ?? const []).map((a) => '$a').toList();
+
+  /// Its parent process's executable, or null.
+  String? get parentExe => (identity['parent'] as Map?)?['exe'] as String?;
+
+  /// Who asks, in one line: the script with its interpreter, or the
+  /// executable.
+  String get who => script != null
+      ? '${interpreter ?? exe} $script'
+      : exe.isEmpty
+      ? 'an unknown program'
+      : exe;
+
+  /// The folder a `folder` decision suggests: the script's, else the
+  /// executable's.
+  String get suggestedFolder {
+    final path = script ?? exe;
+    final cut = path.lastIndexOf(RegExp(r'[/\\]'));
+    return cut > 0 ? path.substring(0, cut) : (cwd ?? path);
+  }
+}

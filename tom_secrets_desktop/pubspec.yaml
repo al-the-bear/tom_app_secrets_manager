@@ -51,7 +51,7 @@ dev_dependencies:
   # The service host's tests run the real service in this process, on demo
   # vaults (dev dependencies are not linked: the app reaches no KDBX but
   # through tom_secrets_core).
-  tom_secrets_service: ^0.2.0
+  tom_secrets_service: ^0.3.0
   tom_kdbx_store: ^0.2.4
   flutter_lints: ^6.0.0
 

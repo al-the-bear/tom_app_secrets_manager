@@ -402,12 +402,13 @@ void main() {
         'identity': {'exe': '/usr/bin/demo'},
       });
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(notifier.titles, ['Unlock the secrets']);
+      // The prompt above notified too, the window being closed (DP-31).
+      expect(notifier.titles, ['Approve a request', 'Unlock the secrets']);
       notifier.click!();
       expect(window.visible, isTrue);
       service.emit({'op': 'unlock_needed'});
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(notifier.titles, hasLength(1), reason: 'the window is shown');
+      expect(notifier.titles, hasLength(2), reason: 'the window is shown');
 
       tray.items
           .firstWhere((i) => i.label.startsWith('Quit'))
