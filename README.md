@@ -19,7 +19,13 @@ GitHub (tag `tom_secrets_manager-v<version>`), one archive per platform:
 | --- | --- | --- |
 | macOS (Apple silicon) | `tom_secrets_manager-<version>-macos-arm64.zip` | unzip, move `Tom Secrets Manager.app` to `/Applications`; the app is ad-hoc signed, so open it the first time with Control-click › Open |
 | Windows (x64) | `tom_secrets_manager-<version>-windows-x64.zip` | unzip into a folder of your choice and start `tom_secrets_app.exe` |
-| Linux (x64) | `tom_secrets_manager-<version>-linux-x64.tar.gz` | unpack into a folder of your choice and start `tom_secrets_app` |
+| Linux (x64) | `tom_secrets_manager-<version>-linux-x64.tar.gz` | unpack into a folder of your choice and start `tom_secrets_app`; the tray needs an AppIndicator (StatusNotifierItem) host, the keychain a Secret Service (GNOME Keyring or KWallet) |
+
+`SHA256SUMS` beside the archives holds their checksums
+(`shasum -a 256 -c SHA256SUMS` on macOS, `sha256sum -c SHA256SUMS` on
+Linux). Only the macOS archive is signed, and ad-hoc: it is not notarised,
+which is why the first start goes through Control-click › Open; Windows may
+show SmartScreen's "Windows protected your PC" once (More info › Run anyway).
 
 The app carries everything it needs: the secrets service and the command
 line `tsm` are inside it, in its `tsm/bin` folder (on macOS
@@ -46,10 +52,17 @@ On a machine that is not set up yet, the app opens its First run wizard:
 3. name the machine and choose its default environment, the vaults it serves
    and when the service locks.
 
-It then starts the service and unlocks it. The setup is kept in the app's
+A second machine instead takes "Pair with another desktop": the first
+machine's Pairing screen shows a code, and it hands over the vaults and keys
+you choose. The wizard then starts the service and unlocks it. The setup is kept in the app's
 data directory (`~/Library/Application Support/TomSecretsManager`,
 `%LOCALAPPDATA%\TomSecretsManager`, `~/.local/share/tom-secrets-manager`;
 `TSM_DATA_DIR` names another).
+
+The [user guide](tom_secrets_app/doc/user_guide.md) walks the wizard and
+every screen of the app: the vault browser, system secrets and overlays,
+approvals, the import from 1Password and Enpass, keys and their rotation,
+pairing, settings and troubleshooting.
 
 ## Building from source
 

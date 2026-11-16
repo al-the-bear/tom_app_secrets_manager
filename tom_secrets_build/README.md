@@ -1,4 +1,6 @@
-# Tom Secrets Build
+# tom_secrets_build
+
+> Part of the Tom Secrets Manager by Peter Nicolai Alexis Kyaw, BSD-3-Clause.
 
 The manually driven CI of the Tom Secrets Manager, and its release build. It
 analyzes and tests every package of the product's three repositories — this
@@ -11,6 +13,13 @@ archives for the platform it runs on.
 **A person starts it, from the repository.** Nothing schedules it: no launchd
 agent, crontab, systemd timer, git hook or GitHub workflow (Actions is
 switched off for the product's repositories).
+
+## Getting it
+
+The package is not published (`publish_to: none`): it runs from a clone of
+this repository. It needs the Flutter SDK (3.38 or later, for the apps and
+the Dart it carries); `:conformance` needs Python 3 with `jsonschema`, and
+the npm packages Node.js with npm.
 
 ## Running it
 
@@ -141,6 +150,41 @@ turns red when one is no longer needed.
 The version is `tom_secrets_app`'s. The archives are published as a release of
 the `al-the-bear/tom_binaries` repository on GitHub, tag
 `tom_secrets_manager-v<version>`, with `SHA256SUMS`.
+
+## Configuration
+
+| Setting | Effect |
+| --- | --- |
+| `tom_secrets_build/repositories.yaml` | where the two other repositories are (above) |
+| `FLUTTER_ROOT` | the Flutter SDK to use, instead of `flutter` on `PATH` |
+| `secretsLicenceExceptions` (`lib/src/licence_boundary.dart`) | the licence exceptions in force |
+| `secretsStandaloneExceptions` (`lib/src/standalone.dart`) | the places the standalone check lets pass |
+
+## Limits
+
+- `:release` builds for the platform it runs on only: each platform's
+  archives are made on a machine of that platform.
+- The macOS app is signed ad-hoc, not with a developer identity, and not
+  notarised.
+- A runner of the conformance suite without its toolchain is red, not
+  skipped.
+
+## Further documentation
+
+- [The repository README](../README.md): installing, building, the packages.
+- [`tom_secrets_desktop`](../tom_secrets_desktop/README.md): the demo
+  installation the release's smoke run uses.
+- The two other repositories it checks:
+  [`al-the-bear/tom_secrets_manager`](https://github.com/al-the-bear/tom_secrets_manager)
+  and
+  [`al-the-bear/tom_secrets_clients`](https://github.com/al-the-bear/tom_secrets_clients).
+
+## Status
+
+Version 0.1.0. Its own suite covers the stage list, finding the repositories,
+the licence rules and the boundary check, the standalone rules and check,
+and the release assembly; the tagged parts (`licence-boundary`, `standalone`)
+run as the CI stages of the same name.
 
 ## Licence
 

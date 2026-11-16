@@ -152,7 +152,7 @@ List<String> tomSecretsTagsOf(KdbxEntry entry) => (entry.tags.get() ?? '')
     .where((t) => t.isNotEmpty)
     .toList();
 
-/// Whether [name] is an overlay group (`@host:bomber`, part-structure).
+/// Whether [name] is an overlay group (`@host:server1`, part-structure).
 bool tomSecretsIsOverlayGroup(String name) => name.startsWith('@');
 
 /// The preference keys the session keeps per device.

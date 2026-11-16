@@ -1,8 +1,47 @@
 # tom_secrets_desktop
 
+> Part of the Tom Secrets Manager by Peter Nicolai Alexis Kyaw, BSD-3-Clause.
+
 The desktop host of the Tom Secrets Manager's manager app on macOS, Windows
-and Linux: the implementations of `tom_secrets_ui`'s ports. Each third-party
-plugin sits behind a port, so it can be swapped (DP-32).
+and Linux: the implementations of `tom_secrets_ui`'s ports.
+
+## Overview
+
+`tom_secrets_ui` holds the screens and asks its host for everything a
+platform decides, through the ports of `TomSecretsHost`. This package fills
+them on the desktop: it finds, starts, attaches to and claims the user's
+secrets service, puts the app in the tray or menu bar, hides the window on
+close, shows notifications, registers start at login, keeps the window out
+of screen capture, opens file and print dialogs and web pages, and announces
+a pairing window on the LAN. Each third-party plugin sits behind a port, so
+it can be swapped (DP-32); the parts no plugin offers (capture exclusion,
+the macOS login item, the macOS clipboard markers) are this package's own
+platform code.
+
+```text
+ tom_secrets_app
+   |
+   |-- TomSecretsHost(...)  <- tom_secrets_desktop fills every port
+   |                            (plugins + macos/ Swift + windows/ C++)
+   '-- TomSecretsApp(host)  <- tom_secrets_ui
+```
+
+## Getting it
+
+The package is not published (`publish_to: none`); the app of this
+repository takes it by path:
+
+```yaml
+dependencies:
+  tom_secrets_desktop:
+    path: ../tom_secrets_desktop
+```
+
+It needs Flutter 3.38 or later. The platform build requirements (Visual
+Studio components on Windows, the tray and keychain libraries on Linux) are
+the app's, listed in [`tom_secrets_app`](../tom_secrets_app/README.md).
+
+## The ports
 
 | Port | Implementation |
 | --- | --- |
@@ -23,6 +62,56 @@ The platform code is in `macos/` (Swift, the channels
 `tom_secrets_desktop/capture`, `/clipboard`, `/login`) and `windows/` (C++,
 `/capture`).
 
+## Usage
+
+The app's composition root fills the host from this package (shortened from
+`tom_secrets_app/lib/main.dart`):
+
+```dart
+final window = await TomSecretsPluginWindow.create(
+  title: 'Tom Secrets Manager',
+  hidden: false,
+  hideOnClose: true,
+);
+const files = TomSecretsDesktopFiles();
+final host = TomSecretsHost(
+  service: TomSecretsDesktopServiceHost(),
+  tray: TomSecretsPluginTray(),
+  window: window,
+  captureGuard: TomSecretsPlatformCaptureGuard(),
+  preferences: await TomSecretsFilePreferences.open(
+    File('<data directory>/app-preferences.json'),
+  ),
+  keyFiles: files,
+  files: files,
+  printer: const TomSecretsDesktopPrinter(),
+  openUrl: tomSecretsDesktopOpenUrl,
+  clipboard: tomSecretsDesktopClipboard(),
+  pairingDiscovery: const TomSecretsBonsoirPairingDiscovery(),
+);
+runApp(TomSecretsApp(host: host));
+```
+
+## Configuration
+
+| Variable | Effect |
+| --- | --- |
+| `TSM_DATA_DIR` | the data directory (`bootstrap.yaml`, `app-preferences.json`, `app.port`); default the platform's |
+| `TSM_RUNTIME_DIR` | the runtime directory where the running service is found |
+| `TSM_SERVICE` | the service executable to start, instead of the one beside the app |
+
+The admin key is kept in the OS keychain under the service name
+`tom-secrets-manager`, where `tsm` finds it too.
+
+## Limits
+
+- Linux cannot keep a window out of screen capture.
+- On Linux the tray needs a StatusNotifierItem host (AppIndicator); without
+  one the app has no tray and the window minimises instead of hiding.
+- Pairing discovery on Linux needs `avahi-daemon` running; without it the
+  other machine types the address.
+- Start at login on macOS needs macOS 13 or later.
+
 ## Testing
 
 ```text
@@ -34,9 +123,23 @@ others check one instance, the preferences file, the capture guard per
 platform and the tray assets.
 
 `tool/demo_installation.dart <folder> [<app executable>]` writes a demo
-installation (bootstrap, demo vaults) for trying the app by hand; see its
-header.
+installation (a primary and a team vault under demo passwords, demo entries,
+a bootstrap naming the app) for trying the app by hand; its header says how
+to start the service and the app on it.
+
+## Further documentation
+
+- [`tom_secrets_ui`](../tom_secrets_ui/README.md): the ports and the screens
+  they serve.
+- [`tom_secrets_app`](../tom_secrets_app/README.md): the app, its build
+  requirements, and its user guide.
+
+## Status
+
+Version 0.1.0 (phase A). The suite runs with `flutter test` on the platform
+it is started on; the capture guard's checks for the other platforms run
+everywhere.
 
 ## Licence
 
-BSD-3-Clause (`LICENSE`).
+BSD-3-Clause ([`LICENSE`](LICENSE)).

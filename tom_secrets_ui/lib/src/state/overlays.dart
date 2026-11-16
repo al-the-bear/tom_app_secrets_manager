@@ -22,7 +22,7 @@ enum TomSecretsValueSource {
   /// The shared entry itself.
   shared,
 
-  /// An overlay of the entry (`@host:bomber/…`).
+  /// An overlay of the entry (`@host:server1/…`).
   overlay,
 
   /// An entry with the same key in another file (an environment's file).
@@ -246,7 +246,7 @@ final class TomSecretsResolutionModel {
   }
 
   /// Parses qualifiers as the reference writes them, with or without the
-  /// brackets: `[env:prod,host:bomber]`. Throws [FormatException].
+  /// brackets: `[env:prod,host:server1]`. Throws [FormatException].
   static List<TomSecretBinding> parseQualifiers(String text) {
     var t = text.trim();
     if (t.startsWith('[')) t = t.substring(1);

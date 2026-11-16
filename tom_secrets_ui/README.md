@@ -1,9 +1,75 @@
 # tom_secrets_ui
 
+> Part of the Tom Secrets Manager by Peter Nicolai Alexis Kyaw, BSD-3-Clause.
+
 The screens and state of the Tom Secrets Manager's manager app, shared by the
-desktop app and (phase B) the mobile app. The host implements the ports
-(`TomSecretsHost`) and runs `TomSecretsApp`; this package decides no
-platform.
+desktop app and (phase B) the mobile app.
+
+## Overview
+
+The package is the whole user interface of the manager app, without a
+platform. A host (the desktop app today) implements its ports in a
+`TomSecretsHost` (the secrets service, the tray, the window, notifications,
+screen capture, files, printing, the clipboard, pairing discovery) and runs
+`TomSecretsApp` with it. `TomSecretsApp` holds a `TomSecretsServiceConnection`
+to the user's secrets service and shows the screen its phase calls for: the
+First run wizard on a machine that is not set up, the connection, claim and
+unlock screens, then the main shell with its rail of screens.
+
+The vaults are opened in the app's memory from the copy the service holds,
+through `tom_secrets_core` (the only way to KDBX); every change is saved
+through the service against the revision read. Nothing here decides a
+platform, and nothing here reads or writes a vault file directly.
+
+```text
+ tom_secrets_app (composition root)
+   |-- tom_secrets_desktop (ports on macOS, Windows, Linux)
+   '-- tom_secrets_ui (this package)
+         |-- TomSecretsApp -> screens (lib/src/screens/)
+         |-- state: connection, session, models (lib/src/state/)
+         '-- ports: TomSecretsHost (lib/src/ports/)
+               |
+               v
+         the secrets service (admin connection, protocol)
+```
+
+## Getting it
+
+The package is not published (`publish_to: none`); the apps of this
+repository take it by path:
+
+```yaml
+dependencies:
+  tom_secrets_ui:
+    path: ../tom_secrets_ui
+```
+
+It needs Flutter 3.38 or later (Dart 3.10). Its own dependencies come from
+pub.dev (see [Dependencies](#dependencies)).
+
+## Quick start
+
+A host builds a `TomSecretsHost` and runs the app. The smallest host has the
+service only (the shape tests use):
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:tom_secrets_desktop/tom_secrets_desktop.dart';
+import 'package:tom_secrets_ui/tom_secrets_ui.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  final host = TomSecretsHost.headless(TomSecretsDesktopServiceHost());
+  runApp(TomSecretsApp(host: host));
+  // The window shows "Connecting", then the First run wizard on a machine
+  // that is not set up, or the unlock screen.
+}
+```
+
+The desktop app's `lib/main.dart` (in
+[`tom_secrets_app`](../tom_secrets_app/)) is the full composition: every port
+filled from `tom_secrets_desktop`, and the First run wizard's last step
+offering the import and the pairing.
 
 ## What it holds
 
@@ -18,7 +84,7 @@ platform.
 | `TomSecretsVaultBrowser` | The tree view (group tree, entry list, details) and the list view (vault, type and tag filters); overlay groups (`@host:…`) shown as the entry's overlays, not folders; multi-select move, tag, delete to the recycle bin; groups created, renamed and moved; an offline vault marked with its reason and age. In the vault-aware view a system vault's entry shows its key, the dimensions it is bound in and which clients read it and when (the grants of every host), a personal or shared vault's entry its login, URL and TOTP; the uniform view shows each of them the entry has (`tomSecretsEntryDetails`). |
 | `TomSecretsEntryEditor` | Login, API token and secure note: title, user name, the password with the generator, URLs, TOTP with its countdown, notes, custom fields (protected or not), tags, expiry, attachments, "How clients name it" (the path reference and the `tsm.key`, checked for uniqueness in the vault), "Overlays…" opening the overlay editor, the history with Restore. Protected values are masked, revealed one at a time for 30 seconds and copied through the protected clipboard (cleared after 30 seconds). A vault served from its offline copy opens read-only. |
 | `TomSecretsResolutionModel` | The open vaults as the service's resolver sees them: the primary's configuration (the dimensions in priority order), every vault as a store; the dimension values a matrix has rows for (hosts from the grants, the devices and the bindings; every platform; the configured environments); what a request gets, step by step (the request's values, every candidate kept with its rank vector or dropped with the binding that drops it, the answer: the shared entry, an overlay, another file, none, ambiguous); the clients granted an entry. |
-| `TomSecretsOverlayEditor` | One entry and its overlays as a matrix: the shared entry, then per dimension one row per value with the value it gets (masked when protected) and where it comes from; a cell edited in place; a click on a row without an overlay of its own creates one (`@<dimension>:<value>/<groups>/<title>`, a copy of the shared entry) and edits it; an overlay removed with its menu; a row of a dimension the file is bound to edits the entry in that value's file. "Which value does … get?" takes qualifiers (`[env:prod,host:bomber]`) and shows the resolution step by step; ambiguities in red. |
+| `TomSecretsOverlayEditor` | One entry and its overlays as a matrix: the shared entry, then per dimension one row per value with the value it gets (masked when protected) and where it comes from; a cell edited in place; a click on a row without an overlay of its own creates one (`@<dimension>:<value>/<groups>/<title>`, a copy of the shared entry) and edits it; an overlay removed with its menu; a row of a dimension the file is bound to edits the entry in that value's file. "Which value does … get?" takes qualifiers (`[env:prod,host:server1]`) and shows the resolution step by step; ambiguities in red. |
 | `TomSecretsEnvironmentsView` | The keys (`tsm.key`) across the environments' files side by side, one column per served file and per vault not served that is open for editing; the vaults the primary lists that this machine does not serve offered to open (the service reads each from its location with its listed keys and writes its saves there, protocol 6.4), the configured files the primary lists no keys for named; a cell edited in place and saved, an empty cell creating the entry. |
 | `TomSecretsConflictsView` | The entries with an unsettled conflict (`tsm.conflict`) and `TomMergeView` over their fields: the value the merge kept and the one it replaced (from the entry's history), masked when protected; keep one side or edit the result; confirming writes it, takes the field off the record (the last one clears it) and saves. |
 | `TomSecretsApprovalPromptDialog` | Which host asks, who asks there (executable or interpreter and script, arguments, folder, parent, as that host's service measured them), which secrets (references and resolved entries), and the answer: once, always, always for a folder, never; covering the reference, the store or everything; pinned to the program file or not. Closes itself when the prompt ends elsewhere; Later leaves it under Clients. |
@@ -45,6 +111,23 @@ the key-file picker, the file dialogs, the print path (`TomSecretsPrinter`), ope
 wizard's last step offers. `tom_secrets_desktop`
 implements them on macOS, Windows and Linux; a test uses fakes.
 
+## Configuration
+
+The package has no configuration of its own. What it keeps per device goes
+through the host's preferences port (`TomSecretsPreferences`): the tree/list
+and vault-aware/uniform switches, screen capture, start at login, the key
+reminders' snoozes. The machine's settings are the service's
+(`settings.get` / `settings.set`), the shared configuration is `tsm.config` in
+the primary vault; the Settings screen edits both.
+
+## Limits
+
+- No platform code: a host without a port (a `null` tray, no printer, no
+  file dialogs) gets the screens without that capability.
+- Linux cannot keep a window out of screen capture; the Settings screen says
+  so.
+- The mobile host (phase B) does not exist yet.
+
 ## Testing
 
 ```text
@@ -52,7 +135,9 @@ flutter test
 ```
 
 The tests run the screens and controllers against an in-memory stand-in for
-the service holding real demo vaults (`test/support/fake_service.dart`).
+the service holding real demo vaults (`test/support/fake_service.dart`), with
+a fake GitHub for the First run's repository check. Demo data under demo keys
+only.
 
 ## Dependencies
 
@@ -61,8 +146,28 @@ admin errors, the reference grammar), the Tom UI modules `tom_ui_support`
 (notices, colours), `tom_host_ui` (the clipboard port), `tom_credentials_ui`
 (key fields, the key-file picker, the token prompt) and `tom_sync_ui` (the
 merge view, the sync indicator), `tom_basics` (the protected clipboard),
-`tom_core_sync`, `provider`; all from pub.dev.
+`tom_core_storage` (the token prompt's types), `tom_core_sync` (the sync
+states), `pdf` (the emergency sheet), `provider`; all from pub.dev.
+
+## Further documentation
+
+- [The desktop app's user guide](../tom_secrets_app/doc/user_guide.md): every
+  screen as a user meets it.
+- [`tom_secrets_desktop`](../tom_secrets_desktop/README.md): the desktop
+  implementations of the ports.
+- [The repository README](../README.md): installing, building, the packages.
+- The protocol between the app and the service:
+  [`al-the-bear/tom_secrets_clients`](https://github.com/al-the-bear/tom_secrets_clients)
+  (`protocol/protocol.md`).
+
+## Status
+
+Version 0.1.0 (phase A of the product). The suite covers the First run wizard
+(set up here and by pairing), the shell, the vault browser and entry editor,
+overlays and their resolution, conflicts, clients and approvals, keys,
+rotation, token renewal, the import, pairing and the force-push question; it
+runs with `flutter test` and needs no service, network or GitHub.
 
 ## Licence
 
-BSD-3-Clause (`LICENSE`).
+BSD-3-Clause ([`LICENSE`](LICENSE)).

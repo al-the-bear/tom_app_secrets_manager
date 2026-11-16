@@ -601,7 +601,7 @@ class _SourceChip extends StatelessWidget {
   }
 }
 
-/// An overlay as `@host:bomber`, several bindings comma-separated.
+/// An overlay as `@host:server1`, several bindings comma-separated.
 String tomSecretsOverlayLabel(TomSecretsIndexedEntry e) => [
   for (final MapEntry(:key, :value) in e.overlayBindings.entries)
     '$tomSecretsOverlayPrefix$key:$value',
@@ -644,7 +644,7 @@ class _WhichBox extends StatelessWidget {
                 controller: controller,
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: '[env:prod,host:bomber]',
+                  hintText: '[env:prod,host:server1]',
                   helperText:
                       'dimensions not named take their default '
                       '(${dimensions.join(', ')})',

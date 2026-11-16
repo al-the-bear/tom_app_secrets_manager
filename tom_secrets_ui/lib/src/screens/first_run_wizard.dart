@@ -312,7 +312,7 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
             labelText: m.canFind
                 ? 'Its address (as shown; leave it empty on the same '
                       'network)'
-                : 'Its address (as shown, e.g. 10.8.0.7:47900)',
+                : 'Its address (as shown, e.g. 192.168.1.20:47900)',
             prefixIcon: const Icon(Icons.lan_outlined),
           ),
           onChanged: (v) {
