@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- A paired host's prompts (passed on by this machine's service, their ids
+  qualified `<host>/<approvalId>`) sit in the same prompt list beside this
+  host's and are answered the same way.
 - Pairing on the LAN: the `TomSecretsPairingDiscovery` port
   (`TomSecretsHost.pairingDiscovery`); the Pairing screen announces its open
   window as `_tsm-pair._tcp` with the code's number, and the First run
