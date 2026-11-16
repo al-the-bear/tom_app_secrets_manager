@@ -2,6 +2,12 @@
 
 ## 0.1.0
 
+- Pairing on the LAN: the `TomSecretsPairingDiscovery` port
+  (`TomSecretsHost.pairingDiscovery`); the Pairing screen announces its open
+  window as `_tsm-pair._tcp` with the code's number, and the First run
+  wizard finds it by the code alone when the address is left empty (the
+  address on this machine's network chosen; none or several found, or no
+  mDNS: the address is asked for).
 - The Tom UI modules from pub.dev (`tom_ui_support`, `tom_host_ui`,
   `tom_credentials_ui`, `tom_sync_ui`) in place of `tom_reusable_ui` by
   path; no `pubspec_overrides.yaml` any more.

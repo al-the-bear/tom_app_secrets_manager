@@ -16,6 +16,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
+import '../ports/pairing_discovery.dart';
 import 'service_connection.dart';
 
 /// Where a pairing stands.
@@ -73,7 +74,17 @@ class TomSecretsPairingModel extends ChangeNotifier {
     Future<List<InternetAddress>> Function()? addresses,
     this.allowLoopback = false,
     this.window = tomSecretsPairingWindow,
+    this.discovery,
   }) : _addresses = addresses ?? tomSecretsPairingAddresses;
+
+  /// mDNS for announcing the window on the LAN, or null.
+  final TomSecretsPairingDiscovery? discovery;
+
+  TomSecretsPairingAdvertising? _advertising;
+
+  /// Whether the open window is announced on the LAN (`_tsm-pair._tcp`), so
+  /// the other machine finds it by the code's number.
+  bool get announced => _advertising != null;
 
   /// The admin connection.
   final TomSecretsServiceConnection connection;
@@ -210,12 +221,39 @@ class TomSecretsPairingModel extends ChangeNotifier {
     );
     _closesAt = DateTime.now().add(window);
     _stage = TomSecretsPairingStage.waiting;
+    await _announce(opened, device, code);
     _tick = Timer.periodic(
       const Duration(seconds: 1),
       (_) => notifyListeners(),
     );
     notifyListeners();
     unawaited(_await(opened));
+  }
+
+  Future<void> _announce(
+    TomSecretsPairingWindow opened,
+    String device,
+    TomSecretsPairingCode code,
+  ) async {
+    final d = discovery;
+    if (d == null) return;
+    try {
+      final advertising = await d.advertise(
+        TomSecretsPairingAdvert(
+          device: device,
+          number: code.number,
+          port: opened.port,
+          addresses: [for (final a in opened.addresses) a.address],
+        ),
+      );
+      if (_window == opened) {
+        _advertising = advertising;
+      } else {
+        await advertising.stop();
+      }
+    } on Object {
+      // Not announced: the other machine types the address shown.
+    }
   }
 
   Future<void> _readChoices() async {
@@ -363,6 +401,13 @@ class TomSecretsPairingModel extends ChangeNotifier {
   }
 
   Future<void> _stop() async {
+    final advertising = _advertising;
+    _advertising = null;
+    try {
+      await advertising?.stop();
+    } on Object {
+      // The announcement ends with the window anyway.
+    }
     _tick?.cancel();
     _tick = null;
     _closesAt = null;

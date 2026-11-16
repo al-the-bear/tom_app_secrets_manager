@@ -80,6 +80,8 @@ Future<void> main(List<String> args) async {
     printer: const TomSecretsDesktopPrinter(),
     openUrl: tomSecretsDesktopOpenUrl,
     clipboard: tomSecretsDesktopClipboard(),
+    // Pairing on the LAN finds the other machine by the code alone.
+    pairingDiscovery: const TomSecretsBonsoirPairingDiscovery(),
     startedHidden: hidden,
     // The First run wizard's last step offers the import and pairing
     // another desktop (part-app).

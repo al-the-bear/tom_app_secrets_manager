@@ -9,6 +9,7 @@ library;
 export 'src/app.dart';
 export 'src/host_bridge.dart';
 export 'src/ports/desktop_ports.dart';
+export 'src/ports/pairing_discovery.dart';
 export 'src/ports/service_host.dart';
 export 'src/screens/approval_prompt.dart';
 export 'src/screens/clients_view.dart';

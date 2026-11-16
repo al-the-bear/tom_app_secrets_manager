@@ -38,6 +38,7 @@ void main() {
   late TomSecretsRepositoryKey repositoryKey;
   late TomSecretsPairingPeerKeys giverKeys;
   late TomSecretsPairingPeerKeys receiverKeys;
+  late FakePairingDiscovery lan;
 
   setUpAll(() async {
     final giver = TomSecretsTrust.create('mbp');
@@ -55,6 +56,7 @@ void main() {
   });
 
   setUp(() async {
+    lan = FakePairingDiscovery();
     final stores = await demoStores();
     keyFile = TomSecretsKeyFile.generate();
     repositoryKey = TomSecretsRepositoryKey.generate();
@@ -70,6 +72,7 @@ void main() {
       clipboard: _Clipboard(),
       pairingAddresses: () async => [InternetAddress.loopbackIPv4],
       pairingAllowsLoopback: true,
+      pairingDiscovery: lan,
     );
   });
 
@@ -161,6 +164,13 @@ void main() {
     primary.revision = tomSecretsBlobId(primary.stored);
     await pairingScreen(tester);
     final (code, port) = await openWindow(tester);
+    // Announced on the LAN while the window is open.
+    final announced = lan.adverts.single;
+    expect(announced.device, 'mbp');
+    expect(announced.number, code.number);
+    expect(announced.port, port);
+    expect(announced.addresses, ['127.0.0.1']);
+    expect(find.byKey(const Key('tsm-pair-announced')), findsOneWidget);
     final received = await receive(tester, code, port);
     await until(tester, find.byKey(const Key('tsm-pair-choosing')));
     expect(find.textContaining('bigbeast proved the code'), findsOneWidget);
@@ -178,6 +188,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tsm-pair-confirm')));
     await until(tester, find.textContaining('bigbeast is paired'));
+    expect(lan.adverts, isEmpty, reason: 'no longer announced');
 
     late TomSecretsPairingReceived got;
     await tester.runAsync(() async => got = await received);
@@ -305,6 +316,7 @@ void main() {
     });
     await wait(tester, 5);
     expect(find.byKey(const Key('tsm-pairing')), findsNothing);
+    expect(lan.adverts, isEmpty, reason: 'the announcement ends too');
     await tester.runAsync(() async {
       await expectLater(
         Socket.connect('127.0.0.1', port),

@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- `TomSecretsBonsoirPairingDiscovery`: the pairing discovery port over
+  `bonsoir` (mDNS, `_tsm-pair._tcp`).
 - `tom_credentials_ui` and `tom_host_ui` from pub.dev in place of
   `tom_reusable_ui` by path; no `pubspec_overrides.yaml` any more.
 - The desktop implementations of `tom_secrets_ui`'s ports: the service host,

@@ -16,7 +16,8 @@ A package that adds a shipped dependency adds its row here.
 | [tray_manager](https://pub.dev/packages/tray_manager) | MIT | `tom_secrets_desktop`: the tray and menu bar |
 | [window_manager](https://pub.dev/packages/window_manager) | MIT | `tom_secrets_desktop`: the window (closing hides it) |
 | [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications) | BSD-3-Clause | `tom_secrets_desktop`: system notifications |
-| [dbus](https://pub.dev/packages/dbus) | MPL-2.0 | `tom_secrets_desktop`, `tom_secrets_app` on Linux, through `flutter_local_notifications_linux`; unmodified; source: https://github.com/canonical/dbus.dart. The one named exception of the licence boundary (`secretsLicenceExceptions`) |
+| [bonsoir](https://pub.dev/packages/bonsoir) | MIT | `tom_secrets_desktop`: mDNS for pairing on the LAN (the open pairing window advertised as `_tsm-pair._tcp`, found by the code's number); with its platform packages `bonsoir_darwin`, `bonsoir_windows`, `bonsoir_linux` (Avahi over D-Bus), `bonsoir_android` and `bonsoir_platform_interface`, all MIT |
+| [dbus](https://pub.dev/packages/dbus) | MPL-2.0 | `tom_secrets_desktop`, `tom_secrets_app` on Linux, through `flutter_local_notifications_linux` and `bonsoir_linux`; unmodified; source: https://github.com/canonical/dbus.dart. The one named exception of the licence boundary (`secretsLicenceExceptions`) |
 | [launch_at_startup](https://pub.dev/packages/launch_at_startup) | MIT | `tom_secrets_desktop`: start at login on Windows and Linux |
 | [file_selector](https://pub.dev/packages/file_selector) | BSD-3-Clause | `tom_secrets_desktop`: key files and attachments |
 | [pdf](https://pub.dev/packages/pdf) | Apache-2.0 | `tom_secrets_ui`: the emergency sheet as a PDF (its QR codes through `barcode`, Apache-2.0, and `qr`, BSD-3-Clause) |

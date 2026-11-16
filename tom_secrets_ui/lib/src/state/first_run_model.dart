@@ -7,7 +7,7 @@
 /// unlocked.
 library;
 
-import 'dart:io' show Platform;
+import 'dart:io' show InternetAddress, Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:tom_core_storage/tom_core_storage.dart'
@@ -21,6 +21,7 @@ import 'package:tom_credentials_ui/tom_credentials_ui.dart'
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
+import '../ports/pairing_discovery.dart';
 import 'emergency_sheet.dart';
 
 import 'service_connection.dart';
@@ -60,18 +61,29 @@ const int tomSecretsMinimumPasswordLength = 10;
 class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   /// The state of a wizard writing through [firstRun] and starting the
   /// service through [connection].
-  TomSecretsFirstRunModel({required this.firstRun, required this.connection})
-    : localPath = _join(
-        _join(firstRun.dataDirectory, 'vaults'),
-        'primary.kdbx',
-      ),
-      host = tomSecretsDefaultHost();
+  TomSecretsFirstRunModel({
+    required this.firstRun,
+    required this.connection,
+    this.discovery,
+    Future<List<InternetAddress>> Function()? ownAddresses,
+  }) : _ownAddresses = ownAddresses ?? tomSecretsPairingAddresses,
+       localPath = _join(
+         _join(firstRun.dataDirectory, 'vaults'),
+         'primary.kdbx',
+       ),
+       host = tomSecretsDefaultHost();
 
   /// Where the first run writes.
   final TomSecretsFirstRun firstRun;
 
   /// The service connection, to start and unlock the service at the end.
   final TomSecretsServiceConnection connection;
+
+  /// mDNS for finding the other machine's pairing window by the code's
+  /// number, or null (the address is typed).
+  final TomSecretsPairingDiscovery? discovery;
+
+  final Future<List<InternetAddress>> Function() _ownAddresses;
 
   static String _join(String a, String b) =>
       '$a${Platform.isWindows ? r'\' : '/'}$b';
@@ -94,8 +106,11 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   });
 
   /// The giving machine's address as its Pairing screen shows it
-  /// (`host:port`).
+  /// (`host:port`); empty: found on the LAN by the code's number.
   String pairAddress = '';
+
+  /// Whether the other machine can be found on the LAN by the code alone.
+  bool get canFind => discovery != null;
 
   /// The code its Pairing screen shows.
   String pairCode = '';
@@ -114,10 +129,8 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   /// nothing is stored until [setUp]. A failure is shown as the error.
   Future<void> receive() async {
     if (_receiving) return;
-    final (String, int) at;
     final TomSecretsPairingCode code;
     try {
-      at = tomSecretsParsePairingAddress(pairAddress);
       code = TomSecretsPairingCode.parse(pairCode);
     } on FormatException catch (e) {
       fail(e.message);
@@ -128,6 +141,16 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
       _receipt = null;
     });
     try {
+      final (String, int)? at;
+      try {
+        at = pairAddress.trim().isEmpty
+            ? await _find(code.number)
+            : tomSecretsParsePairingAddress(pairAddress);
+      } on FormatException catch (e) {
+        fail(e.message);
+        return;
+      }
+      if (at == null) return;
       final receipt = await tomSecretsReceivePairingForSetup(
         address: at.$1,
         port: at.$2,
@@ -149,6 +172,33 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
       _receiving = false;
       notifyListeners();
     }
+  }
+
+  /// The window with [number] found on the LAN, or null (told).
+  Future<(String, int)?> _find(int number) async {
+    final d = discovery;
+    if (d == null) {
+      fail('Type the other machine\'s address as its Pairing screen shows it.');
+      return null;
+    }
+    final seen = await d.browse();
+    final advert = tomSecretsPairingAdvertFor(seen, number);
+    if (advert == null) {
+      fail(
+        seen.any((a) => a.number == number)
+            ? 'More than one machine on this network shows a code with '
+                  '$number: type the address its Pairing screen shows.'
+            : 'No machine on this network shows a code with $number. Over '
+                  'the VPN, or where the network blocks it, type the '
+                  'address its Pairing screen shows.',
+      );
+      return null;
+    }
+    final address = tomSecretsPairingAddressFor(advert, await _ownAddresses());
+    pairAddress = address.contains(':')
+        ? '[$address]:${advert.port}'
+        : '$address:${advert.port}';
+    return (address, advert.port);
   }
 
   bool _create = true;

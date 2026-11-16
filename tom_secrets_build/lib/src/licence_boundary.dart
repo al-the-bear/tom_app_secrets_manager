@@ -63,7 +63,8 @@ const Map<String, Map<String, String>> secretsLicenceExceptions = {
 
 const String _dbusReason =
     'MPL-2.0 (file-level copyleft), linked only by flutter_local_notifications_linux '
-    'for Linux desktop notifications; unmodified, stated in THIRD_PARTY.md '
+    'for Linux desktop notifications and bonsoir_linux for mDNS over Avahi; '
+    'unmodified, stated in THIRD_PARTY.md '
     'with its source, so a BSD-3 binary may carry it (tsm_a23).';
 
 /// The KDBX rule for the package [package] of the repository of role

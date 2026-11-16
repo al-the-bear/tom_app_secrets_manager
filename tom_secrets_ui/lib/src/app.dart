@@ -129,6 +129,8 @@ class _FirstRunGateState extends State<_FirstRunGate> {
           () => _model = TomSecretsFirstRunModel(
             firstRun: firstRun,
             connection: connection,
+            discovery: host.pairingDiscovery,
+            ownAddresses: host.pairingAddresses,
           ),
         );
       },

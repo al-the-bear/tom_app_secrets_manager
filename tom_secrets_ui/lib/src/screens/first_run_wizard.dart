@@ -308,9 +308,12 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
           key: const Key('tsm-fr-pair-address'),
           controller: _pairAddress,
           enabled: receipt == null && !m.receiving,
-          decoration: const InputDecoration(
-            labelText: 'Its address (as shown, e.g. 10.8.0.7:47900)',
-            prefixIcon: Icon(Icons.lan_outlined),
+          decoration: InputDecoration(
+            labelText: m.canFind
+                ? 'Its address (as shown; leave it empty on the same '
+                      'network)'
+                : 'Its address (as shown, e.g. 10.8.0.7:47900)',
+            prefixIcon: const Icon(Icons.lan_outlined),
           ),
           onChanged: (v) {
             m.pairAddress = v;
@@ -374,7 +377,7 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Paired with ${receipt.giver}. It gave:',
+                  'Paired with ${receipt.giver} (${m.pairAddress}). It gave:',
                   style: theme.textTheme.titleSmall,
                 ),
                 for (final v in receipt.bundle.vaults)

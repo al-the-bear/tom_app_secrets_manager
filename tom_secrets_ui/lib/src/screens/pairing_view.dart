@@ -55,6 +55,7 @@ class _PairingState extends State<TomSecretsPairingView> {
       context.read<TomSecretsServiceConnection>(),
       addresses: host.pairingAddresses,
       allowLoopback: host.pairingAllowsLoopback,
+      discovery: host.pairingDiscovery,
     )..addListener(_changed);
     unawaited(_loadDevices());
   }
@@ -193,6 +194,14 @@ class _PairingState extends State<TomSecretsPairingView> {
           'and connect to ${m.listening.join(' or ')}.',
           key: const Key('tsm-pair-addresses'),
         ),
+        if (m.announced)
+          Text(
+            'Announced on this network: on the same network the other '
+            'machine finds this one by the code alone. Over the VPN it '
+            'needs the address.',
+            key: const Key('tsm-pair-announced'),
+            style: theme.textTheme.bodySmall,
+          ),
         Text(
           'Open for ${left.inMinutes}:'
           '${(left.inSeconds % 60).toString().padLeft(2, '0')} more; the '

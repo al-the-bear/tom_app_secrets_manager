@@ -1005,3 +1005,37 @@ Future<Uint8List> _withConflict(Uint8List stored) async {
   ]);
   return file.save();
 }
+
+/// mDNS on one in-memory network: what is advertised is browsed.
+final class FakePairingDiscovery implements TomSecretsPairingDiscovery {
+  /// The adverts on the network.
+  final List<TomSecretsPairingAdvert> adverts = [];
+
+  /// How often [browse] ran.
+  int browsed = 0;
+
+  @override
+  Future<TomSecretsPairingAdvertising> advertise(
+    TomSecretsPairingAdvert advert,
+  ) async {
+    adverts.add(advert);
+    return _FakeAdvertising(() => adverts.remove(advert));
+  }
+
+  @override
+  Future<List<TomSecretsPairingAdvert>> browse({
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    browsed++;
+    return List.of(adverts);
+  }
+}
+
+final class _FakeAdvertising implements TomSecretsPairingAdvertising {
+  _FakeAdvertising(this._stop);
+
+  final void Function() _stop;
+
+  @override
+  Future<void> stop() async => _stop();
+}

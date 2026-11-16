@@ -212,6 +212,83 @@ void main() {
     expect(m.error, contains('host:port'));
   });
 
+  test(
+    'the model: found on the LAN by the code alone (no address typed)',
+    () async {
+      await prepare();
+      final lan = FakePairingDiscovery();
+      final m =
+          TomSecretsFirstRunModel(
+              firstRun: firstRun,
+              connection: connection,
+              discovery: lan,
+              ownAddresses: () async => [InternetAddress.loopbackIPv4],
+            )
+            ..byPairing = true
+            ..host = 'newdesk';
+      expect(m.canFind, isTrue);
+      final (w, code) = await window();
+      // The giving side's announcement, and another machine's window.
+      await lan.advertise(
+        TomSecretsPairingAdvert(
+          device: 'mbp',
+          number: code.number,
+          port: w.port,
+          addresses: const ['192.0.2.1', '127.0.0.1'],
+        ),
+      );
+      await lan.advertise(
+        TomSecretsPairingAdvert(
+          device: 'bomber',
+          number: code.number == 999 ? 1 : code.number + 1,
+          port: 1,
+          addresses: const ['127.0.0.1'],
+        ),
+      );
+      m.pairCode = code.text;
+      await m.receive();
+      expect(m.error, isNull);
+      expect(lan.browsed, 1);
+      expect(m.pairAddress, '127.0.0.1:${w.port}', reason: 'this network\'s');
+      expect(m.receipt!.giver, 'mbp');
+      expect((await w.result).receiver, 'newdesk');
+    },
+  );
+
+  test('the model: no window with the number on the LAN is told; without '
+      'mDNS the address is asked for', () async {
+    await prepare();
+    final lan = FakePairingDiscovery();
+    final m =
+        TomSecretsFirstRunModel(
+            firstRun: firstRun,
+            connection: connection,
+            discovery: lan,
+          )
+          ..byPairing = true
+          ..pairCode = '7-guitar-orbit';
+    await m.receive();
+    expect(m.error, contains('No machine on this network'));
+    expect(m.error, contains('VPN'));
+    const twin = TomSecretsPairingAdvert(
+      device: 'a',
+      number: 7,
+      port: 1,
+      addresses: ['127.0.0.1'],
+    );
+    await lan.advertise(twin);
+    await lan.advertise(twin);
+    await m.receive();
+    expect(m.error, contains('More than one machine'));
+    final without =
+        TomSecretsFirstRunModel(firstRun: firstRun, connection: connection)
+          ..byPairing = true
+          ..pairCode = '7-guitar-orbit';
+    expect(without.canFind, isFalse);
+    await without.receive();
+    expect(without.error, contains('Type the other machine'));
+  });
+
   testWidgets('the wizard: Pair with another desktop, then the last step '
       'opens the Pairing screen', (tester) async {
     await tester.runAsync(prepare);

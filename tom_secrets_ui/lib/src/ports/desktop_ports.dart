@@ -19,6 +19,8 @@ import 'package:tom_host_ui/tom_host_ui.dart' show TomFlutterClipboardPort;
 
 import 'service_host.dart';
 
+import 'pairing_discovery.dart';
+
 /// The three states of the tray icon.
 enum TomSecretsTrayState {
   /// The service is locked.
@@ -216,6 +218,7 @@ final class TomSecretsHost {
     this.openUrl,
     this.pairingAddresses,
     this.pairingAllowsLoopback = false,
+    this.pairingDiscovery,
     this.clipboard = const TomFlutterClipboardPort(),
     this.startedHidden = false,
     this.firstRunActions = const {},
@@ -270,6 +273,11 @@ final class TomSecretsHost {
 
   /// Whether a pairing window may listen on loopback: tests only.
   final bool pairingAllowsLoopback;
+
+  /// mDNS for pairing on the LAN (advertising an open window, finding one
+  /// by its code's number), or null where the host has none (the address
+  /// is typed then).
+  final TomSecretsPairingDiscovery? pairingDiscovery;
 
   /// The clipboard protected values are copied to.
   final TomClipboardPort clipboard;

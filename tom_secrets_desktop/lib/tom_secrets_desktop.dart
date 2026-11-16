@@ -9,6 +9,7 @@ library;
 export 'src/browser.dart';
 export 'src/device_files.dart';
 export 'src/platform_channels.dart';
+export 'src/pairing_discovery.dart';
 export 'src/printer.dart';
 export 'src/service_host.dart';
 export 'src/shell.dart';
