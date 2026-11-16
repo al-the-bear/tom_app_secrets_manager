@@ -40,21 +40,6 @@ const Map<String, String> secretsWorkspaceMarkers = {
 /// `SecretsCiWorkspace.roleOf` names them), each with why and the todo that
 /// ends it.
 const Map<String, String> secretsStandaloneExceptions = {
-  // The apps take tom_reusable_ui by path until it is published (webwork
-  // wrui1); every other dependency comes from pub.dev.
-  'apps:tom_secrets_ui/pubspec.yaml':
-      'tom_reusable_ui by path until it is published (webwork wrui1)',
-  'apps:tom_secrets_ui/pubspec_overrides.yaml':
-      'source unification while tom_reusable_ui is taken by path '
-      '(webwork wrui1)',
-  'apps:tom_secrets_desktop/pubspec.yaml':
-      'tom_reusable_ui by path until it is published (webwork wrui1)',
-  'apps:tom_secrets_desktop/pubspec_overrides.yaml':
-      'source unification while tom_reusable_ui is taken by path '
-      '(webwork wrui1)',
-  'apps:tom_secrets_app/pubspec_overrides.yaml':
-      'source unification while tom_reusable_ui is taken by path '
-      '(webwork wrui1)',
   // The CI's default is this workspace's layout (the todo's requirement:
   // the locations configurable, the workspace layout only the default), and
   // its tests use it as a fixture.

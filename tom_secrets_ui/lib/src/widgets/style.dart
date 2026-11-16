@@ -3,12 +3,12 @@
 
 /// The app's look: a compact Material 3 theme for a desktop tool, a colour
 /// per vault and per entry type, type avatars, tinted chips and section
-/// cards. Colours stay readable through `tom_reusable_ui`'s
+/// cards. Colours stay readable through `tom_ui_support`'s
 /// `tomReadableOn` / `tomTintedChip`.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:tom_reusable_ui/tom_reusable_ui.dart'
+import 'package:tom_ui_support/tom_ui_support.dart'
     show tomReadableOn, tomTintedChip;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 

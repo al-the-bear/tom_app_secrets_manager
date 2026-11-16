@@ -16,7 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
-import 'package:tom_reusable_ui/tom_reusable_ui.dart' show tomShowNotice;
+import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_client/tom_secrets_client.dart'
     show TomSecretPathTarget, TomSecretReference;

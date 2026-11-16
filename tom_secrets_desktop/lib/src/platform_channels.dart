@@ -11,7 +11,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:tom_basics/utilities.dart' show TomClipboardPort;
-import 'package:tom_reusable_ui/desktop.dart' show TomDesktopClipboardPort;
+import 'package:tom_host_ui/desktop.dart' show TomDesktopClipboardPort;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 /// The channel of the screen-capture setting.
@@ -51,7 +51,10 @@ final class TomSecretsPlatformCaptureGuard implements TomSecretsCaptureGuard {
   Future<bool> setExcluded(bool excluded) async {
     if (!supported) return false;
     try {
-      return await _channel.invokeMethod<bool>('setCaptureExcluded', excluded) ??
+      return await _channel.invokeMethod<bool>(
+            'setCaptureExcluded',
+            excluded,
+          ) ??
           false;
     } on PlatformException {
       return false;

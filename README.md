@@ -75,11 +75,10 @@ the other two repositories are elsewhere,
 
 The packages take their dependencies from pub.dev (the core, the service,
 the client and `tsm` are there: `tom_secrets_core`, `tom_secrets_service`,
-`tom_secrets_client`, `tom_secrets_tsm`), or by path inside one repository.
-One exception is left: the apps take `tom_reusable_ui` by path from the
-`tom_app_webwork` repository, which is not published yet, so building the
-apps needs that checkout beside this one until it is; `ci.sh :standalone`
-lists it.
+`tom_secrets_client`, `tom_secrets_tsm`, and the Tom UI modules
+`tom_ui_support`, `tom_host_ui`, `tom_credentials_ui`, `tom_sync_ui`), or by
+path inside one repository, so a clone of this repository builds on its own;
+`ci.sh :standalone` holds it.
 
 ## Packages
 

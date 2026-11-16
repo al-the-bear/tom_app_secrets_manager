@@ -11,7 +11,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
-import 'package:tom_reusable_ui/tom_reusable_ui.dart';
+import 'package:tom_ui_support/tom_ui_support.dart';
 
 /// How long a revealed value stays readable.
 const Duration tomSecretsRevealFor = Duration(seconds: 30);

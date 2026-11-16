@@ -16,7 +16,7 @@ import 'package:tom_core_storage/tom_core_storage.dart'
         TomTokenListing,
         TomTokenRejectedException,
         TomTokenRequiredException;
-import 'package:tom_reusable_ui/tom_reusable_ui.dart'
+import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFile, TomTokenKeeper;
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';

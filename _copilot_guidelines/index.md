@@ -12,17 +12,11 @@ application, capability, build and testkit packages).
   decide no implementation.
 - `tom_secrets_relay` imports no KDBX and carries its own `LICENSE` and
   closure check.
-- The apps take `tom_reusable_ui` by path from the sibling
-  `tom_app_webwork` checkout until it is published; a build host needs it
-  checked out beside this repository (`ci.sh :standalone` lists it).
+- Every dependency comes from pub.dev (the Tom UI modules `tom_ui_support`,
+  `tom_host_ui`, `tom_credentials_ui`, `tom_sync_ui` among them), or by path
+  from a sibling package of this repository; no `pubspec_overrides.yaml`
+  (`ci.sh :standalone` holds it).
 - A shipped dependency gets its row in `THIRD_PARTY.md`.
-- **Source unification only, and only until `tom_reusable_ui` is
-  published:** `tom_secrets_core` and the service take `tom_core_storage`,
-  `tom_core_sync` and `tom_github_api` from pub.dev, `tom_reusable_ui` takes
-  them by path. A Flutter package that reaches both carries a tracked
-  `pubspec_overrides.yaml` pointing them at pub.dev at exactly the version
-  the checkout carries, with the reason in the file. It never reaches for an
-  unpublished API; a version that differs is published first.
 - **Desktop plugins:** each third-party plugin sits behind a port of
   `tom_secrets_ui`, implemented in `tom_secrets_desktop` (DP-32); where a
   plugin needs hand edits of the app's runner, the capability is this

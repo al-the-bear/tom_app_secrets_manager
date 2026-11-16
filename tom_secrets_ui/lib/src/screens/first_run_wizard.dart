@@ -12,7 +12,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tom_reusable_ui/tom_reusable_ui.dart';
+import 'package:tom_credentials_ui/tom_credentials_ui.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';

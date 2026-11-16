@@ -15,7 +15,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
-import 'package:tom_reusable_ui/tom_reusable_ui.dart' show tomShowNotice;
+import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 

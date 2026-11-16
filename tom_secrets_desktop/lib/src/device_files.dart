@@ -12,7 +12,7 @@ import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
-import 'package:tom_reusable_ui/tom_reusable_ui.dart'
+import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFile, TomKeyFilePicker;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 

@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- The Tom UI modules from pub.dev (`tom_ui_support`, `tom_host_ui`,
+  `tom_credentials_ui`, `tom_sync_ui`) in place of `tom_reusable_ui` by
+  path; no `pubspec_overrides.yaml` any more.
 - The shell, the Unlock and claim screens, the vault browser (tree and list
   views), the entry editor with the password generator and TOTP, the Status
   view, and the controllers `TomSecretsServiceConnection` and

@@ -12,7 +12,7 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:tom_reusable_ui/tom_reusable_ui.dart'
+import 'package:tom_sync_ui/tom_sync_ui.dart'
     show TomMergeResolution, TomMergeRow, TomMergeSide;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 

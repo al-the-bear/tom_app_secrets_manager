@@ -13,8 +13,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:tom_basics/utilities.dart' show TomClipboardPort;
-import 'package:tom_reusable_ui/tom_reusable_ui.dart'
-    show TomFlutterClipboardPort, TomKeyFilePicker;
+import 'package:tom_credentials_ui/tom_credentials_ui.dart'
+    show TomKeyFilePicker;
+import 'package:tom_host_ui/tom_host_ui.dart' show TomFlutterClipboardPort;
 
 import 'service_host.dart';
 

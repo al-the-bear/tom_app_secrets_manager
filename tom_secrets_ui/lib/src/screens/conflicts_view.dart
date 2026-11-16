@@ -12,7 +12,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tom_reusable_ui/tom_reusable_ui.dart'
+import 'package:tom_sync_ui/tom_sync_ui.dart'
     show
         TomMergeBodyRequest,
         TomMergeFieldTable,

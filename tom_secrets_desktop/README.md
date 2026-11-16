@@ -12,7 +12,7 @@ plugin sits behind a port, so it can be swapped (DP-32).
 | Notifications | `TomSecretsPluginNotifier` over `flutter_local_notifications`. |
 | Start at login | `TomSecretsDesktopLoginItem`: macOS through this package's own `SMAppService` code (macOS 13+), Windows and Linux through `launch_at_startup`, with `--hidden`. |
 | Screen capture | `TomSecretsPlatformCaptureGuard`, this package's own code: `NSWindow.sharingType = .none` on macOS, `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` on Windows (10 2004+); Linux cannot exclude a window (DP-33). |
-| Clipboard | `tomSecretsDesktopClipboard()`: `tom_reusable_ui`'s `TomDesktopClipboardPort`, its macOS half (the concealed and transient pasteboard markers) in this package's code. |
+| Clipboard | `tomSecretsDesktopClipboard()`: `tom_host_ui`'s `TomDesktopClipboardPort`, its macOS half (the concealed and transient pasteboard markers) in this package's code. |
 | Preferences, files | `TomSecretsFilePreferences` (`app-preferences.json` in the data directory, never synced), `TomSecretsDesktopFiles` (`file_selector`: key files, attachments, the First run's vault file and the copies of its new keys). |
 | Print path | `TomSecretsDesktopPrinter` over `printing`: the system print dialog for the emergency sheet (on Windows and Linux `printing` bundles PDFium, which its build downloads). |
 | Web pages | `tomSecretsDesktopOpenUrl` over `url_launcher`: GitHub's token pages in the system browser (`https` only). |

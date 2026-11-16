@@ -29,8 +29,8 @@ dependencies:
   # the app and tsm share it.
   tom_core_storage: ^0.1.2
   # The key-file picker port and the desktop clipboard port.
-  tom_reusable_ui:
-    path: ../../app_webwork/reusable/tom_reusable_ui
+  tom_credentials_ui: ^0.1.0
+  tom_host_ui: ^0.1.0
   tom_basics: ">=3.3.0"
   # DP-32: the desktop plugins, each behind a port. tray_manager and
   # window_manager at their 0.5 lines (the next ones need Flutter 3.50 and

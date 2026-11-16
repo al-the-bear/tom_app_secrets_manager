@@ -15,7 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
 import 'package:tom_core_sync/tom_core_sync.dart' show TomSyncState;
-import 'package:tom_reusable_ui/tom_reusable_ui.dart';
+import 'package:tom_sync_ui/tom_sync_ui.dart';
 
 import '../ports/desktop_ports.dart';
 import '../state/reminders.dart';
@@ -420,7 +420,7 @@ class _MainShellState extends State<TomSecretsMainShell> {
   }
 }
 
-/// The sync summary of a GitHub vault for `tom_reusable_ui`'s indicator:
+/// The sync summary of a GitHub vault for `tom_sync_ui`'s indicator:
 /// its changes not yet pushed, offline while served from its cached copy,
 /// last synced at its last fetch.
 TomSyncSummary tomSecretsSyncSummary(TomSecretsStoreState s) => TomSyncSummary(

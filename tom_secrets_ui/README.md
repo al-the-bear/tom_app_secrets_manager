@@ -57,11 +57,11 @@ the service holding real demo vaults (`test/support/fake_service.dart`).
 ## Dependencies
 
 `tom_secrets_core` (the only way to KDBX, DP-29), `tom_secrets_client` (the
-admin errors, the reference grammar), `tom_reusable_ui` (key fields, notices,
-sync indicator, masked editing surface, colours), `tom_basics` (the protected
-clipboard), `tom_core_sync`, `provider`. `pubspec_overrides.yaml` unifies the
-source of three packages that `tom_secrets_core` takes from pub.dev and
-`tom_reusable_ui` by path, at the same versions (see the file).
+admin errors, the reference grammar), the Tom UI modules `tom_ui_support`
+(notices, colours), `tom_host_ui` (the clipboard port), `tom_credentials_ui`
+(key fields, the key-file picker, the token prompt) and `tom_sync_ui` (the
+merge view, the sync indicator), `tom_basics` (the protected clipboard),
+`tom_core_sync`, `provider`; all from pub.dev.
 
 ## Licence
 
