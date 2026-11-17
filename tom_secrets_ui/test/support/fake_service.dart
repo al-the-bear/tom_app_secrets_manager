@@ -557,6 +557,102 @@ final class FakeService implements TomSecretsAdminChannel {
         }
         emit({'op': 'store_changed', 'store': s.name, 'revision': s.revision});
         return {'op': 'ok', 'location': to, 'revision': s.revision};
+      case 'vault.create':
+        _unlocked();
+        creations.add(args);
+        final name = args['store']! as String;
+        final location = args['location']! as String;
+        if ([...stores, ...unserved].any((s) => s.name == name)) {
+          throw TomSecretsAdminException(
+            'malformed',
+            'store',
+            details: {'reason': 'store'},
+          );
+        }
+        if ([...stores, ...unserved].any((s) => s.location == location)) {
+          throw TomSecretsAdminException(
+            'malformed',
+            'location',
+            details: {'reason': 'location'},
+          );
+        }
+        final keys = (args['keys']! as Map).cast<String, Object?>();
+        final kf = keys['keyFile'] as String?;
+        final keyFile = kf == null ? null : base64.decode(kf);
+        final outerKey = keys['outerKey'] as String?;
+        final bytes = base64.decode(args['bytes']! as String);
+        try {
+          await tomSecretsDecodeStored(
+            location,
+            bytes,
+            tomSecretsVaultCredentials(
+              password: keys['password'] as String?,
+              keyFile: keyFile,
+            ),
+            outerKey: outerKey,
+          );
+        } on Object {
+          throw TomSecretsAdminException(
+            'malformed',
+            'bytes',
+            details: {'reason': 'bytes'},
+          );
+        }
+        final created = FakeStore(
+          name,
+          keys['password']! as String,
+          bytes,
+          location: location,
+          keyFile: keyFile,
+          outerKey: outerKey,
+        );
+        stores.add(created);
+        // The service lists the new vault in the primary.
+        final primary = stores.first;
+        final file = await tomSecretsDecodeStored(
+          primary.location,
+          primary.stored,
+          tomSecretsVaultCredentials(
+            password: primary.password,
+            keyFile: primary.keyFile,
+          ),
+          outerKey: primary.outerKey,
+        );
+        final due = args['keysDue'] as String?;
+        TomSecretsPrimaryVaults(file).put(
+          TomSecretsVaultKeys(
+            name: name,
+            locator: location,
+            password: created.password,
+            keyFile: keyFile,
+            outerKey: outerKey,
+            githubToken: args['githubToken'] as String?,
+            expires: due == null ? null : DateTime.parse(due),
+          ),
+        );
+        primary
+          ..stored = await tomSecretsEncodeStored(
+            primary.location,
+            file,
+            outerKey: primary.outerKey,
+          )
+          ..revision = tomSecretsBlobId(primary.stored);
+        emit({
+          'op': 'store_changed',
+          'store': primary.name,
+          'revision': primary.revision,
+        });
+        emit({
+          'op': 'store_changed',
+          'store': name,
+          'revision': created.revision,
+        });
+        return {
+          'op': 'ok',
+          'store': name,
+          'location': location,
+          'revision': created.revision,
+        };
       case 'keys.rotate':
         _unlocked();
         pairRotations.add(args);
@@ -766,6 +862,9 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// The `vault.move` requests.
   final List<Map<String, Object?>> moves = [];
+
+  /// The `vault.create` requests.
+  final List<Map<String, Object?>> creations = [];
 
   /// The `keys.rotate` requests.
   final List<Map<String, Object?>> pairRotations = [];

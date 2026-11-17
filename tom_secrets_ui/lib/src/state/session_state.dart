@@ -17,6 +17,7 @@ import '../ports/desktop_ports.dart';
 import 'conflicts.dart';
 import 'emergency_sheet.dart';
 import 'import_model.dart';
+import 'new_vault.dart';
 import 'overlays.dart';
 import 'rotation.dart';
 import 'service_connection.dart';
@@ -661,10 +662,23 @@ class TomSecretsSession extends ChangeNotifier {
   Future<List<TomSecretsKnownRepositoryKey>> repositoryKeysFor(
     String store,
   ) async {
-    final primary = _vaults.values.firstOrNull;
     final vault = _vaultOf(store);
-    if (primary == null || vault == null) return const [];
-    final repository = tomSecretsRepositoryOf(vault.location);
+    if (vault == null) return const [];
+    return repositoryKeysAt(vault.location, except: store);
+  }
+
+  /// The repository keys the vaults in [location]'s repository already use
+  /// (the primary's included, [except] left out), each with the vaults
+  /// under it: what a vault outer encrypted there may take instead of a new
+  /// key.
+  Future<List<TomSecretsKnownRepositoryKey>> repositoryKeysAt(
+    String location, {
+    String? except,
+  }) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) return const [];
+    final store = except;
+    final repository = tomSecretsRepositoryOf(location);
     final byKey = <String, List<String>>{};
     void take(String name, String locator, String? key) {
       if (key == null || name == store) return;
@@ -771,6 +785,113 @@ class TomSecretsSession extends ChangeNotifier {
           : TomSecretsRepositoryKey.fromBase64(outerKey).keyIdHex,
       compacted: compacted,
       compactFailures: failures,
+    );
+  }
+
+  /// Makes the new, empty vault file of [createVault]: `tomSecretsNewVault`
+  /// with its default Argon2id; a test passes a lighter one.
+  @visibleForTesting
+  KdbxFile Function(String password, Uint8List? keyFile, String name)
+  newVaultFile = (password, keyFile, name) => tomSecretsNewVault(
+    tomSecretsVaultCredentials(password: password, keyFile: keyFile),
+    name,
+  );
+
+  /// Creates the further vault [spec] names beside the primary through the
+  /// service (`vault.create`, protocol.md 6.4): a new, empty vault (KDBX
+  /// 4.1, Argon2id, through [newVaultFile]) with its metadata (the store name, its
+  /// kind, a system vault's environment binding, the purpose), under its
+  /// master password (given, or generated) and key file (none, the
+  /// primary's, or a new one), and for an outer-encrypted vault under the
+  /// repository key chosen or a new one. The service writes it where it
+  /// lives and lists it in the primary with its keys, due for rotation after
+  /// `vaultKeyAgeMonths`; then the vaults are read again. Answers the new key
+  /// material for the user's recovery copies. Throws [ArgumentError] for a
+  /// name in use or a place that cannot be named, [StateError] when no
+  /// primary is open, `TomSecretsAdminException` when the service refuses.
+  Future<TomSecretsVaultCreated> createVault(
+    TomSecretsNewVaultSpec spec, {
+    DateTime? now,
+  }) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final name = spec.name;
+    final taken = {
+      ..._vaults.keys,
+      for (final u in _unserved) u.store,
+      for (final v in TomSecretsPrimaryVaults(primary.file).list()) v.name,
+    };
+    if (taken.contains(name)) {
+      throw ArgumentError.value(name, 'name', 'a vault $name exists already');
+    }
+    final location = tomSecretsNewVaultLocation(spec, primary.location);
+    final held = (await _heldKeys([primary.store]))[primary.store]!;
+    final primaryKeyFile = held['keyFile'] as String?;
+    if (spec.keyFile == TomSecretsNewKeyFile.primary &&
+        primaryKeyFile == null) {
+      throw ArgumentError('the primary has no key file');
+    }
+    final generated = spec.password == null || spec.password!.isEmpty;
+    final password = generated
+        ? TomSecretsPasswordGenerator().generate(
+            TomSecretsPasswordPolicy(length: 32),
+          )
+        : spec.password!;
+    final newKeyFile = spec.keyFile == TomSecretsNewKeyFile.generate
+        ? TomSecretsKeyFile.generate().toBytes()
+        : null;
+    final keyFile = switch (spec.keyFile) {
+      TomSecretsNewKeyFile.none => null,
+      TomSecretsNewKeyFile.primary => base64.decode(primaryKeyFile!),
+      TomSecretsNewKeyFile.generate => newKeyFile,
+    };
+    final newOuter = spec.outer && spec.repositoryKey == null
+        ? TomSecretsRepositoryKey.generate().toBase64()
+        : null;
+    final outerKey = spec.outer ? (spec.repositoryKey ?? newOuter) : null;
+    final file = newVaultFile(password, keyFile, name);
+    final purpose = spec.purpose?.trim();
+    TomSecretsMetadata(
+      store: name,
+      kind: spec.kind,
+      purpose: purpose == null || purpose.isEmpty ? null : purpose,
+      binding: spec.binding,
+    ).writeTo(file);
+    final bytes = await tomSecretsEncodeStored(
+      location,
+      file,
+      outerKey: outerKey,
+      cipher: spec.cipher,
+    );
+    final device = await _deviceSettings();
+    final at = (now ?? DateTime.now()).toUtc();
+    final token = spec.githubToken?.trim();
+    try {
+      await connection.request('vault.create', {
+        'store': name,
+        'location': location,
+        'bytes': base64.encode(bytes),
+        'keys': {
+          'password': password,
+          if (keyFile != null) 'keyFile': base64.encode(keyFile),
+          'outerKey': ?outerKey,
+        },
+        if (token != null && token.isNotEmpty) 'githubToken': token,
+        'keysDue': tomSecretsAddMonths(
+          at,
+          device.vaultKeyAgeMonths,
+        ).toIso8601String(),
+      });
+    } finally {
+      bytes.fillRange(0, bytes.length, 0);
+    }
+    await load();
+    return TomSecretsVaultCreated(
+      store: name,
+      location: location,
+      keyFile: newKeyFile,
+      repositoryKey: newOuter,
+      passwordGenerated: generated,
     );
   }
 

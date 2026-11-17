@@ -26,6 +26,7 @@ import '../state/session_state.dart';
 import '../widgets/style.dart';
 import 'entry_editor.dart';
 import 'gate_screens.dart';
+import 'new_vault_dialog.dart';
 import 'rewritten_question.dart';
 
 /// The browser in the view the session has chosen.
@@ -224,6 +225,14 @@ class _GroupTree extends StatelessWidget {
               isRecycleBin: vault.file.recycleBin?.uuid == group.uuid,
             ),
         ],
+        if (session.vaults.isNotEmpty)
+          ListTile(
+            key: const Key('tsm-new-vault'),
+            dense: true,
+            leading: const Icon(Icons.add_box_outlined),
+            title: const Text('New vault…'),
+            onTap: () => unawaited(tomSecretsShowNewVaultDialog(context)),
+          ),
       ],
     );
   }

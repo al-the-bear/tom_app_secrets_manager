@@ -233,6 +233,32 @@ recycle bin", "Clear the marks".
 A vault served from its offline copy is marked "offline copy:" with the
 reason and its age, and opens read-only.
 
+### A new vault
+
+"New vault…" (under the vaults in the tree; also on the Environments and
+Import screens) creates a further vault beside the primary:
+
+- its **name** (the store name: lower-case letters, digits, `-` and `_`),
+  its **kind** ("Personal" for your own passwords, "System" for the
+  processes' secrets) and, for a system vault, **the environment it serves
+  in** (`env`; every entry of the vault is bound in it; left empty, it
+  serves in every environment);
+- **where it lives**: "Beside the primary" (its GitHub repository or its
+  folder), "Another GitHub repository" (`owner/name`, an optional folder,
+  and its token when this machine's keychain has none, kept with the vault's
+  entry in the primary) or "A file on this machine" (an absolute folder);
+  the vault's place is shown below;
+- its **keys**: "Generate the master password" (kept in the primary only,
+  so the vault opens wherever the primary does) or one you type; a "Key
+  file": "None", "The primary's key file" or "A new key file";
+- "Outer encryption (.kdbx.tsmx)": under "A new repository key" or the key
+  the repository's other vaults use, with its cipher.
+
+"Create" has the service write the new file where it lives and list the
+vault with its keys in the primary; every machine that opens the primary
+serves it from then on. Save copies of a new key file and repository key,
+and replace your emergency sheet.
+
 ### The entry editor
 
 An entry is a "Login", an "API token" or a "Secure note" (imported entries
@@ -309,6 +335,10 @@ Vaults the primary lists but this machine does not serve appear under "Not
 served on this machine": "Open" one to edit it here; its saves are written
 to its location, and "Close" puts it away again.
 
+A file the configuration names that the primary lists no keys for shows
+"no keys"; click it to create it as a system vault in its environment. "New
+vault…" creates another (see [A new vault](#a-new-vault)).
+
 ## Approvals
 
 ### The prompt
@@ -373,7 +403,8 @@ Open **Import** (also offered at the end of the First run wizard).
    an Enpass CSV, name the Enpass vault the file holds. Keep the export
    outside every repository: it holds every password in plaintext.
 2. **"Where each vault goes"**: for each vault of the export, the vault and
-   the "Group (a/b/c)" it goes to. Tick "Import the archived items too (into
+   the "Group (a/b/c)" it goes to; "Into a new vault…" creates the vault
+   first (see [A new vault](#a-new-vault)). Tick "Import the archived items too (into
    an Archive group)" if you want them.
 3. **"Preview"** shows what would happen without writing anything: the
    counts (added, updated, imported as conflicts, unchanged, left out, not

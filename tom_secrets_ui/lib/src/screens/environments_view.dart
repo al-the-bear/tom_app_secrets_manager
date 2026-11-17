@@ -20,6 +20,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 import '../state/session_state.dart';
 import '../widgets/protected_field.dart';
 import '../widgets/style.dart';
+import 'new_vault_dialog.dart';
 import 'vault_browser.dart' show tomSecretsGuarded;
 
 /// One file of the table: a served vault, or one not served open for
@@ -184,6 +185,18 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
                   _editing = null;
                 }),
               ),
+              const Spacer(),
+              TextButton.icon(
+                key: const Key('tsm-env-new-vault'),
+                icon: const Icon(Icons.add_box_outlined),
+                label: const Text('New vault…'),
+                onPressed: () => unawaited(
+                  tomSecretsShowNewVaultDialog(
+                    context,
+                    kind: TomSecretsVaultKind.system,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -223,12 +236,26 @@ class _EnvironmentsState extends State<TomSecretsEnvironmentsView> {
                 for (final name in noKeys)
                   Tooltip(
                     message:
-                        'The primary vault lists no keys for $name: add the '
-                        'vault there to edit it here',
-                    child: TomSecretsChip(
-                      '$name (env:${envOf[name]}): no keys',
-                      colour: theme.colorScheme.outline,
-                      icon: Icons.key_off_outlined,
+                        'The primary vault lists no keys for $name: create '
+                        'it as a new vault, or add an existing vault\'s keys '
+                        'to the primary, to edit it here',
+                    child: ActionChip(
+                      key: Key('tsm-env-create-vault-$name'),
+                      visualDensity: VisualDensity.compact,
+                      avatar: Icon(
+                        Icons.key_off_outlined,
+                        size: 16,
+                        color: theme.colorScheme.outline,
+                      ),
+                      label: Text('$name (env:${envOf[name]}): no keys'),
+                      onPressed: () => unawaited(
+                        tomSecretsShowNewVaultDialog(
+                          context,
+                          name: name,
+                          kind: TomSecretsVaultKind.system,
+                          environment: envOf[name],
+                        ),
+                      ),
                     ),
                   ),
               ],

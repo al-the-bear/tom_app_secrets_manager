@@ -20,6 +20,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 import '../ports/desktop_ports.dart';
 import '../state/import_model.dart';
 import '../state/session_state.dart';
+import 'new_vault_dialog.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 
@@ -137,6 +138,28 @@ class _ImportState extends State<TomSecretsImportView> {
 
   void _notThe(TomSecretsImportFormat format, String why) {
     if (mounted) setState(() => _error = 'Not a ${format.label} export: $why');
+  }
+
+  /// The mapping menu's "Into a new vault…".
+  static const String _newVault = '\u0000new';
+
+  /// Creates a vault for the source vault [id] ([name] proposes its store
+  /// name) and maps it there; its group starts at the root.
+  Future<void> _intoNewVault(String id, String name) async {
+    final proposed = name
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9_-]+'), '-')
+        .replaceAll(RegExp(r'^[-_]+|-+$'), '');
+    final created = await tomSecretsShowNewVaultDialog(
+      context,
+      name: proposed.isEmpty ? null : proposed,
+    );
+    if (created == null || !mounted) return;
+    setState(() {
+      _stores[id] = created.store;
+      _report = null;
+      _error = null;
+    });
   }
 
   Map<String, TomSecretsImportMapping> get _mappings => {
@@ -304,11 +327,22 @@ class _ImportState extends State<TomSecretsImportView> {
                                 items: [
                                   for (final s in writable)
                                     DropdownMenuItem(value: s, child: Text(s)),
+                                  const DropdownMenuItem(
+                                    key: Key('tsm-import-new-vault'),
+                                    value: _newVault,
+                                    child: Text('Into a new vault…'),
+                                  ),
                                 ],
-                                onChanged: (s) => setState(() {
-                                  if (s != null) _stores[v.id] = s;
-                                  _report = null;
-                                }),
+                                onChanged: (s) {
+                                  if (s == _newVault) {
+                                    unawaited(_intoNewVault(v.id, v.name));
+                                    return;
+                                  }
+                                  setState(() {
+                                    if (s != null) _stores[v.id] = s;
+                                    _report = null;
+                                  });
+                                },
                               ),
                               const SizedBox(width: 8),
                               Expanded(

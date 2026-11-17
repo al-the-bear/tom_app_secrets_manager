@@ -2,6 +2,15 @@
 
 ## 0.1.0
 
+- New vault (`tomSecretsShowNewVaultDialog`, `TomSecretsSession.createVault`,
+  `TomSecretsNewVaultSpec`): a further vault beside the primary, from the
+  vault browser, the Environments screen (a configured file without keys
+  created as a system vault in its environment) and the Import screen ("Into
+  a new vault…"); its kind and environment, its place (beside the primary,
+  another GitHub repository, a file), its keys (a password given or
+  generated and kept in the primary, no key file, the primary's or a new one)
+  and its outer encryption (a new repository key or one the repository
+  uses), created through the service's `vault.create`.
 - A paired host's prompts (passed on by this machine's service, their ids
   qualified `<host>/<approvalId>`) sit in the same prompt list beside this
   host's and are answered the same way.
