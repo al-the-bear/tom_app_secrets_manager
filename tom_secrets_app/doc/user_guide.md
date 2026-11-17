@@ -158,6 +158,10 @@ the wizard's first step, choose "Pair with another desktop" and give:
   `192.168.1.20:47900`. On the same network leave it empty: the app finds the
   other machine by the code. Over a VPN, type the address.
 - **"The code"**, for example `7-guitar-orbit`.
+- **"This machine's approval link (optional)"**: a VPN or LAN address of
+  this machine and a port, for example `10.8.0.6:47731`, never `0.0.0.0`.
+  The other machine is told it and answers this one's approval prompts over
+  the link at once. Left empty, this machine has no approval link.
 - **"This machine's name"**.
 
 Choose "Pair". While it says "Waiting for the other machine…", confirm on the

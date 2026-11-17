@@ -18,7 +18,8 @@ import 'package:tom_core_storage/tom_core_storage.dart'
         TomTokenRequiredException;
 import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFile, TomTokenKeeper;
-import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_client/admin.dart'
+    show TomSecretsAdminException, tomSecretsApprovalLinkProblem;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/pairing_discovery.dart';
@@ -115,6 +116,11 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   /// The code its Pairing screen shows.
   String pairCode = '';
 
+  /// Where this machine's approval link listens (`address:port`, the
+  /// device setting `approvalLink`); empty: no link. The giving machine is
+  /// told it with the pairing, so its service opens the link.
+  String pairLink = '';
+
   TomSecretsPairingReceipt? _receipt;
 
   /// The pairing received (held in memory until the setup), or null.
@@ -134,6 +140,14 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
       code = TomSecretsPairingCode.parse(pairCode);
     } on FormatException catch (e) {
       fail(e.message);
+      return;
+    }
+    final link = _pairLink;
+    final linkProblem = link == null
+        ? null
+        : tomSecretsApprovalLinkProblem(link);
+    if (linkProblem != null) {
+      fail(linkProblem);
       return;
     }
     _update(() {
@@ -156,6 +170,7 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         port: at.$2,
         code: code,
         device: host,
+        linkAddress: link,
       );
       _update(() => _receipt = receipt);
     } on TomSecretsPairingException catch (e) {
@@ -552,8 +567,12 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
     host: host == tomSecretsDefaultHost() ? null : host,
   );
 
-  /// This machine's settings as step 3 has them.
+  String? get _pairLink => pairLink.trim().isEmpty ? null : pairLink.trim();
+
+  /// This machine's settings as step 3 has them (and, set up by pairing,
+  /// the approval link given then).
   TomSecretsDeviceSettings get settings => TomSecretsDeviceSettings(
+    approvalLink: _byPairing ? _pairLink : null,
     defaultEnvironment: defaultEnvironment.trim().isEmpty
         ? null
         : defaultEnvironment.trim(),

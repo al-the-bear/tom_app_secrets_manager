@@ -43,6 +43,7 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
   final _password = TextEditingController();
   final _pairAddress = TextEditingController();
   final _pairCode = TextEditingController();
+  final _pairLink = TextEditingController();
   final _pairPassword = TextEditingController();
   final _repeat = TextEditingController();
   final _openKey = TomKeyStepController();
@@ -72,6 +73,7 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
     for (final c in [
       _pairAddress,
       _pairCode,
+      _pairLink,
       _pairPassword,
       _path,
       _owner,
@@ -332,6 +334,24 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
           ),
           onChanged: (v) {
             m.pairCode = v;
+            m.changed();
+          },
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('tsm-fr-pair-link'),
+          controller: _pairLink,
+          enabled: receipt == null && !m.receiving,
+          decoration: const InputDecoration(
+            labelText: 'This machine\'s approval link (optional)',
+            helperText:
+                'A VPN or LAN address of this machine and a port, e.g. '
+                '10.8.0.6:47731: the other machine then answers this one\'s '
+                'prompts. Empty: no link.',
+            prefixIcon: Icon(Icons.link),
+          ),
+          onChanged: (v) {
+            m.pairLink = v;
             m.changed();
           },
         ),

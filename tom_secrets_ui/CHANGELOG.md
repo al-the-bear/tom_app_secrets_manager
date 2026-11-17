@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- The First run wizard by pairing takes "This machine's approval link"
+  (optional, checked: `host:port`, never every interface): the giving
+  machine is told it with the pairing and opens the link, and the machine
+  is set up with it as its device setting `approvalLink`.
 - New vault (`tomSecretsShowNewVaultDialog`, `TomSecretsSession.createVault`,
   `TomSecretsNewVaultSpec`): a further vault beside the primary, from the
   vault browser, the Environments screen (a configured file without keys

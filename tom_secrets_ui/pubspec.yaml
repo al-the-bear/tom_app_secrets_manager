@@ -18,9 +18,9 @@ dependencies:
   provider: ^6.1.5
   # The vaults: KDBX through the one gateway (DP-29), the TOTP, the password
   # generator, the stored-file codec and the entry fields.
-  tom_secrets_core: ^0.2.1
+  tom_secrets_core: ^0.2.3
   # The admin errors and the reference grammar ("How clients name it").
-  tom_secrets_client: ^0.2.0
+  tom_secrets_client: ^0.2.4
   # The key fields, notices, sync indicator and the masked editing surface.
   tom_ui_support: ^0.1.0
   tom_host_ui: ^0.1.0

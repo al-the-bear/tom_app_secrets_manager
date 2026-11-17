@@ -186,6 +186,36 @@ void main() {
     expect(connection.locked, isFalse);
   });
 
+  test('the model: with this machine\'s approval link, the giver is told it '
+      'and the device settings hold it; a link on every interface is '
+      'refused before anything is sent', () async {
+    await prepare();
+    await connection.connect();
+    final m = TomSecretsFirstRunModel(
+      firstRun: firstRun,
+      connection: connection,
+    );
+    m
+      ..byPairing = true
+      ..host = 'newdesk';
+    final (w, code) = await window();
+    m
+      ..pairAddress = '127.0.0.1:${w.port}'
+      ..pairCode = code.text
+      ..pairLink = '0.0.0.0:47731';
+    await m.receive();
+    expect(m.error, contains('every interface'));
+    expect(m.receipt, isNull);
+
+    m.pairLink = ' 10.8.0.6:47731 ';
+    expect(m.settings.approvalLink, '10.8.0.6:47731');
+    await m.receive();
+    expect(m.error, isNull);
+    expect((await w.result).receiverKeys.linkAddress, '10.8.0.6:47731');
+    m.byPairing = false;
+    expect(m.settings.approvalLink, isNull, reason: 'only set up by pairing');
+  });
+
   test('the model: a wrong code is told; nothing is received', () async {
     await prepare();
     final m = TomSecretsFirstRunModel(
