@@ -1,9 +1,10 @@
 // Copyright (c) 2026 Peter Nicolai Alexis Kyaw
 // SPDX-License-Identifier: BSD-3-Clause
 
-/// `tom_secrets_ui`'s pairing discovery port over `bonsoir` (MIT; macOS and
-/// iOS through Network.framework's Bonjour, Windows through its DNS-SD API,
-/// Linux through Avahi over D-Bus): an open pairing window advertised as
+/// The pairing discovery port over `bonsoir` (MIT; macOS and iOS through
+/// Network.framework's Bonjour, Android through its NsdManager, Windows
+/// through its DNS-SD API, Linux through Avahi over D-Bus), shared by the
+/// desktop and the mobile app: an open pairing window advertised as
 /// `_tsm-pair._tcp` with its code's number and addresses in the TXT record,
 /// and the windows on the LAN browsed for a few seconds.
 library;
@@ -11,9 +12,9 @@ library;
 import 'dart:async';
 
 import 'package:bonsoir/bonsoir.dart';
-import 'package:tom_secrets_ui/tom_secrets_ui.dart';
+import 'pairing_discovery.dart';
 
-/// The pairing discovery of the desktop app.
+/// The pairing discovery of the desktop and the mobile app.
 final class TomSecretsBonsoirPairingDiscovery
     implements TomSecretsPairingDiscovery {
   /// The discovery.

@@ -12,8 +12,8 @@
 - Start at login on Windows and Linux is this package's own code (the `Run`
   key through `win32_registry` 3, an XDG autostart entry) in place of
   `launch_at_startup`, which holds `win32` 5.
-- `TomSecretsBonsoirPairingDiscovery`: the pairing discovery port over
-  `bonsoir` (mDNS, `_tsm-pair._tcp`).
+- `TomSecretsBonsoirPairingDiscovery` moved to `tom_secrets_ui`, which the
+  mobile app shares; this package no longer depends on `bonsoir`.
 - `tom_credentials_ui` and `tom_host_ui` from pub.dev in place of
   `tom_reusable_ui` by path; no `pubspec_overrides.yaml` any more.
 - The desktop implementations of `tom_secrets_ui`'s ports: the service host,

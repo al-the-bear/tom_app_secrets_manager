@@ -2,6 +2,10 @@
     <!-- The vaults are fetched from GitHub; the pairing reaches the desktop. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- The QR codes (pairing, one-time codes): asked when the camera opens;
+         a phone without a camera types the codes. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
         android:label="Tom Secrets"
         android:allowBackup="false"

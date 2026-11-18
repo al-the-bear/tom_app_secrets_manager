@@ -26,8 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID unlocks your vaults without the master password.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera reads the desktop app's pairing code and the QR code of a one-time code.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_tsm-pair._tcp</string>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Pairing reaches the Tom Secrets Manager desktop app on your network.</string>
+	<string>Pairing finds and reaches the Tom Secrets Manager desktop app on your network.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

@@ -275,6 +275,75 @@ void main() {
     await tester.pump(const Duration(seconds: 31));
   });
 
+  testWidgets('TOTP by scanning: the QR code\'s otpauth URI fills the field '
+      'and is saved; another QR code is refused', (tester) async {
+    final scanner = _FakeScanner();
+    host = TomSecretsHost(
+      service: FakeHost(service),
+      preferences: TomSecretsMemoryPreferences(),
+      clipboard: clipboard,
+      scanner: scanner,
+    );
+    await pumpApp(tester);
+    await unlock(tester);
+    await tester.tap(find.byKey(const Key('tsm-group-primary-Db')));
+    await tester.pump();
+    await tester.tap(find.text('Main'));
+    await tester.pump();
+    await scrollTo(tester, 'tsm-otp-scan');
+
+    scanner.next = 'tsm-pair:10.8.0.2:47900?code=17-apple-river';
+    await tester.tap(find.byKey(const Key('tsm-otp-scan')));
+    await tester.pump();
+    expect(scanner.titles, ['Scan the one-time code\'s QR code']);
+    expect(find.byKey(const Key('tsm-otp-error')), findsOneWidget);
+
+    const uri =
+        'otpauth://totp/Demo:demo-user?secret=JBSWY3DPEHPK3PXP&issuer=Demo';
+    scanner.next = uri;
+    await tester.tap(find.byKey(const Key('tsm-otp-scan')));
+    await tester.pump();
+    expect(find.byKey(const Key('tsm-otp-error')), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('tsm-field-otp')))
+          .controller!
+          .text,
+      uri,
+    );
+    await scrollTo(tester, 'tsm-save-entry');
+    await tester.tap(find.byKey(const Key('tsm-save-entry')));
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+    }
+    final saved = await tester.runAsync(
+      () => KdbxFormat().read(
+        service.store('primary').stored,
+        tomSecretsVaultCredentials(password: demoPassword),
+      ),
+    );
+    final main = saved!.body.rootGroup.getAllEntries().firstWhere(
+      (e) => e.label == 'Main' && e.parent?.name.get() == 'Db',
+    );
+    expect(
+      TomSecretsTotp.fromEntry(main)?.secret,
+      tomSecretsBase32Decode('JBSWY3DPEHPK3PXP'),
+    );
+  });
+
+  testWidgets('without a camera the editor offers no scan', (tester) async {
+    await pumpApp(tester);
+    await unlock(tester);
+    await tester.tap(find.byKey(const Key('tsm-group-primary-Db')));
+    await tester.pump();
+    await tester.tap(find.text('Main'));
+    await tester.pump();
+    expect(find.byKey(const Key('tsm-otp-scan')), findsNothing);
+  });
+
   testWidgets('a key another entry of the vault has is refused', (tester) async {
     await pumpApp(tester);
     await unlock(tester);
@@ -430,4 +499,15 @@ void main() {
       connection.dispose();
     });
   });
+}
+
+final class _FakeScanner implements TomSecretsCodeScanner {
+  String? next;
+  final List<String> titles = [];
+
+  @override
+  Future<String?> scan(BuildContext context, {required String title}) async {
+    titles.add(title);
+    return next;
+  }
 }

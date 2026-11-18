@@ -643,18 +643,21 @@ with their keys, and the two approve for each other.
 
 On the machine that is set up, open **Pairing** and choose **"Pair a
 device"**. The app opens a pairing window for five minutes and shows the
-code, the addresses it listens on and the time left; the code works once.
+code, the addresses it listens on, a QR code for a phone or tablet to scan
+(it holds the addresses and the code) and the time left; the code works
+once.
 On the same network it is announced, so the other machine needs the code
 only; over a VPN it needs the address too. The first time, macOS or Windows
 Defender Firewall asks whether the app may accept connections: allow it.
 
 On the other machine, use the First run wizard's "Pair with another desktop"
 ([Setting up by pairing](#setting-up-by-pairing)); a phone or tablet uses the
-mobile app's "Pair with a desktop" ([mobile user
+mobile app's "Pair with a desktop", scanning the QR code ([mobile user
 guide](../../tom_secrets_mobile/doc/user_guide.md#setting-the-phone-up)).
 Tick the primary for a phone: it is set up from it. A phone needs a GitHub
 token of its own; it approves nothing and gets no approval link. When it has
-proved the code, this machine shows "*name* proved the code. Choose what it gets:":
+proved the code, this machine shows "*name* proved the code. Choose what it
+gets:":
 
 - tick each vault it gets (the primary included or not), each with its key
   file and repository key;

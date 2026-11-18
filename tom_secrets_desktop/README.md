@@ -43,22 +43,57 @@ the app's, listed in [`tom_secrets_app`](../tom_secrets_app/README.md).
 
 ## The ports
 
-| Port | Implementation |
-| --- | --- |
-| Service host | `TomSecretsDesktopServiceHost`: the runtime directory of this user's service; starting it (`tomSecretsStartService`, the service executable from `TSM_SERVICE` or beside the app, `bootstrap.yaml` in the data directory); attaching with the admin key kept in the OS keychain under tsm's handle (`tsm.admin.<start>`, service `tom-secrets-manager`, through `tom_core_storage`'s `TomDesktopSecretStore`), so the app and tsm share it; claiming with the master password; a machine without `bootstrap.yaml` answers not set up, and its first run (`TomSecretsFirstRun`) writes into the data directory (`TSM_DATA_DIR`, else the platform's) and the OS keychain. |
-| Tray | `TomSecretsPluginTray` over `tray_manager`: the macOS menu bar (template images), the Windows notification area (ICO), the Linux tray (StatusNotifierItem through AppIndicator); the icons in `assets/tray/` (`tool/make_tray_icons.py` draws them). |
-| Window | `TomSecretsPluginWindow` over `window_manager`: closing hides the window (the app stays in the tray, DP-30), or minimises it where no tray is. |
-| Notifications | `TomSecretsPluginNotifier` over `flutter_local_notifications`. |
-| Start at login | `TomSecretsDesktopLoginItem`, this package's own code with `--hidden`: macOS through `SMAppService` (macOS 13+), Windows through the user's `Run` key, Linux through an XDG autostart entry (`~/.config/autostart/<app>.desktop`). |
-| OS unlock | `tomSecretsDesktopOsUnlock()`: `tom_biometric_storage`'s `TomBiometricGatedSecretStore` — Touch ID on macOS (gate-only in an ad-hoc signed build: the item in the login keychain behind LocalAuthentication; key-bound in the data-protection keychain once team-signed), Windows Hello (key-bound: the AES key exists only after Hello has signed); null on Linux. |
-| Screen lock, sleep | `TomSecretsDesktopSessionEvents`, this package's own code: macOS `com.apple.screenIsLocked` and NSWorkspace's will-sleep, Windows `WTS_SESSION_LOCK` and `PBT_APMSUSPEND`. |
-| Screen capture | `TomSecretsPlatformCaptureGuard`, this package's own code: `NSWindow.sharingType = .none` on macOS, `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` on Windows (10 2004+); Linux cannot exclude a window (DP-33). |
-| Pairing discovery | `TomSecretsBonsoirPairingDiscovery`: `bonsoir` (MIT) advertises the open pairing window as `_tsm-pair._tcp` and browses for one by the code's number; Bonjour on macOS (`NSBonjourServices` and `NSLocalNetworkUsageDescription` in the app's `Info.plist`), DNS-SD on Windows, Avahi over D-Bus on Linux (`avahi-daemon` must run). |
-| Clipboard | `tomSecretsDesktopClipboard()`: `tom_host_ui`'s `TomDesktopClipboardPort`, its macOS half (the concealed and transient pasteboard markers) in this package's code. |
-| Preferences, files | `TomSecretsFilePreferences` (`app-preferences.json` in the data directory, never synced), `TomSecretsDesktopFiles` (`file_selector`: key files, attachments, the First run's vault file and the copies of its new keys). |
-| Print path | `TomSecretsDesktopPrinter` over `printing`: the system print dialog for the emergency sheet (on Windows and Linux `printing` bundles PDFium, which its build downloads). |
-| Web pages | `tomSecretsDesktopOpenUrl` over `url_launcher`: GitHub's token pages in the system browser (`https` only). |
-| One instance | `TomSecretsSingleInstance`: a second launch brings the window to the front (`app.port` in the data directory). |
+- **Service host**: `TomSecretsDesktopServiceHost`: the runtime directory of
+  this user's service; starting it (`tomSecretsStartService`, the service
+  executable from `TSM_SERVICE` or beside the app, `bootstrap.yaml` in the data
+  directory); attaching with the admin key kept in the OS keychain under tsm's
+  handle (`tsm.admin.<start>`, service `tom-secrets-manager`, through
+  `tom_core_storage`'s `TomDesktopSecretStore`), so the app and tsm share it;
+  claiming with the master password; a machine without `bootstrap.yaml` answers
+  not set up, and its first run (`TomSecretsFirstRun`) writes into the data
+  directory (`TSM_DATA_DIR`, else the platform's) and the OS keychain.
+- **Tray**: `TomSecretsPluginTray` over `tray_manager`: the macOS menu bar
+  (template images), the Windows notification area (ICO), the Linux tray
+  (StatusNotifierItem through AppIndicator); the icons in `assets/tray/`
+  (`tool/make_tray_icons.py` draws them).
+- **Window**: `TomSecretsPluginWindow` over `window_manager`: closing hides the
+  window (the app stays in the tray, DP-30), or minimises it where no tray is.
+- **Notifications**: `TomSecretsPluginNotifier` over
+  `flutter_local_notifications`.
+- **Start at login**: `TomSecretsDesktopLoginItem`, this package's own code with
+  `--hidden`: macOS through `SMAppService` (macOS 13+), Windows through the
+  user's `Run` key, Linux through an XDG autostart entry
+  (`~/.config/autostart/<app>.desktop`).
+- **OS unlock**: `tomSecretsDesktopOsUnlock()`: `tom_biometric_storage`'s
+  `TomBiometricGatedSecretStore` — Touch ID on macOS (gate-only in an ad-hoc
+  signed build: the item in the login keychain behind LocalAuthentication;
+  key-bound in the data-protection keychain once team-signed), Windows Hello
+  (key-bound: the AES key exists only after Hello has signed); null on Linux.
+- **Screen lock, sleep**: `TomSecretsDesktopSessionEvents`, this package's own
+  code: macOS `com.apple.screenIsLocked` and NSWorkspace's will-sleep, Windows
+  `WTS_SESSION_LOCK` and `PBT_APMSUSPEND`.
+- **Screen capture**: `TomSecretsPlatformCaptureGuard`, this package's own code:
+  `NSWindow.sharingType = .none` on macOS,
+  `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` on Windows (10 2004+);
+  Linux cannot exclude a window (DP-33).
+- **Pairing discovery**: `tom_secrets_ui`'s `TomSecretsBonsoirPairingDiscovery`
+  (shared with the mobile app): Bonjour on macOS (`NSBonjourServices` and
+  `NSLocalNetworkUsageDescription` in the app's `Info.plist`), DNS-SD on
+  Windows, Avahi over D-Bus on Linux (`avahi-daemon` must run).
+- **Clipboard**: `tomSecretsDesktopClipboard()`: `tom_host_ui`'s
+  `TomDesktopClipboardPort`, its macOS half (the concealed and transient
+  pasteboard markers) in this package's code.
+- **Preferences, files**: `TomSecretsFilePreferences` (`app-preferences.json` in
+  the data directory, never synced), `TomSecretsDesktopFiles` (`file_selector`:
+  key files, attachments, the First run's vault file and the copies of its new
+  keys).
+- **Print path**: `TomSecretsDesktopPrinter` over `printing`: the system print
+  dialog for the emergency sheet (on Windows and Linux `printing` bundles
+  PDFium, which its build downloads).
+- **Web pages**: `tomSecretsDesktopOpenUrl` over `url_launcher`: GitHub's token
+  pages in the system browser (`https` only).
+- **One instance**: `TomSecretsSingleInstance`: a second launch brings the
+  window to the front (`app.port` in the data directory).
 
 The platform code is in `macos/` (Swift, the channels
 `tom_secrets_desktop/capture`, `/clipboard`, `/login`) and `windows/` (C++,
@@ -96,11 +131,11 @@ runApp(TomSecretsApp(host: host));
 
 ## Configuration
 
-| Variable | Effect |
-| --- | --- |
-| `TSM_DATA_DIR` | the data directory (`bootstrap.yaml`, `app-preferences.json`, `app.port`); default the platform's |
-| `TSM_RUNTIME_DIR` | the runtime directory where the running service is found |
-| `TSM_SERVICE` | the service executable to start, instead of the one beside the app |
+- `TSM_DATA_DIR`: the data directory (`bootstrap.yaml`, `app-preferences.json`,
+  `app.port`); default the platform's
+- `TSM_RUNTIME_DIR`: the runtime directory where the running service is found
+- `TSM_SERVICE`: the service executable to start, instead of the one beside the
+  app
 
 The admin key is kept in the OS keychain under the service name
 `tom-secrets-manager`, where `tsm` finds it too.

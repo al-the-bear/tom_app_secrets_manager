@@ -15,3 +15,7 @@
   stays in memory as a change not written and is written (merged) at the
   next refresh that reaches GitHub. The reinstall reminder two days before
   the iOS profile expires (DP-130). No iOS autofill (TD-4).
+- Pairing by the desktop's QR code (DP-56) with the camera
+  (`TomSecretsMobileCodeScanner` over `mobile_scanner`), or by the code
+  alone on the same network (the desktop's `_tsm-pair._tcp` announcement);
+  TOTP secrets scanned in the entry editor.

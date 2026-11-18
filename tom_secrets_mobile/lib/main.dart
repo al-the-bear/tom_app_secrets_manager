@@ -10,6 +10,8 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tom_biometric_storage/tom_gated_secret_store.dart';
 import 'package:tom_secrets_mobile/tom_secrets_mobile.dart';
+import 'package:tom_secrets_ui/tom_secrets_ui.dart'
+    show TomSecretsBonsoirPairingDiscovery;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +25,11 @@ Future<void> main() async {
       keychain: TomSecretsMobileKeychain(),
       platform: Platform.operatingSystem,
       gated: TomBiometricGatedSecretStore(),
-      biometricLabel: Platform.isIOS ? 'Face ID or Touch ID' : 'your fingerprint',
+      biometricLabel: Platform.isIOS
+          ? 'Face ID or Touch ID'
+          : 'your fingerprint',
+      scanner: const TomSecretsMobileCodeScanner(),
+      discovery: const TomSecretsBonsoirPairingDiscovery(),
     ),
   );
 }

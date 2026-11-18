@@ -47,12 +47,17 @@ The first screen is "Set up Tom Secrets Manager".
 **"Pair with a desktop"** (the usual way):
 
 1. On the desktop app, open **Pairing** and choose **"Pair a device"**. It
-   shows a code and the addresses it listens on.
-2. On the phone, type "This device's name" (e.g. `iphone`), the "Address"
-   (one of the desktop's, with its port, e.g. `10.8.0.2:47900`; the phone
-   must be on the same network or the VPN) and the "Code", then **"Pair"**.
-   iOS asks once whether the app may find devices on the local network:
-   allow it.
+   shows a code, the addresses it listens on and a QR code.
+2. On the phone, type "This device's name" (e.g. `iphone`), then either:
+   - **"Scan the desktop's code"** and point the camera at the QR code: it
+     fills the address (the one in the phone's network) and the code. The
+     camera is asked for the first time; or
+   - type the "Code". On the same network as the desktop that is enough:
+     the phone finds it. Over the VPN type the "Address" too (one of the
+     desktop's, with its port, e.g. `10.8.0.2:47900`).
+
+   Then **"Pair"**. iOS asks once whether the app may find devices on the
+   local network: allow it.
 3. On the desktop, tick the vaults the phone gets — the primary must be
    among them — and paste "A GitHub token for this device": a separate
    fine-grained token with read and write access to the vault repository,
@@ -92,6 +97,10 @@ in every vault by title, user name, URL and key.
 
 On a tablet the list and the entry stand side by side; on a wide tablet in
 landscape the desktop's tree, list and entry are shown.
+
+A one-time code (TOTP) is added in the entry's "One-time code" section:
+paste the `otpauth://` URI or the secret, or **"Scan a QR code"** the
+service shows when you switch on two-factor sign-in there.
 
 The copy buttons beside the user name, password and the one-time code put
 the value on the clipboard. It does not go to your other Apple devices, and

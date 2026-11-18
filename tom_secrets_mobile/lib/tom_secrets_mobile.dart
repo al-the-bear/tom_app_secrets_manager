@@ -13,6 +13,7 @@ export 'src/mobile_host.dart';
 export 'src/mobile_keychain.dart';
 export 'src/mobile_lifecycle.dart';
 export 'src/mobile_ports.dart';
+export 'src/mobile_scanner.dart';
 export 'src/mobile_settings_view.dart';
 export 'src/mobile_setup.dart';
 export 'src/mobile_shell.dart';

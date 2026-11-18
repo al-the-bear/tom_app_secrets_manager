@@ -33,6 +33,12 @@ dependencies:
   # The sync states the top bar's indicator presents.
   tom_core_sync: ^0.1.0
   pdf: ^3.13.1
+  # The pairing invitation's QR code on screen (DP-56).
+  qr: ^3.0.2
+  # mDNS for pairing on the LAN, both apps: advertising an open pairing
+  # window as _tsm-pair._tcp and finding one by its code's number (MIT;
+  # Avahi over D-Bus on Linux).
+  bonsoir: ^7.1.6
 
 dev_dependencies:
   flutter_test:

@@ -11,6 +11,8 @@ library;
 
 import 'dart:convert';
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tom_basics/utilities.dart'
@@ -48,7 +50,10 @@ void main() {
   late TomSecretsMemoryPreferences preferences;
   late _Clipboard clipboard;
   final paired = <String>[];
+  final codes = <String>[];
   DateTime? expiry;
+  late _Scanner scanner;
+  late _Discovery lan;
   late TomSecretsPairingPeerKeys giverKeys;
 
   setUpAll(() async {
@@ -68,7 +73,10 @@ void main() {
     preferences = TomSecretsMemoryPreferences();
     clipboard = _Clipboard();
     paired.clear();
+    codes.clear();
     expiry = null;
+    scanner = _Scanner();
+    lan = _Discovery();
   });
 
   Future<({String giver, TomSecretsPairingBundle bundle})> receive({
@@ -78,6 +86,7 @@ void main() {
     required String device,
   }) async {
     paired.add('$device@$address:$port');
+    codes.add(code.text);
     return (
       giver: 'mbp',
       bundle: TomSecretsPairingBundle(
@@ -108,6 +117,9 @@ void main() {
     httpClient: server.client,
     githubBaseUrl: FakeGitHubServer.baseUrl,
     receive: receive,
+    scanner: scanner,
+    discovery: lan,
+    ownAddresses: () async => [InternetAddress('10.8.0.6')],
   );
 
   Future<void> wait(WidgetTester tester, [int rounds = 4]) async {
@@ -321,4 +333,155 @@ void main() {
     expect(find.byKey(const Key('tsm-mobile-reinstall')), findsOneWidget);
     expect(find.textContaining('install it again from Xcode'), findsOneWidget);
   });
+
+  Future<void> nameDevice(WidgetTester tester) async {
+    await tester.pumpWidget(app());
+    await wait(tester, 1);
+    await tester.enterText(
+      find.byKey(const Key('tsm-mobile-setup-device')),
+      'iphone',
+    );
+  }
+
+  testWidgets('the desktop\'s QR code fills the address nearest the phone '
+      'and the code; Pair receives from there', (tester) async {
+    size(tester, const Size(400, 860));
+    await nameDevice(tester);
+    final code = TomSecretsPairingCode.generate();
+    scanner.next = TomSecretsPairingInvitation(
+      addresses: ['192.168.1.20', '10.8.0.2'],
+      port: 47900,
+      code: code,
+    ).text;
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-scan')));
+    await wait(tester, 2);
+    expect(scanner.titles, ['Scan the desktop\'s code']);
+    expect(find.byKey(const Key('tsm-mobile-setup-scanned')), findsOneWidget);
+    String field(String key) =>
+        tester.widget<TextField>(find.byKey(Key(key))).controller!.text;
+    expect(field('tsm-mobile-setup-address'), '10.8.0.2:47900');
+    expect(field('tsm-mobile-setup-code'), code.text);
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-pair')));
+    await wait(tester, 6);
+    expect(paired, ['iphone@10.8.0.2:47900']);
+    expect(codes, [code.text]);
+    expect(find.byKey(const Key('tsm-unlock-passphrase')), findsOneWidget);
+  });
+
+  testWidgets('another QR code is refused; closing the camera changes '
+      'nothing', (tester) async {
+    size(tester, const Size(400, 860));
+    await nameDevice(tester);
+    scanner.next = 'otpauth://totp/x?secret=JBSWY3DPEHPK3PXP';
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-scan')));
+    await wait(tester, 2);
+    expect(
+      find.textContaining('That is not a desktop\'s pairing code'),
+      findsOneWidget,
+    );
+    scanner.next = null;
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-scan')));
+    await wait(tester, 2);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('tsm-mobile-setup-address')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+    expect(paired, isEmpty);
+  });
+
+  testWidgets('on the same network the code alone finds the desktop by its '
+      'announcement', (tester) async {
+    size(tester, const Size(400, 860));
+    final code = TomSecretsPairingCode.generate();
+    lan.adverts.add(
+      TomSecretsPairingAdvert(
+        device: 'mbp',
+        number: code.number,
+        port: 47911,
+        addresses: const ['192.168.1.20', '10.8.0.2'],
+      ),
+    );
+    await nameDevice(tester);
+    await tester.enterText(
+      find.byKey(const Key('tsm-mobile-setup-code')),
+      code.text,
+    );
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-pair')));
+    await wait(tester, 6);
+    expect(paired, ['iphone@10.8.0.2:47911']);
+  });
+
+  testWidgets('no window with that number on the network: the address is '
+      'asked for', (tester) async {
+    size(tester, const Size(400, 860));
+    await nameDevice(tester);
+    await tester.enterText(
+      find.byKey(const Key('tsm-mobile-setup-code')),
+      TomSecretsPairingCode.generate().text,
+    );
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-pair')));
+    await wait(tester, 4);
+    expect(lan.browsed, 1);
+    expect(find.textContaining('No machine on this network'), findsOneWidget);
+    expect(paired, isEmpty);
+  });
+
+  testWidgets('the entry editor on the phone scans a TOTP code', (
+    tester,
+  ) async {
+    size(tester, const Size(400, 860));
+    await setUpByPairing(tester);
+    await unlock(tester);
+    await tester.tap(find.byKey(const Key('tsm-mobile-vault-team')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tsm-mobile-entry-Api')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('tsm-otp-scan')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    scanner.next = 'otpauth://totp/Demo?secret=JBSWY3DPEHPK3PXP';
+    await tester.tap(find.byKey(const Key('tsm-otp-scan')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('tsm-field-otp')))
+          .controller!
+          .text,
+      'otpauth://totp/Demo?secret=JBSWY3DPEHPK3PXP',
+    );
+  });
+}
+
+final class _Scanner implements TomSecretsCodeScanner {
+  String? next;
+  final List<String> titles = [];
+
+  @override
+  Future<String?> scan(BuildContext context, {required String title}) async {
+    titles.add(title);
+    return next;
+  }
+}
+
+final class _Discovery implements TomSecretsPairingDiscovery {
+  final List<TomSecretsPairingAdvert> adverts = [];
+  int browsed = 0;
+
+  @override
+  Future<TomSecretsPairingAdvertising> advertise(
+    TomSecretsPairingAdvert advert,
+  ) => throw UnsupportedError('a phone does not give');
+
+  @override
+  Future<List<TomSecretsPairingAdvert>> browse({
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    browsed++;
+    return List.of(adverts);
+  }
 }

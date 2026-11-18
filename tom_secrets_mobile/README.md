@@ -26,7 +26,10 @@ A phone runs no secrets service and keeps no copy of a vault:
   the app then keeps the primary's composite key under Face ID, Touch ID or
   the fingerprint (never the password), and the next unlocks ask only for
   that. Settings turn it off.
-- **Set up by pairing.** The desktop app's Pairing screen gives the phone the
+- **Set up by pairing.** The phone scans the desktop's QR code (or the code
+  is typed, found on the same network by the desktop's announcement, the
+  address typed over the VPN), and the desktop app's Pairing screen gives
+  the phone the
   vaults' locators, key files, repository keys and a GitHub token of its
   own; the master password never travels.
 - **System vaults are read-only** on a phone (BP-40).
@@ -66,6 +69,9 @@ switch on their own.
 - `lib/src/mobile_shell.dart`, `lib/src/mobile_settings_view.dart`: the
   shell and the settings.
 - `lib/src/mobile_lifecycle.dart`: the refresh and the background lock.
+- `lib/src/mobile_scanner.dart`: the camera's QR reader over
+  `mobile_scanner` (AVFoundation on iOS, Google's ML Kit model bundled on
+  Android; closed source, named in the repository's `THIRD_PARTY.md`).
 - `lib/src/mobile_keychain.dart`, `lib/src/mobile_ports.dart`: the keychain
   (`tom_biometric_storage` without a check), the preferences file, the
   clipboard channel, the profile expiry.
@@ -74,7 +80,8 @@ switch on their own.
   needs it), `FLAG_SECURE`, the sensitive clipboard, no backup; the release
   signing in `android/app/build.gradle.kts`.
 - `ios/Runner/`: the local-only expiring pasteboard, the privacy cover, the
-  profile expiry, the Face ID and local-network texts.
+  profile expiry, the Face ID, camera and local-network texts and the
+  Bonjour service type (`_tsm-pair._tcp`).
 
 ## Building and running
 
@@ -105,8 +112,10 @@ pairing, an edit written and another device's change merged, the system
 vault refused, the OS unlock's composite key, no network, a save kept while
 GitHub is out of reach and written (merged) when it is back, the phone and
 tablet layouts, the biometric unlock and its switch, the background lock,
-the clipboard timeout, the setup reset, the reinstall banner. Demo data
-only.
+the clipboard timeout, the setup reset, the reinstall banner, the
+desktop's QR code scanned (a fake scanner), the window found on the network
+by the code (a fake discovery), a TOTP secret scanned. Demo data only. The
+camera itself is checked on a device.
 
 ## Limits
 
@@ -114,7 +123,5 @@ only.
 - Only `github:` vaults (a `file:` vault on a desktop disk is not reachable).
 - The phone approves nothing and is no approval link's peer: it receives no
   trust material from the pairing.
-- The pairing is typed (address and code); the desktop's LAN announcement is
-  not looked for, and there is no QR code yet.
 - The GitHub App sign-in (device flow) is a desktop feature; the phone uses
   the token the pairing gave it.

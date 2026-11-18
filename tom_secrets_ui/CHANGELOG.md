@@ -2,6 +2,14 @@
 
 ## 0.1.0
 
+- Pairing by QR code (DP-56, DP-61): `TomSecretsPairingInvitation` (the
+  window's addresses, port and code as `tsm-pair:<address>,…:<port>?code=…`,
+  and the address nearest the scanning device), shown by the Pairing screen
+  as a QR code (`TomSecretsQrCode`, over `qr`); `tomSecretsFindPairingWindow`
+  (the window found on the LAN by the code's number, shared by the First run
+  wizard and the mobile app); `TomSecretsBonsoirPairingDiscovery` moved here
+  from `tom_secrets_desktop`. `TomSecretsCodeScanner` (`TomSecretsHost.scanner`):
+  the entry editor's "Scan a QR code" for a TOTP secret.
 - The hooks the mobile app fills (part-mobile): `TomSecretsHost.shell`
   (the unlocked screen, default the desktop's main shell),
   `systemVaultsReadOnly` (a system vault is read-only on this device, BP-40;

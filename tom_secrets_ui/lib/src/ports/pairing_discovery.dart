@@ -138,3 +138,51 @@ String tomSecretsPairingAddressFor(
   }
   return advert.addresses.first;
 }
+
+/// Where the window with the code number [number] is on the LAN, or why it
+/// is not found: browsed through [discovery], the address chosen near
+/// [own] (the receiving side's addresses).
+Future<TomSecretsPairingFind> tomSecretsFindPairingWindow(
+  TomSecretsPairingDiscovery discovery,
+  int number,
+  List<InternetAddress> own,
+) async {
+  final seen = await discovery.browse();
+  final advert = tomSecretsPairingAdvertFor(seen, number);
+  if (advert == null) {
+    return TomSecretsPairingFind._(
+      problem: seen.any((a) => a.number == number)
+          ? 'More than one machine on this network shows a code with '
+                '$number: type the address its Pairing screen shows.'
+          : 'No machine on this network shows a code with $number. Over '
+                'the VPN, or where the network blocks it, type the address '
+                'its Pairing screen shows.',
+    );
+  }
+  return TomSecretsPairingFind._(
+    address: tomSecretsPairingAddressFor(advert, own),
+    port: advert.port,
+  );
+}
+
+/// What [tomSecretsFindPairingWindow] found.
+final class TomSecretsPairingFind {
+  const TomSecretsPairingFind._({this.address, this.port, this.problem});
+
+  /// The address to connect to, or null when not found.
+  final String? address;
+
+  /// The window's port, or null when not found.
+  final int? port;
+
+  /// Why it was not found, for the user, or null.
+  final String? problem;
+
+  /// `address:port` as the address field takes it (IPv6 in brackets), or
+  /// null.
+  String? get typed {
+    final a = address;
+    if (a == null) return null;
+    return a.contains(':') ? '[$a]:$port' : '$a:$port';
+  }
+}

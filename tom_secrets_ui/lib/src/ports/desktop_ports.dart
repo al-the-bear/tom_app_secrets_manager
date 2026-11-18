@@ -245,6 +245,14 @@ final class TomSecretsNoCaptureGuard implements TomSecretsCaptureGuard {
   Future<bool> setExcluded(bool excluded) async => false;
 }
 
+/// The camera reading a QR code (part-mobile: the desktop's pairing code,
+/// a TOTP secret's code), on a host that has one.
+abstract interface class TomSecretsCodeScanner {
+  /// Shows the camera, titled [title], until a QR code is read: answers its
+  /// text, or null when the user closed it (or the camera was refused).
+  Future<String?> scan(BuildContext context, {required String title});
+}
+
 /// Everything the app's host provides.
 final class TomSecretsHost {
   /// A host; only [service] is required.
@@ -272,6 +280,7 @@ final class TomSecretsHost {
     this.systemVaultsReadOnly = false,
     this.shell,
     this.clipboardClearAfter,
+    this.scanner,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -358,6 +367,10 @@ final class TomSecretsHost {
   /// How long a copied value stays on the clipboard, asked at every copy (a
   /// setting the user may change); null: 30 seconds.
   final Duration Function()? clipboardClearAfter;
+
+  /// The camera's QR reader (the mobile app), or null: then a TOTP secret
+  /// is pasted only.
+  final TomSecretsCodeScanner? scanner;
 
   /// The screen shown once unlocked, in place of the desktop's main shell
   /// (the mobile app's adaptive shell), or null.

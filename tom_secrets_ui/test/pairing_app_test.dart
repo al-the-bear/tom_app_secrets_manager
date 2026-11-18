@@ -120,6 +120,14 @@ void main() {
     );
     expect(find.byKey(const Key('tsm-pair-countdown')), findsOneWidget);
     expect(find.textContaining('Windows Defender'), findsOneWidget);
+    // The QR code a phone scans holds the same addresses, port and code.
+    final qr = tester.widget<TomSecretsQrCode>(
+      find.byKey(const Key('tsm-pair-qr')),
+    );
+    final invitation = TomSecretsPairingInvitation.parse(qr.data);
+    expect(invitation.code.text, code.text);
+    expect(invitation.port, port);
+    expect(invitation.addresses, contains('127.0.0.1'));
     return (code, port);
   }
 

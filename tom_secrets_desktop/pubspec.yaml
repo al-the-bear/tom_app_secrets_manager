@@ -51,10 +51,6 @@ dependencies:
   file_selector: ^1.0.3
   printing: ^5.15.1
   url_launcher: ^6.3.3
-  # mDNS for pairing on the LAN: advertising an open pairing window as
-  # _tsm-pair._tcp and finding one by its code's number (MIT; Avahi over
-  # D-Bus on Linux).
-  bonsoir: ^7.1.6
 
 dev_dependencies:
   flutter_test:

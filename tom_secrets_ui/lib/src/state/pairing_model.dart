@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/pairing_discovery.dart';
+import 'pairing_invitation.dart';
 import 'service_connection.dart';
 
 /// Where a pairing stands.
@@ -129,6 +130,20 @@ class TomSecretsPairingModel extends ChangeNotifier {
 
   /// The port the window listens on, or null.
   int? get port => _window?.port;
+
+  /// The open window as its QR code tells it (DP-56), or null.
+  TomSecretsPairingInvitation? get invitation {
+    final window = _window;
+    final code = _code;
+    if (window == null || code == null || window.addresses.isEmpty) {
+      return null;
+    }
+    return TomSecretsPairingInvitation(
+      addresses: [for (final a in window.addresses) a.address],
+      port: window.port,
+      code: code,
+    );
+  }
 
   /// The time left before the window closes.
   Duration get remaining {

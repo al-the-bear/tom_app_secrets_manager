@@ -57,15 +57,23 @@ const Set<TomLicence> secretsAdmittedLicences = TomLicence.permissive;
 /// boundary test prints each on every run and turns red when one is no
 /// longer needed, so the list cannot outlive its reasons.
 const Map<String, Map<String, String>> secretsLicenceExceptions = {
+  'tom_secrets_ui': {'dbus': _dbusReason},
   'tom_secrets_desktop': {'dbus': _dbusReason},
   'tom_secrets_app': {'dbus': _dbusReason},
+  'tom_secrets_mobile': {'dbus': _dbusMobileReason},
 };
 
 const String _dbusReason =
-    'MPL-2.0 (file-level copyleft), linked only by flutter_local_notifications_linux '
-    'for Linux desktop notifications and bonsoir_linux for mDNS over Avahi; '
+    'MPL-2.0 (file-level copyleft), linked only on Linux, by '
+    'flutter_local_notifications_linux for desktop notifications and by '
+    'bonsoir_linux for mDNS over Avahi (tom_secrets_ui\'s pairing discovery); '
     'unmodified, stated in THIRD_PARTY.md '
     'with its source, so a BSD-3 binary may carry it (tsm_a23).';
+
+const String _dbusMobileReason =
+    'MPL-2.0 (file-level copyleft), in the closure through tom_secrets_ui\'s '
+    'bonsoir (bonsoir_linux, mDNS over Avahi) but never built into the iOS '
+    'or Android app; stated in THIRD_PARTY.md (tsm_b_mobile1).';
 
 /// The KDBX rule for the package [package] of the repository of role
 /// [repository] (`SecretsCiWorkspace.roleOf`), which declares

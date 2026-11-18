@@ -19,6 +19,7 @@ import '../ports/desktop_ports.dart';
 import '../state/pairing_model.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
+import '../widgets/qr_code.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 
@@ -194,6 +195,29 @@ class _PairingState extends State<TomSecretsPairingView> {
           'and connect to ${m.listening.join(' or ')}.',
           key: const Key('tsm-pair-addresses'),
         ),
+        if (m.invitation case final invitation?)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TomSecretsQrCode(
+                  key: const Key('tsm-pair-qr'),
+                  data: invitation.text,
+                  size: 180,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'A phone or tablet scans this code instead: its setup '
+                    'screen › "Scan the desktop\'s code". It holds the '
+                    'addresses and the code.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ),
         if (m.announced)
           Text(
             'Announced on this network: on the same network the other '

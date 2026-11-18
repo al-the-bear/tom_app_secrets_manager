@@ -8,12 +8,15 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:tom_basics/utilities.dart' show TomClipboardPort;
 import 'package:tom_core_storage/settings.dart'
     show TomGatedSecretStore, TomSecretStore;
+import 'package:tom_secrets_core/tom_secrets_core.dart'
+    show tomSecretsPairingAddresses;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 import 'mobile_engine.dart';
@@ -41,6 +44,9 @@ class TomSecretsMobileApp extends StatefulWidget {
     this.githubBaseUrl,
     this.receive,
     this.profileExpiry = tomSecretsMobileProfileExpiry,
+    this.scanner,
+    this.discovery,
+    this.ownAddresses,
   });
 
   /// The device preferences.
@@ -72,6 +78,16 @@ class TomSecretsMobileApp extends StatefulWidget {
 
   /// When this build stops starting (iOS), read once at the start.
   final Future<DateTime?> Function() profileExpiry;
+
+  /// The camera's QR reader (the desktop's pairing code, TOTP secrets), or
+  /// null.
+  final TomSecretsCodeScanner? scanner;
+
+  /// mDNS finding the desktop's open pairing window, or null.
+  final TomSecretsPairingDiscovery? discovery;
+
+  /// This device's addresses; default its network interfaces'.
+  final Future<List<InternetAddress>> Function()? ownAddresses;
 
   @override
   State<TomSecretsMobileApp> createState() => _MobileAppState();
@@ -132,6 +148,9 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
         home: TomSecretsMobileSetupScreen(
           setup: _setup,
           receive: widget.receive ?? tomSecretsMobileReceive,
+          scanner: widget.scanner,
+          discovery: widget.discovery,
+          ownAddresses: widget.ownAddresses ?? tomSecretsPairingAddresses,
           onSetUp: () => setState(_open),
         ),
       );
@@ -151,6 +170,7 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
               TomSecretsMobileClipboardPort(clearAfter: clearAfter),
           clipboardClearAfter: clearAfter,
           systemVaultsReadOnly: true,
+          scanner: widget.scanner,
           osUnlock: gated == null
               ? null
               : TomSecretsOsUnlockHost(

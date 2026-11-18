@@ -2,12 +2,22 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /// The first screen of a phone that is not set up: pairing with a desktop
-/// app (its Pairing screen shows the address, over the LAN or the VPN, and
-/// the one-time code), or the primary set up by hand.
+/// app — its Pairing screen's QR code scanned (DP-56), or its code typed
+/// with the address (over the VPN) or without it (on the same network the
+/// open window is found by its announcement) — or the primary set up by
+/// hand.
 library;
+
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
+import 'package:tom_secrets_ui/tom_secrets_ui.dart'
+    show
+        TomSecretsCodeScanner,
+        TomSecretsPairingDiscovery,
+        TomSecretsPairingInvitation,
+        tomSecretsFindPairingWindow;
 
 import 'mobile_setup.dart';
 
@@ -49,6 +59,9 @@ class TomSecretsMobileSetupScreen extends StatefulWidget {
     required this.setup,
     required this.onSetUp,
     this.receive = tomSecretsMobileReceive,
+    this.scanner,
+    this.discovery,
+    this.ownAddresses = tomSecretsPairingAddresses,
   });
 
   /// Where the setup is kept.
@@ -59,6 +72,15 @@ class TomSecretsMobileSetupScreen extends StatefulWidget {
 
   /// How a pairing is received.
   final TomSecretsMobileReceive receive;
+
+  /// The camera reading the desktop's QR code, or null (typed only).
+  final TomSecretsCodeScanner? scanner;
+
+  /// mDNS finding the desktop's open window by the code's number, or null.
+  final TomSecretsPairingDiscovery? discovery;
+
+  /// This device's addresses (the one nearest the desktop's is taken).
+  final Future<List<InternetAddress>> Function() ownAddresses;
 
   @override
   State<TomSecretsMobileSetupScreen> createState() => _SetupState();
@@ -74,6 +96,7 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
   bool _busy = false;
   String? _error;
   String? _received;
+  bool _scanned = false;
 
   @override
   void dispose() {
@@ -89,10 +112,8 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
       setState(() => _error = 'Name this device (e.g. "iphone").');
       return;
     }
-    final (String, int) at;
     final TomSecretsPairingCode code;
     try {
-      at = tomSecretsParsePairingAddress(_address.text);
       code = TomSecretsPairingCode.parse(_code.text);
     } on FormatException catch (e) {
       setState(() => _error = e.message);
@@ -103,6 +124,28 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
       _error = null;
     });
     try {
+      // No address typed: on the same network the open window is found by
+      // the code's number (the desktop announces it).
+      final discovery = widget.discovery;
+      if (_address.text.trim().isEmpty && discovery != null) {
+        final found = await tomSecretsFindPairingWindow(
+          discovery,
+          code.number,
+          await widget.ownAddresses(),
+        );
+        if (found.problem != null) {
+          setState(() => _error = found.problem);
+          return;
+        }
+        _address.text = found.typed!;
+      }
+      final (String, int) at;
+      try {
+        at = tomSecretsParsePairingAddress(_address.text);
+      } on FormatException catch (e) {
+        setState(() => _error = e.message);
+        return;
+      }
       final receipt = await widget.receive(
         address: at.$1,
         port: at.$2,
@@ -132,6 +175,30 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
       setState(() => _error = 'The pairing failed: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// The desktop's QR code read by the camera: its address (the one
+  /// nearest this device) and code fill the fields.
+  Future<void> _scan(TomSecretsCodeScanner scanner) async {
+    final text = await scanner.scan(context, title: 'Scan the desktop\'s code');
+    if (text == null || !mounted) return;
+    try {
+      final invitation = TomSecretsPairingInvitation.parse(text);
+      final address = invitation.addressFor(await widget.ownAddresses());
+      if (!mounted) return;
+      setState(() {
+        _address.text = address.contains(':')
+            ? '[$address]:${invitation.port}'
+            : '$address:${invitation.port}';
+        _code.text = invitation.code.text;
+        _error = null;
+        _scanned = true;
+      });
+    } on FormatException catch (e) {
+      setState(
+        () => _error = 'That is not a desktop\'s pairing code: ${e.message}.',
+      );
     }
   }
 
@@ -193,15 +260,32 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
             if (!_byHand) ...[
               const SizedBox(height: 8),
               const Text(
-                'On the desktop: Pairing › "Pair another device". Type the '
-                'address and the code it shows (the same LAN, or the VPN).',
+                'On the desktop: Pairing › "Pair a device". Scan the QR code '
+                'it shows, or type its code: on the same network the code '
+                'alone finds it; over the VPN type the address too.',
               ),
+              if (widget.scanner case final scanner?) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  key: const Key('tsm-mobile-setup-scan'),
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Scan the desktop\'s code'),
+                  onPressed: _busy ? null : () => _scan(scanner),
+                ),
+                if (_scanned)
+                  const Text(
+                    'Read from the desktop\'s code: tap Pair.',
+                    key: Key('tsm-mobile-setup-scanned'),
+                  ),
+              ],
               TextField(
                 key: const Key('tsm-mobile-setup-address'),
                 controller: _address,
                 keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  labelText: 'Address',
+                decoration: InputDecoration(
+                  labelText: widget.discovery == null
+                      ? 'Address'
+                      : 'Address (not needed on the same network)',
                   hintText: '10.8.0.2:47900',
                 ),
               ),

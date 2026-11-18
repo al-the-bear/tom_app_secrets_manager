@@ -196,24 +196,17 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
       fail('Type the other machine\'s address as its Pairing screen shows it.');
       return null;
     }
-    final seen = await d.browse();
-    final advert = tomSecretsPairingAdvertFor(seen, number);
-    if (advert == null) {
-      fail(
-        seen.any((a) => a.number == number)
-            ? 'More than one machine on this network shows a code with '
-                  '$number: type the address its Pairing screen shows.'
-            : 'No machine on this network shows a code with $number. Over '
-                  'the VPN, or where the network blocks it, type the '
-                  'address its Pairing screen shows.',
-      );
+    final found = await tomSecretsFindPairingWindow(
+      d,
+      number,
+      await _ownAddresses(),
+    );
+    if (found.problem != null) {
+      fail(found.problem!);
       return null;
     }
-    final address = tomSecretsPairingAddressFor(advert, await _ownAddresses());
-    pairAddress = address.contains(':')
-        ? '[$address]:${advert.port}'
-        : '$address:${advert.port}';
-    return (address, advert.port);
+    pairAddress = found.typed!;
+    return (found.address!, found.port!);
   }
 
   bool _create = true;

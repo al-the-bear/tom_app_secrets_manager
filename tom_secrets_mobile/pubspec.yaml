@@ -36,6 +36,10 @@ dependencies:
   http: ^1.2.0
   path_provider: ^2.1.5
   provider: ^6.1.5
+  # The camera's QR reader (the desktop's pairing code, TOTP secrets):
+  # AVFoundation on iOS, Google's ML Kit model bundled on Android
+  # (tsm_b_mobile1, decision (a); THIRD_PARTY.md).
+  mobile_scanner: ^7.5.0
 
 dev_dependencies:
   flutter_test:

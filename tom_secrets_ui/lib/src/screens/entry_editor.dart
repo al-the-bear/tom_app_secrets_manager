@@ -211,6 +211,29 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
     return TomSecretsTotp(secret);
   }
 
+  /// The TOTP secret read from its QR code (an `otpauth://` URI, as the
+  /// service's setup page shows it): put in the field to save.
+  Future<void> _scanOtp(TomSecretsCodeScanner scanner) async {
+    final text = await scanner.scan(
+      context,
+      title: 'Scan the one-time code\'s QR code',
+    );
+    if (text == null || !mounted) return;
+    String? problem;
+    try {
+      if (_parseOtp(text) == null) problem = 'the QR code is empty';
+    } on FormatException catch (e) {
+      problem = 'the QR code holds ${e.message}';
+    }
+    setState(() {
+      _otpError = problem;
+      if (problem == null) {
+        _otp.text = text.trim();
+        _dirty = true;
+      }
+    });
+  }
+
   Future<void> _save() async {
     final keyError = _checkKey(_key.text.trim());
     TomSecretsTotp? totp;
@@ -811,6 +834,16 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
               clipboard: widget.clipboard,
               readOnly: readOnly != null,
             ),
+            if (host.scanner != null && readOnly == null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('tsm-otp-scan'),
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Scan a QR code'),
+                  onPressed: () => unawaited(_scanOtp(host.scanner!)),
+                ),
+              ),
             if (_otpError != null)
               Text(
                 _otpError!,
