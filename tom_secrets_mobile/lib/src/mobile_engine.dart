@@ -1,0 +1,657 @@
+// Copyright (c) 2026 Peter Nicolai Alexis Kyaw
+// SPDX-License-Identifier: BSD-3-Clause
+
+/// The mobile app's engine in place of the secrets service (part-mobile: "no
+/// secrets service, so the app is its own writer"): the admin requests the
+/// screens send, answered in the app's own process over the service's vault
+/// set and GitHub opener without an offline cache, so every vault is fetched
+/// from GitHub into memory at the unlock and nothing of it is written to the
+/// device.
+///
+/// Answered: `subscribe`, `status`, `unlock` (the master password and the key
+/// file; the key files and repository keys pairing delivered come from the
+/// keychain), the OS unlock's bundle (the composite key), `unlockStore`,
+/// `lock`, `vaultKeys`, `vaultFile`, `save` (written to GitHub at once,
+/// merged with a branch another device moved; a system vault refused,
+/// BP-40), `reload`, `settings.get` / `settings.set` (the app's refresh
+/// interval). Everything a phone does not do (approvals, grants, pairing as
+/// the giving side, imports, the ssh-agent) answers `unsupported`.
+library;
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+import 'package:tom_core_storage/settings.dart' show TomSecretStore;
+import 'package:tom_core_storage/tom_core_storage.dart'
+    show TomKeyRequiredException;
+import 'package:tom_crypto/protected_value.dart';
+import 'package:tom_secrets_core/tom_secrets_core.dart';
+import 'package:tom_secrets_service/tom_secrets_service.dart';
+import 'package:tom_secrets_ui/tom_secrets_ui.dart'
+    show TomSecretsAdminChannel, TomSecretsPreferences;
+
+/// The device preference keys of the mobile app.
+abstract final class TomSecretsMobileKeys {
+  /// The primary vault's locator, set by the setup (pairing).
+  static const primary = 'mobile.primary';
+
+  /// This device's name (`host` dimension, commit messages).
+  static const device = 'mobile.device';
+
+  /// The refresh interval, minutes (default 15, at least 5; DP-55).
+  static const refreshMinutes = 'mobile.refreshMinutes';
+
+  /// The lock timeout in the background, seconds (default 30; 0 locks at
+  /// once).
+  static const lockSeconds = 'mobile.lockSeconds';
+
+  /// The clipboard timeout, seconds (default 30).
+  static const clipboardSeconds = 'mobile.clipboardSeconds';
+
+  /// `off` when the user turned the biometric unlock off (default on).
+  static const biometric = 'mobile.biometric';
+}
+
+/// The mobile app's settings (device preferences, never synced).
+final class TomSecretsMobileSettings {
+  /// The settings of [preferences].
+  TomSecretsMobileSettings(this.preferences);
+
+  /// The device's preferences.
+  final TomSecretsPreferences preferences;
+
+  /// The default refresh interval (DP-55).
+  static const defaultRefreshMinutes = 15;
+
+  /// The shortest refresh interval: three vaults every 5 minutes on three
+  /// devices stay far below GitHub's shared rate limit (part-mobile).
+  static const minRefreshMinutes = 5;
+
+  int _int(String key, int fallback) =>
+      int.tryParse(preferences.read(key) ?? '') ?? fallback;
+
+  /// Minutes between refreshes while the app is open and unlocked.
+  int get refreshMinutes {
+    final v = _int(TomSecretsMobileKeys.refreshMinutes, defaultRefreshMinutes);
+    return v < minRefreshMinutes ? minRefreshMinutes : v;
+  }
+
+  /// Seconds in the background before the app locks (0: at once).
+  int get lockSeconds => _int(TomSecretsMobileKeys.lockSeconds, 30);
+
+  /// Seconds a copied value stays on the clipboard.
+  int get clipboardSeconds => _int(TomSecretsMobileKeys.clipboardSeconds, 30);
+
+  /// Whether an unlock with the master password keeps it under the
+  /// biometric check (Face ID, Touch ID, the fingerprint), so the next
+  /// unlocks need no password (part-mobile; default on).
+  bool get biometric =>
+      preferences.read(TomSecretsMobileKeys.biometric) != 'off';
+
+  /// Turns the biometric unlock on or off.
+  Future<void> setBiometric(bool on) =>
+      preferences.write(TomSecretsMobileKeys.biometric, on ? null : 'off');
+
+  /// Sets [key] to [value].
+  Future<void> set(String key, int value) => preferences.write(key, '$value');
+}
+
+/// The admin channel of the mobile app, answered in-process.
+final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
+  /// The engine of the primary at [primaryLocator] for [device] on
+  /// [platform] (`ios`, `android`), the keys and tokens in [keychain], its
+  /// settings in [preferences]; GitHub at [githubBaseUrl] through
+  /// [httpClient] (tests).
+  TomSecretsMobileEngine({
+    required this.primaryLocator,
+    required this.device,
+    required this.platform,
+    required this.keychain,
+    required TomSecretsPreferences preferences,
+    http.Client? httpClient,
+    String githubBaseUrl = 'https://api.github.com',
+    DateTime Function()? clock,
+  }) : settings = TomSecretsMobileSettings(preferences),
+       _clock = clock ?? DateTime.now {
+    _vaults = TomSecretsVaultSet(
+      opener: TomSecretsGitHubOpener(
+        device: device,
+        tokens: _token,
+        // No offline cache: a phone keeps no copy of a vault (part-mobile).
+        cacheDirectory: null,
+        baseUrl: githubBaseUrl,
+        httpClient: httpClient,
+        clock: _clock,
+      ),
+      clock: _clock,
+    );
+  }
+
+  /// The primary vault's locator.
+  final String primaryLocator;
+
+  /// This device's name.
+  final String device;
+
+  /// `ios` or `android`.
+  final String platform;
+
+  /// The keychain: key files, repository keys, GitHub tokens.
+  final TomSecretStore keychain;
+
+  /// The app's settings.
+  final TomSecretsMobileSettings settings;
+
+  final DateTime Function() _clock;
+  late final TomSecretsVaultSet _vaults;
+  final StreamController<Map<String, Object?>> _events =
+      StreamController.broadcast();
+
+  /// The engine's start, in place of the service's (the OS unlock keeps it
+  /// with a session item).
+  final int start = DateTime.now().millisecondsSinceEpoch;
+
+  bool _closed = false;
+  Future<void> _queue = Future<void>.value();
+
+  /// The saves GitHub could not take (no network, a refused token), by
+  /// store: held in memory, shown as a change not written, written at the
+  /// next refresh that reaches GitHub, dropped by the lock (part-mobile,
+  /// Saving).
+  final Map<String, _Pending> _pending = {};
+
+  /// [status] as the screens see it: a store with a save waiting has one
+  /// change not written.
+  Map<String, Object?> _stateOf(TomSecretsStoreStatus status) => {
+    ...status.toJson(),
+    if (_pending.containsKey(status.name)) 'notPushed': 1,
+  };
+
+  /// Whether the vaults are closed.
+  bool get isLocked => !_vaults.isUnlocked;
+
+  Future<T> _serial<T>(Future<T> Function() body) {
+    final result = _queue.then((_) => body());
+    _queue = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
+  void _emit(Map<String, Object?> event) {
+    if (!_events.isClosed) _events.add(event);
+  }
+
+  @override
+  Stream<Map<String, Object?>> get events => _events.stream;
+
+  /// The token for [vault]'s repository: the keychain's
+  /// (`tsm.github-token.<owner>:<repository>`, delivered by pairing or
+  /// entered), else the one the primary lists for it.
+  Future<String?> _token(TomSecretsGitHubLocator vault) async {
+    final kept = await keychain.read(
+      tomSecretsGitHubTokenHandle(vault.owner, vault.repository),
+    );
+    if (kept != null && kept.isNotEmpty) return kept;
+    for (final v in _vaults.listed) {
+      final listed = v.githubToken;
+      if (listed == null) continue;
+      try {
+        final l = TomSecretsVaultLocator.parse(v.locator);
+        if (l is TomSecretsGitHubLocator &&
+            l.repositorySlug == vault.repositorySlug) {
+          return listed;
+        }
+      } on TomSecretsLocatorException {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  static Never _refuse(
+    String kind,
+    String message, [
+    Map<String, Object?> details = const {},
+  ]) => throw TomSecretsAdminException(kind, message, details: details);
+
+  void _unlocked() {
+    if (isLocked) _refuse('locked', 'unlock first');
+  }
+
+  @override
+  Future<void> unlockWithBundle(String vault, TomSecretsUnlockBundle bundle) =>
+      _serial(() async {
+        final keys = TomSecretsHeldKeys.ofBundle(bundle);
+        if (!isLocked) {
+          keys.dispose();
+          return;
+        }
+        await _unlock(keys, bundle: true);
+      });
+
+  /// The keys of [given] completed from the keychain for the primary: its
+  /// key file (unless a composite key holds it) and a `.tsmx` primary's
+  /// repository key.
+  Future<TomSecretsHeldKeys> _withKeychainKeys(TomSecretsHeldKeys given) async {
+    final locator = TomSecretsVaultLocator.parse(primaryLocator);
+    final keyFile = given.keyFile == null && given.compositeKey == null
+        ? await keychain.read(locator.keyFileHandle)
+        : null;
+    final outerKey =
+        given.outerKey == null &&
+            locator.fileName.endsWith(tomSecretsOuterSuffix)
+        ? await keychain.read(locator.repositoryKeyHandle)
+        : null;
+    if (keyFile == null && outerKey == null) return given;
+    return TomSecretsHeldKeys(
+      password: given.password,
+      keyFile: keyFile == null
+          ? given.keyFile
+          : TomProtectedValue.fromBytes(base64.decode(keyFile)),
+      outerKey: outerKey == null
+          ? given.outerKey
+          : TomProtectedValue.of(outerKey),
+      compositeKey: given.compositeKey,
+    );
+  }
+
+  Future<void> _unlock(TomSecretsHeldKeys given, {bool bundle = false}) async {
+    final keys = await _withKeychainKeys(given);
+    try {
+      await _vaults.openPrimary(primaryLocator, keys);
+      await _vaults.openStores(
+        machine: TomSecretsMachine(host: device, platform: platform),
+      );
+    } on KdbxInvalidKeyException {
+      _vaults.lock();
+      _refuse(
+        'denied',
+        bundle
+            ? 'the kept unlock no longer opens the vault'
+            : 'the master password is wrong',
+        {'reason': 'bad_password'},
+      );
+    } on TomKeyRequiredException {
+      _vaults.lock();
+      _refuse('denied', 'the repository key is missing', {
+        'reason': 'bad_password',
+      });
+    } on TomSecretsAdminException {
+      _vaults.lock();
+      rethrow;
+    } on Object catch (e) {
+      _vaults.lock();
+      final failure = tomSecretsFetchFailureOf(e);
+      if (failure != null) {
+        final kind = TomSecretsStoreState.offlineFor(failure).wireName;
+        _refuse(
+          kind,
+          kind == 'token_expired'
+              ? 'GitHub refused the token'
+              : 'no connection: the vaults are only on GitHub',
+          {
+            'stores': [primaryLocator],
+          },
+        );
+      }
+      rethrow;
+    }
+    _emit({'op': 'unlocked'});
+  }
+
+  /// Closes every vault: nothing of them stays on the device.
+  void lock() {
+    _pending.clear();
+    if (isLocked) return;
+    _vaults.lock();
+    _emit({'op': 'locked'});
+  }
+
+  /// Fetches every vault whose branch moved (one conditional request per
+  /// vault) and tells the screens; [force] fetches all (pull to refresh).
+  Future<TomSecretsRefreshReport> refresh({bool force = false}) => _serial(
+    () async {
+      if (isLocked) return const TomSecretsRefreshReport();
+      _vaults.refreshInterval = Duration(minutes: settings.refreshMinutes);
+      final waiting = _pending.keys.toSet();
+      final report = await _vaults.refresh(force: force || waiting.isNotEmpty);
+      final written = await _writePending();
+      final changed = {...report.reopened, ...written};
+      for (final s in report.states) {
+        _emit({'op': 'store_state', ..._stateOf(s)});
+      }
+      for (final name in waiting.difference(
+        report.states.map((s) => s.name).toSet(),
+      )) {
+        if (_vaults.statusOf(name) case final s?) {
+          _emit({'op': 'store_state', ..._stateOf(s)});
+        }
+      }
+      for (final name in changed) {
+        _emit({
+          'op': 'store_changed',
+          'store': name,
+          'revision': ?_vaults.statusOf(name)?.revision,
+        });
+      }
+      return report;
+    },
+  );
+
+  static bool _unreachable(String kind) =>
+      kind == TomSecretsStoreState.offline.wireName ||
+      kind == TomSecretsStoreState.tokenExpired.wireName;
+
+  /// Writes every save that waits, once its store reaches GitHub again; a
+  /// file another device moved meanwhile (the refresh brought it in) is
+  /// merged three-way first, the copy the save was made on as the base.
+  /// Answers the stores written.
+  Future<List<String>> _writePending() async {
+    final written = <String>[];
+    for (final MapEntry(key: name, value: waiting)
+        in _pending.entries.toList()) {
+      final status = _vaults.statusOf(name);
+      if (status == null) {
+        _pending.remove(name);
+        continue;
+      }
+      if (_unreachable(status.state.wireName)) continue;
+      var pending = waiting;
+      try {
+        if (status.revision != pending.base) {
+          pending = await _mergedOnto(name, pending);
+          _pending[name] = pending;
+        }
+        await _vaults.save(name, pending.stored, baseRevision: pending.base);
+        _pending.remove(name);
+        written.add(name);
+      } on TomSecretsSaveException catch (e) {
+        // Not reachable after all: it waits for the next refresh. Refused
+        // for another reason (the vault re-keyed elsewhere, ...): the change
+        // cannot be written and is dropped.
+        if (!_unreachable(e.kind)) _pending.remove(name);
+      }
+    }
+    return written;
+  }
+
+  /// [pending] merged onto the copy of [name] held now.
+  Future<_Pending> _mergedOnto(String name, _Pending pending) async {
+    final held = await _vaults.vaultFile(name);
+    final keys =
+        ((_plain(_vaults.vaultKeys(stores: [name])) as List).single
+                as Map)['keys']!
+            as Map;
+    final keyFile = keys['keyFile'];
+    final compositeKey = keys['compositeKey'];
+    final credentials = tomSecretsVaultCredentials(
+      password: keys['password'] as String?,
+      keyFile: keyFile is String ? base64.decode(keyFile) : null,
+      compositeKey: compositeKey is String ? base64.decode(compositeKey) : null,
+    );
+    final outerKey = keys['outerKey'] as String?;
+    final opener = _vaults.opener;
+    Future<KdbxFile> open(Uint8List stored) =>
+        opener.decode(held.location, stored, credentials, outerKey: outerKey);
+    final ours = await open(pending.stored);
+    tomSecretsMergeVaults(
+      base: await open(pending.baseStored),
+      ours: ours,
+      theirs: await open(held.stored),
+      location: held.location,
+    );
+    return _Pending(
+      await opener.encode(held.location, ours, outerKey: outerKey),
+      held.revision,
+      held.stored,
+    );
+  }
+
+  /// Whether [store] is a system vault (its metadata, as the vault set
+  /// serves it): read-only on a phone (BP-40).
+  bool _isSystem(String store) {
+    final served = _vaults.resolver?.stores
+        .where((s) => s.name == store)
+        .firstOrNull;
+    return served?.metadata.kind == TomSecretsVaultKind.system;
+  }
+
+  Map<String, Object?> _statusReport() => {
+    'op': 'statusReport',
+    'locked': isLocked,
+    'lockMode': 'b',
+    'protocol': 1,
+    'service': {'version': 'mobile', 'start': start},
+    'stores': [for (final s in _vaults.status) _stateOf(s)],
+    'expiring': const <Object?>[],
+    'admins': 1,
+    'hardening': const <String, Object?>{},
+  };
+
+  static Object? _plain(Object? value) => switch (value) {
+    TomSecretsSecretSlot slot => slot.read(
+      (bytes) => slot.isBase64 ? base64.encode(bytes) : utf8.decode(bytes),
+    ),
+    Map m => {for (final e in m.entries) e.key as String: _plain(e.value)},
+    List l => [for (final x in l) _plain(x)],
+    _ => value,
+  };
+
+  @override
+  Future<Map<String, Object?>> request(
+    String op, [
+    Map<String, Object?> args = const {},
+  ]) async {
+    if (_closed) _refuse('closed', 'the engine is closed');
+    switch (op) {
+      case 'subscribe':
+        return {'op': 'ok'};
+      case 'status':
+        return _statusReport();
+      case 'unlock':
+        final password = args['password'];
+        final keyFile = args['keyFile'];
+        if (password is! String) {
+          _refuse('malformed', 'unlock needs a password', {
+            'reason': 'password',
+          });
+        }
+        await _serial(() async {
+          if (!isLocked) return;
+          await _unlock(
+            TomSecretsHeldKeys.of(
+              password: password,
+              keyFile: keyFile is String ? base64.decode(keyFile) : null,
+            ),
+          );
+        });
+        return {'op': 'ok'};
+      case 'unlockStore':
+        _unlocked();
+        final store = args['store'];
+        final password = args['password'];
+        if (store is! String || password is! String) {
+          _refuse('malformed', 'store and password', {'reason': 'store'});
+        }
+        final keyFile = args['keyFile'];
+        try {
+          await _serial(
+            () => _vaults.unlockStore(
+              store,
+              TomSecretsHeldKeys.of(
+                password: password,
+                keyFile: keyFile is String ? base64.decode(keyFile) : null,
+              ),
+              machine: TomSecretsMachine(host: device, platform: platform),
+            ),
+          );
+        } on KdbxInvalidKeyException {
+          _refuse('denied', 'the password is wrong', {
+            'reason': 'bad_password',
+          });
+        } on StateError {
+          _refuse('not_found', 'no store $store');
+        }
+        return {'op': 'ok'};
+      case 'lock':
+        lock();
+        return {'op': 'ok'};
+      case 'vaultKeys':
+        _unlocked();
+        final stores = (args['stores'] as List?)?.cast<String>();
+        try {
+          return {
+            'op': 'vaultKeySet',
+            'stores': _plain(_vaults.vaultKeys(stores: stores)),
+            'unserved': [
+              for (final v in _vaults.unserved)
+                {'store': v.name, 'location': v.locator},
+            ],
+          };
+        } on StateError catch (e) {
+          _refuse('not_found', 'no open store ${e.message}', {
+            'store': e.message,
+          });
+        }
+      case 'vaultFile':
+        _unlocked();
+        final store = args['store'];
+        if (store is! String) {
+          _refuse('malformed', 'vaultFile names a store', {'reason': 'store'});
+        }
+        try {
+          final file = await _vaults.vaultFile(store);
+          // A save that waits is what the screens edit on.
+          final waiting = _pending[store];
+          return {
+            'op': 'vaultFileData',
+            'store': store,
+            'location': file.location,
+            'revision': waiting != null ? waiting.base : file.revision,
+            if (!file.served) 'served': false,
+            'bytes': base64.encode(waiting?.stored ?? file.stored),
+          };
+        } on StateError catch (e) {
+          _refuse('not_found', 'no store ${e.message}');
+        } on KdbxInvalidKeyException {
+          _refuse('needs_unlock', 'the listed keys do not open $store', {
+            'store': store,
+          });
+        }
+      case 'save':
+        _unlocked();
+        final store = args['store'];
+        final bytes = args['bytes'];
+        final base = args['baseRevision'];
+        if (store is! String || bytes is! String) {
+          _refuse('malformed', 'save carries store and bytes', {
+            'reason': 'save',
+          });
+        }
+        if (args['keys'] != null) {
+          _refuse('unsupported', 'keys are rotated in the desktop app');
+        }
+        if (_isSystem(store)) {
+          _refuse('denied', 'a system vault is read-only on a phone', {
+            'reason': 'read_only',
+          });
+        }
+        final stored = base64.decode(bytes);
+        try {
+          final result = await _serial(
+            () => _vaults.save(store, stored, baseRevision: base as String?),
+          );
+          _pending.remove(store);
+          _emit({
+            'op': 'store_changed',
+            'store': store,
+            'revision': result.revision,
+          });
+          return {'op': 'ok'};
+        } on TomSecretsSaveException catch (e) {
+          if (!_unreachable(e.kind)) {
+            _refuse(e.kind, e.message, {'reason': ?e.reason});
+          }
+          // GitHub is out of reach: the change waits in memory (a later
+          // save of the same vault replaces it; it carries the first).
+          final waiting = _pending[store];
+          _pending[store] = waiting != null
+              ? _Pending(stored, waiting.base, waiting.baseStored)
+              : _Pending(
+                  stored,
+                  base as String?,
+                  (await _vaults.vaultFile(store)).stored,
+                );
+          return {'op': 'ok', 'pending': true};
+        } finally {
+          for (final s in _vaults.status) {
+            if (s.name == store) _emit({'op': 'store_state', ..._stateOf(s)});
+          }
+        }
+      case 'reload':
+        _unlocked();
+        await refresh(force: true);
+        final offline = [
+          for (final s in _vaults.status)
+            if (s.state == TomSecretsStoreState.offline ||
+                s.state == TomSecretsStoreState.tokenExpired)
+              s.name,
+        ];
+        if (offline.isNotEmpty) {
+          _refuse('offline', 'GitHub could not be reached', {
+            'stores': offline,
+          });
+        }
+        return {'op': 'ok'};
+      case 'settings.get':
+        return {
+          'op': 'deviceSettings',
+          'device': {
+            'refreshMinutes': settings.refreshMinutes,
+            'serviceLock': {
+              'mode': 'idle',
+              'idleSeconds': settings.lockSeconds,
+            },
+          },
+          'cliApprovals': false,
+          'stores': [for (final s in _vaults.status) s.name],
+        };
+      case 'settings.set':
+        final device = (args['device'] as Map?)?.cast<String, Object?>();
+        final minutes = device?['refreshMinutes'];
+        if (minutes is int) {
+          await settings.set(
+            TomSecretsMobileKeys.refreshMinutes,
+            minutes < TomSecretsMobileSettings.minRefreshMinutes
+                ? TomSecretsMobileSettings.minRefreshMinutes
+                : minutes,
+          );
+        }
+        return {'op': 'deviceSettingsWritten', 'nextUnlock': const <String>[]};
+      default:
+        _refuse('unsupported', '$op is not done on a phone');
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    _closed = true;
+    lock();
+    await _events.close();
+  }
+
+  /// Test support: the bytes held for [store].
+  Future<Uint8List> heldBytesForTest(String store) async =>
+      (await _vaults.vaultFile(store)).stored;
+}
+
+/// A save GitHub has not taken yet: the file, the revision it was made on and
+/// that revision's file (the merge base when the vault moved meanwhile).
+final class _Pending {
+  _Pending(this.stored, this.base, this.baseStored);
+
+  final Uint8List stored;
+  final String? base;
+  final Uint8List baseStored;
+}

@@ -200,7 +200,10 @@ class TomSecretsOsUnlock extends ChangeNotifier {
     if (!offered || store == null || connection.locked) return;
     await dropStale();
     final current = items[store];
-    final lifetime = remember || current?.lifetime == TomGatedLifetime.saved
+    final lifetime =
+        remember ||
+            (host?.keepSaved?.call() ?? false) ||
+            current?.lifetime == TomGatedLifetime.saved
         ? TomGatedLifetime.saved
         : connection.lockMode == 'c'
         ? TomGatedLifetime.session

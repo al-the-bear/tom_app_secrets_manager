@@ -4,6 +4,7 @@ library;
 
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:tom_build_base/ci.dart';
 import 'package:tom_secrets_build/tom_secrets_build.dart';
@@ -26,6 +27,7 @@ void main() {
         'standalone',
       ]);
       expect(resolve(['release']), ['release'], reason: 'only when named');
+      expect(resolve(['mobile']), ['mobile'], reason: 'only when named');
       expect(resolve(['licences', 'analyze', 'licences']), [
         'licences',
         'analyze',
@@ -69,6 +71,44 @@ void main() {
       expect(secretsCiNoSuiteReason(root.path), 'no *_test.dart under test/');
       secretsWriteFile(root, 'test/a/b_test.dart', 'void main() {}');
       expect(secretsCiNoSuiteReason(root.path), isNull);
+    });
+  });
+
+  group('the mobile release', () {
+    test('a release is never signed without a complete signing file', () {
+      final dir = secretsScratchDir('mobile_signing');
+      expect(secretsAndroidSigningProblem(null), contains('is not set'));
+      expect(
+        secretsAndroidSigningProblem(p.join(dir.path, 'none.properties')),
+        contains('no file'),
+      );
+      final partial = File(
+        p.join(dir.path, 'partial.properties'),
+      )..writeAsStringSync('storeFile=/k.jks\n# keyAlias=x\nstorePassword=s\n');
+      expect(
+        secretsAndroidSigningProblem(partial.path),
+        endsWith('lacks keyAlias, keyPassword'),
+      );
+      final full = File(p.join(dir.path, 'full.properties'))
+        ..writeAsStringSync(
+          'storeFile=/k.jks\nstorePassword=s\nkeyAlias=a\nkeyPassword=k\n',
+        );
+      expect(secretsAndroidSigningProblem(full.path), isNull);
+    });
+
+    test('the APK is named by version and listed in SHA256SUMS', () {
+      final dir = secretsScratchDir('mobile_sums');
+      File(
+        p.join(dir.path, secretsMobileApkName('0.1.0')),
+      ).writeAsStringSync('apk');
+      File(p.join(dir.path, 'x.zip')).writeAsStringSync('zip');
+      File(p.join(dir.path, 'notes.txt')).writeAsStringSync('no');
+      secretsWriteSums(dir.path);
+      final sums = File(p.join(dir.path, 'SHA256SUMS')).readAsLinesSync();
+      expect(sums.map((l) => l.split('  ').last), [
+        'tom_secrets_mobile-0.1.0-android.apk',
+        'x.zip',
+      ]);
     });
   });
 }

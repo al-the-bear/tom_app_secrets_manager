@@ -537,8 +537,8 @@ Open **Import** (also offered at the end of the First run wizard).
    outside every repository: it holds every password in plaintext.
 2. **"Where each vault goes"**: for each vault of the export, the vault and
    the "Group (a/b/c)" it goes to; "Into a new vault…" creates the vault
-   first (see [A new vault](#a-new-vault)). Tick "Import the archived items too (into
-   an Archive group)" if you want them.
+   first (see [A new vault](#a-new-vault)). Tick "Import the archived items
+   too (into an Archive group)" if you want them.
 3. **"Preview"** shows what would happen without writing anything: the
    counts (added, updated, imported as conflicts, unchanged, left out, not
    imported), "What the format loses", the "Largest attachments" and every
@@ -649,8 +649,12 @@ only; over a VPN it needs the address too. The first time, macOS or Windows
 Defender Firewall asks whether the app may accept connections: allow it.
 
 On the other machine, use the First run wizard's "Pair with another desktop"
-([Setting up by pairing](#setting-up-by-pairing)). When it has proved the
-code, this machine shows "*name* proved the code. Choose what it gets:":
+([Setting up by pairing](#setting-up-by-pairing)); a phone or tablet uses the
+mobile app's "Pair with a desktop" ([mobile user
+guide](../../tom_secrets_mobile/doc/user_guide.md#setting-the-phone-up)).
+Tick the primary for a phone: it is set up from it. A phone needs a GitHub
+token of its own; it approves nothing and gets no approval link. When it has
+proved the code, this machine shows "*name* proved the code. Choose what it gets:":
 
 - tick each vault it gets (the primary included or not), each with its key
   file and repository key;

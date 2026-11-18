@@ -273,13 +273,25 @@ Future<void> _archive(String dir, String name, String archive) async {
 }
 
 /// Writes `SHA256SUMS` over the archives in [outDir] (`sha256sum` format).
+/// The Android app's file in a release (DP-204: installed directly).
+String secretsMobileApkName(String version) =>
+    'tom_secrets_mobile-$version-android.apk';
+
+/// Writes `SHA256SUMS` over every archive and APK in [outDir].
+void secretsWriteSums(String outDir) => _writeSums(outDir);
+
 void _writeSums(String outDir) {
   final lines = <String>[];
   final archives =
       Directory(outDir)
           .listSync()
           .whereType<File>()
-          .where((f) => f.path.endsWith('.zip') || f.path.endsWith('.tar.gz'))
+          .where(
+            (f) =>
+                f.path.endsWith('.zip') ||
+                f.path.endsWith('.tar.gz') ||
+                f.path.endsWith('.apk'),
+          )
           .toList()
         ..sort((a, b) => a.path.compareTo(b.path));
   for (final f in archives) {

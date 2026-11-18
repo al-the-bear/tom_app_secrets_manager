@@ -2,6 +2,12 @@
 
 ## 0.1.0
 
+- The hooks the mobile app fills (part-mobile): `TomSecretsHost.shell`
+  (the unlocked screen, default the desktop's main shell),
+  `systemVaultsReadOnly` (a system vault is read-only on this device, BP-40;
+  `TomSecretsSession.readOnlyReason` says so), `clipboardClearAfter` (the
+  clipboard timeout), and `TomSecretsOsUnlockHost.keepSaved` (while it
+  answers true, every unlock with the master password keeps a saved item).
 - The OS unlock (part-os-unlock, DP-68–DP-71, DP-181): `TomSecretsOsUnlock`
   keeps the primary's composite key and repository key in the host's gated
   store (`TomSecretsHost.osUnlock`) — a session item in lock mode (c), a

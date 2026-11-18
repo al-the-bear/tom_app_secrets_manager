@@ -1,0 +1,171 @@
+// Copyright (c) 2026 Peter Nicolai Alexis Kyaw
+// SPDX-License-Identifier: BSD-3-Clause
+
+/// The mobile app's composition: the setup screen until the phone is set
+/// up, then the shared app (`tom_secrets_ui`) over the in-app engine, with
+/// the mobile shell, system vaults read-only, the biometric unlock and the
+/// mobile clipboard.
+library;
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:tom_basics/utilities.dart' show TomClipboardPort;
+import 'package:tom_core_storage/settings.dart'
+    show TomGatedSecretStore, TomSecretStore;
+import 'package:tom_secrets_ui/tom_secrets_ui.dart';
+
+import 'mobile_engine.dart';
+import 'mobile_host.dart';
+import 'mobile_lifecycle.dart';
+import 'mobile_ports.dart';
+import 'mobile_setup.dart';
+import 'mobile_shell.dart';
+import 'setup_screen.dart';
+
+/// The app.
+class TomSecretsMobileApp extends StatefulWidget {
+  /// The app over [preferences], [keychain] and [gated] (the biometric
+  /// store) on [platform] (`ios`, `android`); [clipboard], [httpClient],
+  /// [githubBaseUrl] and [receive] are for tests.
+  const TomSecretsMobileApp({
+    super.key,
+    required this.preferences,
+    required this.keychain,
+    required this.platform,
+    this.gated,
+    this.biometricLabel = 'biometrics',
+    this.clipboard,
+    this.httpClient,
+    this.githubBaseUrl,
+    this.receive,
+    this.profileExpiry = tomSecretsMobileProfileExpiry,
+  });
+
+  /// The device preferences.
+  final TomSecretsPreferences preferences;
+
+  /// The keychain of the keys and tokens.
+  final TomSecretStore keychain;
+
+  /// `ios` or `android`.
+  final String platform;
+
+  /// The biometric store of the OS unlock, or null without one.
+  final TomGatedSecretStore? gated;
+
+  /// The biometric check's name (Face ID, Touch ID, fingerprint).
+  final String biometricLabel;
+
+  /// The clipboard port; default the app's channel.
+  final TomClipboardPort? clipboard;
+
+  /// The HTTP client to GitHub.
+  final http.Client? httpClient;
+
+  /// GitHub's API base URL.
+  final String? githubBaseUrl;
+
+  /// How a pairing is received.
+  final TomSecretsMobileReceive? receive;
+
+  /// When this build stops starting (iOS), read once at the start.
+  final Future<DateTime?> Function() profileExpiry;
+
+  @override
+  State<TomSecretsMobileApp> createState() => _MobileAppState();
+}
+
+class _MobileAppState extends State<TomSecretsMobileApp> {
+  late final TomSecretsMobileSetup _setup = TomSecretsMobileSetup(
+    preferences: widget.preferences,
+    keychain: widget.keychain,
+  );
+  TomSecretsMobileEngine? _engine;
+  DateTime? _expiry;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_setup.isSetUp) _open();
+    unawaited(
+      widget.profileExpiry().then((at) {
+        if (mounted && at != null) setState(() => _expiry = at);
+      }),
+    );
+  }
+
+  void _open() {
+    _engine = TomSecretsMobileEngine(
+      primaryLocator: _setup.primaryLocator!,
+      device: _setup.device!,
+      platform: widget.platform,
+      keychain: widget.keychain,
+      preferences: widget.preferences,
+      httpClient: widget.httpClient,
+      githubBaseUrl: widget.githubBaseUrl ?? 'https://api.github.com',
+    );
+  }
+
+  Future<void> _forget() async {
+    final engine = _engine;
+    setState(() => _engine = null);
+    await engine?.close();
+    await _setup.reset();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_engine?.close());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final engine = _engine;
+    if (engine == null) {
+      return MaterialApp(
+        title: 'Tom Secrets',
+        theme: tomSecretsTheme(Brightness.light),
+        darkTheme: tomSecretsTheme(Brightness.dark),
+        home: TomSecretsMobileSetupScreen(
+          setup: _setup,
+          receive: widget.receive ?? tomSecretsMobileReceive,
+          onSetUp: () => setState(_open),
+        ),
+      );
+    }
+    final settings = engine.settings;
+    Duration clearAfter() => Duration(seconds: settings.clipboardSeconds);
+    final gated = widget.gated;
+    return TomSecretsMobileLifecycle(
+      key: ObjectKey(engine),
+      engine: engine,
+      child: TomSecretsApp(
+        host: TomSecretsHost(
+          service: TomSecretsMobileServiceHost(engine),
+          preferences: widget.preferences,
+          clipboard:
+              widget.clipboard ??
+              TomSecretsMobileClipboardPort(clearAfter: clearAfter),
+          clipboardClearAfter: clearAfter,
+          systemVaultsReadOnly: true,
+          osUnlock: gated == null
+              ? null
+              : TomSecretsOsUnlockHost(
+                  store: gated,
+                  label: widget.biometricLabel,
+                  keepSaved: () => settings.biometric,
+                ),
+          shell: (context, clipboard) => TomSecretsMobileShell(
+            engine: engine,
+            clipboard: clipboard,
+            onForget: _forget,
+            profileExpiry: _expiry,
+          ),
+        ),
+      ),
+    );
+  }
+}

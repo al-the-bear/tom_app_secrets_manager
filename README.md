@@ -15,11 +15,15 @@ libraries and `tsm`).
 Each release is a release of the `al-the-bear/tom_binaries` repository on
 GitHub (tag `tom_secrets_manager-v<version>`), one archive per platform:
 
-| Platform | Archive | Install |
-| --- | --- | --- |
-| macOS (Apple silicon) | `tom_secrets_manager-<version>-macos-arm64.zip` | unzip, move `Tom Secrets Manager.app` to `/Applications`; the app is ad-hoc signed, so open it the first time with Control-click › Open |
-| Windows (x64) | `tom_secrets_manager-<version>-windows-x64.zip` | unzip into a folder of your choice and start `tom_secrets_app.exe` |
-| Linux (x64) | `tom_secrets_manager-<version>-linux-x64.tar.gz` | unpack into a folder of your choice and start `tom_secrets_app`; the tray needs an AppIndicator (StatusNotifierItem) host, the keychain a Secret Service (GNOME Keyring or KWallet) |
+- **macOS (Apple silicon)**, `tom_secrets_manager-<version>-macos-arm64.zip`:
+  unzip, move `Tom Secrets Manager.app` to `/Applications`; the app is
+  ad-hoc signed, so open it the first time with Control-click › Open.
+- **Windows (x64)**, `tom_secrets_manager-<version>-windows-x64.zip`: unzip
+  into a folder of your choice and start `tom_secrets_app.exe`.
+- **Linux (x64)**, `tom_secrets_manager-<version>-linux-x64.tar.gz`: unpack
+  into a folder of your choice and start `tom_secrets_app`; the tray needs an
+  AppIndicator (StatusNotifierItem) host, the keychain a Secret Service
+  (GNOME Keyring or KWallet).
 
 `SHA256SUMS` beside the archives holds their checksums
 (`shasum -a 256 -c SHA256SUMS` on macOS, `sha256sum -c SHA256SUMS` on
@@ -40,6 +44,11 @@ A server without a desktop takes `tom_secrets_tsm-<version>-<platform>` of
 the same release: `tsm` and the service alone (`bin/`, `lib/`), started and
 unlocked with `tsm start` and `tsm unlock`.
 
+Phones and tablets install the mobile app without an app store: the Android
+APK from `tom_binaries`, the iOS build from Xcode under a free personal team.
+A phone keeps no copy of a vault and is set up by pairing with the desktop
+app ([mobile user guide](tom_secrets_mobile/doc/user_guide.md)).
+
 ## First run
 
 On a machine that is not set up yet, the app opens its First run wizard:
@@ -54,8 +63,8 @@ On a machine that is not set up yet, the app opens its First run wizard:
 
 A second machine instead takes "Pair with another desktop": the first
 machine's Pairing screen shows a code, and it hands over the vaults and keys
-you choose. The wizard then starts the service and unlocks it. The setup is kept in the app's
-data directory (`~/Library/Application Support/TomSecretsManager`,
+you choose. The wizard then starts the service and unlocks it. The setup is
+kept in the app's data directory (`~/Library/Application Support/TomSecretsManager`,
 `%LOCALAPPDATA%\TomSecretsManager`, `~/.local/share/tom-secrets-manager`;
 `TSM_DATA_DIR` names another).
 
@@ -102,7 +111,7 @@ path inside one repository, so a clone of this repository builds on its own;
 | [`tom_secrets_app`](tom_secrets_app/) | A | the desktop composition root (macOS, Linux, Windows), shipping `tsm` and the service inside its distribution |
 | [`tom_secrets_build`](tom_secrets_build/) | A | the manual CI (analyze, test, the licence-boundary and standalone checks over every package of the three repositories) and the release build, started by a person (`ci.sh`, `ci.ps1`, `ci.cmd`) |
 | [`tom_secrets_testkit`](tom_secrets_testkit/) | A | test fixtures more than one package needs (the scratch folder so far); a dev dependency only |
-| `tom_secrets_mobile` | B | the mobile composition root (iOS/iPadOS, Android) |
+| [`tom_secrets_mobile`](tom_secrets_mobile/) | B | the mobile app (iOS/iPadOS, Android): the vaults fetched from GitHub into memory, set up by pairing, unlocked with biometrics, system vaults read-only; [user guide](tom_secrets_mobile/doc/user_guide.md) |
 | `tom_secrets_browser` | B | the WebExtension and its native-messaging host |
 | `tom_secrets_relay` | C | the optional relay server |
 

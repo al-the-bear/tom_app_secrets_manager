@@ -42,9 +42,11 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
   late final TomSecretsSession _session = TomSecretsSession(
     _connection,
     widget.host.preferences,
+    systemVaultsReadOnly: widget.host.systemVaultsReadOnly,
   );
   late final TomProtectedClipboard _clipboard = TomProtectedClipboard(
     port: widget.host.clipboard,
+    clearAfter: widget.host.clipboardClearAfter,
   );
   late final TomSecretsOsUnlock _osUnlock = TomSecretsOsUnlock(
     connection: _connection,
@@ -105,7 +107,8 @@ class _Gate extends StatelessWidget {
       TomSecretsConnectionPhase.attached =>
         c.locked
             ? TomSecretsUnlockScreen(keyFiles: keyFiles)
-            : TomSecretsMainShell(clipboard: clipboard),
+            : (context.read<TomSecretsHost>().shell?.call(context, clipboard) ??
+                  TomSecretsMainShell(clipboard: clipboard)),
       TomSecretsConnectionPhase.claimNeeded => TomSecretsClaimScreen(
         keyFiles: keyFiles,
       ),

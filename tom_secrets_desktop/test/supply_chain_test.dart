@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Peter Nicolai Alexis Kyaw
 // SPDX-License-Identifier: BSD-3-Clause
 
-/// The OS unlock's gated store is `tom_biometric_storage`, the workspace's
-/// fork of `biometric_storage` published on pub.dev (fork record:
-/// `_ai/quests/opensource/references.opensource.md`), taken by version — and
+/// The OS unlock's gated store is `tom_biometric_storage`, the fork of
+/// `biometric_storage` published on pub.dev (its repository:
+/// github.com/al-the-bear/tom_biometric_storage), taken by version — and
 /// nothing redirects it, and upstream `biometric_storage` is not in the
 /// graph beside it (two plugins of the same native classes).
 library;

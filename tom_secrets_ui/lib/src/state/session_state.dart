@@ -186,7 +186,11 @@ final class TomSecretsVaultFailure {
 class TomSecretsSession extends ChangeNotifier {
   /// A session over [connection], keeping its view switches in
   /// [preferences].
-  TomSecretsSession(this.connection, this.preferences) {
+  TomSecretsSession(
+    this.connection,
+    this.preferences, {
+    this.systemVaultsReadOnly = false,
+  }) {
     _listView = preferences.read(TomSecretsPreferenceKeys.view) == 'list';
     _vaultAware =
         preferences.read(TomSecretsPreferenceKeys.vaults) != 'uniform';
@@ -199,6 +203,10 @@ class TomSecretsSession extends ChangeNotifier {
 
   /// The device's preferences.
   final TomSecretsPreferences preferences;
+
+  /// Whether system vaults are read-only on this device (mobile, BP-40):
+  /// shown with their keys and overlays, never edited.
+  final bool systemVaultsReadOnly;
 
   late final StreamSubscription<Map<String, Object?>> _events;
   final Map<String, TomSecretsOpenVault> _vaults = {};
@@ -1176,9 +1184,23 @@ class TomSecretsSession extends ChangeNotifier {
   /// Whether [store] cannot be saved now (served from its offline copy, so
   /// a save is refused until the store is reachable), with why.
   String? readOnlyReason(String store) {
+    if (systemVaultsReadOnly) {
+      final file = _vaultOf(store)?.file;
+      if (file != null && _isSystem(file)) {
+        return 'read-only on this device: a system vault';
+      }
+    }
     final state = connection.stores[store];
     if (state == null || !state.isOffline) return null;
     return 'read-only: ${state.offlineReason}';
+  }
+
+  static bool _isSystem(KdbxFile file) {
+    try {
+      return TomSecretsMetadata.read(file).kind == TomSecretsVaultKind.system;
+    } on Object {
+      return false;
+    }
   }
 
   /// The entries the list view shows: the search, then its filters.

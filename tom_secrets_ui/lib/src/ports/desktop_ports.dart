@@ -11,8 +11,9 @@ library;
 import 'dart:io' show InternetAddress;
 import 'dart:typed_data';
 
-import 'package:flutter/widgets.dart' show BuildContext;
-import 'package:tom_basics/utilities.dart' show TomClipboardPort;
+import 'package:flutter/widgets.dart' show BuildContext, Widget;
+import 'package:tom_basics/utilities.dart'
+    show TomClipboardPort, TomProtectedClipboard;
 import 'package:tom_core_storage/settings.dart' show TomGatedSecretStore;
 import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFilePicker;
@@ -127,14 +128,25 @@ abstract interface class TomSecretsSessionEvents {
 /// bundle is kept in, and how the platform's check is named.
 final class TomSecretsOsUnlockHost {
   /// The OS unlock over [store], its check named [label] ("Touch ID",
-  /// "Windows Hello").
-  const TomSecretsOsUnlockHost({required this.store, required this.label});
+  /// "Windows Hello"); while [keepSaved] answers true, every unlock with
+  /// the master password keeps a saved item (mobile: the first unlock types
+  /// the password, the next ones use biometrics, part-mobile; the user's
+  /// switch turns it off).
+  const TomSecretsOsUnlockHost({
+    required this.store,
+    required this.label,
+    this.keepSaved,
+  });
 
   /// The gated store.
   final TomGatedSecretStore store;
 
   /// The check's name, for the buttons and the settings.
   final String label;
+
+  /// Whether an unlock with the password keeps a saved item now; null:
+  /// never (the desktop's "Remember the master password" decides).
+  final bool Function()? keepSaved;
 }
 
 /// Keeping the window out of screenshots and screen sharing (DP-33).
@@ -257,6 +269,9 @@ final class TomSecretsHost {
     this.integrationPaths,
     this.osUnlock,
     this.sessionEvents,
+    this.systemVaultsReadOnly = false,
+    this.shell,
+    this.clipboardClearAfter,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -336,4 +351,16 @@ final class TomSecretsHost {
 
   /// The desktop session's screen lock and sleep, or null.
   final TomSecretsSessionEvents? sessionEvents;
+
+  /// Whether system vaults are read-only on this host (mobile, BP-40).
+  final bool systemVaultsReadOnly;
+
+  /// How long a copied value stays on the clipboard, asked at every copy (a
+  /// setting the user may change); null: 30 seconds.
+  final Duration Function()? clipboardClearAfter;
+
+  /// The screen shown once unlocked, in place of the desktop's main shell
+  /// (the mobile app's adaptive shell), or null.
+  final Widget Function(BuildContext context, TomProtectedClipboard clipboard)?
+  shell;
 }

@@ -62,16 +62,33 @@ Log and step names are paths relative to the folder that holds all three.
 
 ## Stages
 
-| Stage | What it does |
-| --- | --- |
-| `:analyze` | `pub get` and `analyze` (infos fatal for Dart packages) in every package; `npm ci` and `npm run build` (`tsc` with the package's strict settings) in every npm package |
-| `:test` | every package's suite (without the tags `licence-boundary`, `integration` and `standalone`), one full log per package; a package without `*_test.dart` is reported skipped; `npm ci` and `npm test` in every npm package |
-| `:integration` | the integration suites against the real service (test tag `integration`, left out of `:test`): `tsm`'s builds the service as a binary (`dart build cli`), starts it through `tsm start` on demo vaults in a scratch data directory, and drives it with `tsm` and the Dart client |
-| `:licences` | `pub get` in every package, `npm ci --omit=dev` in every npm package that links anything, then the licence-boundary check (`test/licence_boundary_test.dart`, tag `licence-boundary`); every non-Dart dependency manifest (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`, `pyproject.toml`, `setup.py`) is red until a closure check reads it, except a `go.mod` that requires nothing (its closure is the Go standard library, BSD-3) and a `package.json` with its `package-lock.json` (the npm closure check below) |
-| `:conformance` | the client conformance suite of `tom_secrets_clients` (`conformance/tool/conformance.py all`): the reference table current, the coverage gate, every runner against every case table; a runner without its toolchain is red here (Python 3 with `jsonschema` needed) |
-| `:standalone` | the standalone check (`test/standalone_test.dart`, tag `standalone`), below |
-| `:all` | the stages above, in that order |
-| `:release` | not part of `:all`: the release for the platform it runs on, below |
+- `:analyze`: `pub get` and `analyze` (infos fatal for Dart packages) in every
+  package; `npm ci` and `npm run build` (`tsc` with the package's strict
+  settings) in every npm package.
+- `:test`: every package's suite (without the tags `licence-boundary`,
+  `integration` and `standalone`), one full log per package; a package without
+  `*_test.dart` is reported skipped; `npm ci` and `npm test` in every npm
+  package.
+- `:integration`: the integration suites against the real service (test tag
+  `integration`, left out of `:test`): `tsm`'s builds the service as a binary
+  (`dart build cli`), starts it through `tsm start` on demo vaults in a scratch
+  data directory, and drives it with `tsm` and the Dart client.
+- `:licences`: `pub get` in every package, `npm ci --omit=dev` in every npm
+  package that links anything, then the licence-boundary check
+  (`test/licence_boundary_test.dart`, tag `licence-boundary`); every non-Dart
+  dependency manifest (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`,
+  `pyproject.toml`, `setup.py`) is red until a closure check reads it, except a
+  `go.mod` that requires nothing (its closure is the Go standard library, BSD-3)
+  and a `package.json` with its `package-lock.json` (the npm closure check
+  below).
+- `:conformance`: the client conformance suite of `tom_secrets_clients`
+  (`conformance/tool/conformance.py all`): the reference table current, the
+  coverage gate, every runner against every case table; a runner without its
+  toolchain is red here (Python 3 with `jsonschema` needed).
+- `:standalone`: the standalone check (`test/standalone_test.dart`), below.
+- `:all`: the stages above, in that order.
+- `:release`: not part of `:all`: the release for this platform, below.
+- `:mobile`: not part of `:all`: the mobile app's Android release, below.
 
 The packages are found, never listed: every directory with a `pubspec.yaml`
 (an npm package: a `package.json` with its `package-lock.json`) up to four
@@ -151,14 +168,29 @@ The version is `tom_secrets_app`'s. The archives are published as a release of
 the `al-the-bear/tom_binaries` repository on GitHub, tag
 `tom_secrets_manager-v<version>`, with `SHA256SUMS`.
 
+## The mobile release
+
+`./ci.sh :mobile` builds the mobile app's Android release on any platform
+with the Android SDK: `flutter build apk --release` in `tom_secrets_mobile`,
+signed with the key `TSM_ANDROID_SIGNING` names (a properties file outside
+the repository: `storeFile`, `storePassword`, `keyAlias`, `keyPassword`;
+without a complete one the stage is red, never signed with the debug key),
+copied to `release/<version>/tom_secrets_mobile-<version>-android.apk` (the
+version is `tom_secrets_mobile`'s) and listed in that folder's `SHA256SUMS`.
+It is installed directly on the phone (DP-204). The iOS app is not a release
+file: it is built from Xcode onto the device under the user's free personal
+team (DP-130).
+
 ## Configuration
 
-| Setting | Effect |
-| --- | --- |
-| `tom_secrets_build/repositories.yaml` | where the two other repositories are (above) |
-| `FLUTTER_ROOT` | the Flutter SDK to use, instead of `flutter` on `PATH` |
-| `secretsLicenceExceptions` (`lib/src/licence_boundary.dart`) | the licence exceptions in force |
-| `secretsStandaloneExceptions` (`lib/src/standalone.dart`) | the places the standalone check lets pass |
+- `tom_secrets_build/repositories.yaml`: where the two other repositories
+  are (above).
+- `FLUTTER_ROOT`: the Flutter SDK to use, instead of `flutter` on `PATH`.
+- `TSM_ANDROID_SIGNING`: the Android signing properties file of `:mobile`.
+- `secretsLicenceExceptions` (`lib/src/licence_boundary.dart`): the licence
+  exceptions in force.
+- `secretsStandaloneExceptions` (`lib/src/standalone.dart`): the places the
+  standalone check lets pass.
 
 ## Limits
 

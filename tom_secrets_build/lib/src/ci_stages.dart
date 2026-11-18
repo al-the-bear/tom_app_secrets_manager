@@ -23,10 +23,11 @@ const List<String> secretsCiStages = [
   'conformance',
   'standalone',
   'release',
+  'mobile',
 ];
 
-/// The stages `:all` leaves out: the release is built when one is made.
-const Set<String> secretsCiStagesNotInAll = {'release'};
+/// The stages `:all` leaves out: the releases are built when one is made.
+const Set<String> secretsCiStagesNotInAll = {'release', 'mobile'};
 
 /// One-line descriptions, shared by `--help` and the README.
 const Map<String, String> secretsCiStageDescriptions = {
@@ -60,7 +61,14 @@ const Map<String, String> secretsCiStageDescriptions = {
       'tsm, the app built with both in its tsm folder, the app and tools-only '
       'archives with SHA256SUMS in tom_secrets_build/release/<version>/, and '
       'a smoke run of the assembled tsm and service on a demo installation',
-  'all': 'every stage above but :release, in that order, continuing past a red',
+  'mobile':
+      'the mobile app\'s Android release (not part of :all): the APK signed '
+      'with the key TSM_ANDROID_SIGNING names, as '
+      'tom_secrets_mobile-<version>-android.apk beside the release archives, '
+      'in SHA256SUMS; iOS is installed from Xcode (DP-130)',
+  'all':
+      'every stage above but :release and :mobile, in that order, continuing '
+      'past a red',
 };
 
 /// The test tag of the licence-boundary check, run by `:licences` only.
@@ -261,6 +269,8 @@ class SecretsCiStages {
         ], counts: true);
       case 'release':
         await _release(run);
+      case 'mobile':
+        await _mobile(run);
       default:
         throw ArgumentError.value(stage, 'stage', 'not a stage');
     }
@@ -273,6 +283,48 @@ extension on SecretsCiStages {
     directory: workspace.buildPackageDir,
     isFlutter: false,
   );
+
+  /// The mobile app's Android release: the signed APK beside the archives.
+  Future<void> _mobile(CiRun run) async {
+    const stage = 'mobile';
+    final mobile = p.join(workspace.repoRoot, 'tom_secrets_mobile');
+    final version = secretsPubspecVersion(p.join(mobile, 'pubspec.yaml'));
+    final signing = Platform.environment[secretsAndroidSigningVariable];
+    final problem = secretsAndroidSigningProblem(signing);
+    if (problem != null) {
+      run.fail(stage, 'signing', 'mobile.signing.log', problem);
+      return;
+    }
+    final app = CiPackage(
+      name: workspace.relative(mobile),
+      directory: mobile,
+      isFlutter: true,
+    );
+    final built = p.join(
+      mobile,
+      'build',
+      'app',
+      'outputs',
+      'flutter-apk',
+      'app-release.apk',
+    );
+    await run.step(
+      stage,
+      'apk',
+      'mobile.apk.log',
+      [
+        run.tool(app, ['pub', 'get']),
+        run.tool(app, ['build', 'apk', '--release']),
+      ],
+      needsFlutter: true,
+      produces: built,
+    );
+    if (!File(built).existsSync()) return;
+    final outDir = p.join(workspace.buildPackageDir, 'release', version);
+    Directory(outDir).createSync(recursive: true);
+    File(built).copySync(p.join(outDir, secretsMobileApkName(version)));
+    secretsWriteSums(outDir);
+  }
 
   /// The release for this platform: the parts, the assembly, a smoke run.
   Future<void> _release(CiRun run) async {
@@ -379,6 +431,41 @@ extension on SecretsCiStages {
       demo.deleteSync(recursive: true);
     }
   }
+}
+
+/// The environment variable naming the Android signing properties file
+/// (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`), read by the
+/// mobile app's Gradle build.
+const String secretsAndroidSigningVariable = 'TSM_ANDROID_SIGNING';
+
+/// Why [path] (the variable's value) cannot sign a release, or null.
+String? secretsAndroidSigningProblem(String? path) {
+  if (path == null || path.isEmpty) {
+    return '$secretsAndroidSigningVariable is not set: name the signing '
+        'properties file (storeFile, storePassword, keyAlias, keyPassword); '
+        'a release is never signed with the debug key';
+  }
+  final file = File(path);
+  if (!file.existsSync()) {
+    return '$secretsAndroidSigningVariable: no file $path';
+  }
+  final keys = {
+    for (final line in file.readAsLinesSync())
+      if (line.contains('=') && !line.trimLeft().startsWith('#'))
+        line.substring(0, line.indexOf('=')).trim(),
+  };
+  final missing = [
+    for (final k in const [
+      'storeFile',
+      'storePassword',
+      'keyAlias',
+      'keyPassword',
+    ])
+      if (!keys.contains(k)) k,
+  ];
+  return missing.isEmpty
+      ? null
+      : '$secretsAndroidSigningVariable: $path lacks ${missing.join(', ')}';
 }
 
 /// The demo master password of the smoke run's installation (the desktop
