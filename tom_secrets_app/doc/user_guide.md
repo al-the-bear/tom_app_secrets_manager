@@ -324,20 +324,16 @@ and saves the vault; the note as it was stays in the entry's history.
 
 The secrets service is an ssh-agent: `ssh`, `git`, `scp` and `rsync` sign
 with the vaults' SSH keys through it, and no private key file is needed on
-the machine. Point `ssh` at it once: `tsm status` names its socket (`agent`;
-on Linux and macOS `agent.sock` in the service's runtime directory, on
-Windows the pipe `\\.\pipe\tsm-ssh-agent`), and either
-
-```sh
-export SSH_AUTH_SOCK=<the agent socket>
-```
-
-or, in `~/.ssh/config`:
-
-```text
-Host *
-  IdentityAgent <the agent socket>
-```
+the machine. Switch on "ssh uses the ssh-agent" under Settings ›
+Integrations (or run `tsm integrations install ssh`): it writes
+`IdentityAgent` with the agent's socket into `~/.ssh/config`, for every host
+(`Host *`) or the host patterns you give. By hand, `tsm status` names the
+socket (`agent`; on Linux and macOS `agent.sock` in the service's runtime
+directory, on Windows the pipe `\\.\pipe\tsm-ssh-agent`):
+`export SSH_AUTH_SOCK=<the agent socket>`, or `IdentityAgent` in
+`~/.ssh/config`, where on Windows every backslash is doubled
+(`IdentityAgent \\\\.\\pipe\\tsm-ssh-agent`): ssh's config reader takes a
+backslash as an escape.
 
 The "SSH key" section says whether the agent serves the key ("Served by the
 ssh-agent."), and if not, why: for example the key is encrypted and its
@@ -349,6 +345,17 @@ the tree has "Confirm every SSH signature" for all its keys.
 The first time a program signs with a key, the approval prompt asks you
 (see [Approvals](#approvals)). While the service is locked, a signature waits
 for you to unlock it.
+
+### git's credentials
+
+With "git asks Tom Secrets Manager for credentials" switched on under
+Settings › Integrations (or `tsm integrations install git`), git asks the
+vaults for the password or token of the host it talks to: the login whose
+URL has that host. The first time, **"A tool asks for a login"** lists the
+logins of the host: pick one, then "This time", "Always this login" (git
+gets it from then on without asking) or "None". When git saw a new
+password work, it is offered to the app as a proposal; a password the
+vaults hold already is not.
 
 ## System secrets
 
@@ -415,6 +422,10 @@ request" while the window is closed). It shows:
   "Everything below this folder") or "Never". A lasting answer also
   "Covers" "This reference", "Store" or "All", and can be pinned: "Only
   while the program file is unchanged (pinned)".
+
+**A tool asks for a login** is git's credential helper (see [git's
+credentials](#gits-credentials)): pick one of the host's logins and answer
+"This time", "Always this login" or "None".
 
 "Allow" (or "Refuse" for Never) answers; "Later" leaves the request waiting
 under Clients. A program that asked for a client token gets one with an
@@ -629,6 +640,17 @@ person; it is off by default and switched only here.
 and screen sharing" (Linux cannot), "Start the app at login, in the tray",
 and "Stop the service" (programs then get no secrets until it is started and
 unlocked again).
+
+**Integrations** (this user's tool configuration on this machine): "ssh
+uses the ssh-agent" (`IdentityAgent` in `~/.ssh/config`; "For the hosts"
+takes ssh `Host` patterns, "Apply" writes them) and "git asks Tom Secrets
+Manager for credentials" (`credential.helper tsm` in `~/.gitconfig`, and
+`git-credential-tsm` beside `tsm`). Each is a block between
+`# >>> tom secrets >>>` and `# <<< tom secrets <<<`; switching off removes
+it, and nothing outside it changes. What is not right is said, for example
+that the folder of `tsm` is not on `PATH`, so git does not find the helper.
+At every start the app checks that the blocks still name this machine's
+agent and helper, rewrites one that does not, and tells you.
 
 **Shared by every device**: the configuration kept in the primary vault
 (`tsm.config`): the dimensions in priority order and the files per

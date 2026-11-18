@@ -182,6 +182,7 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     String? pin,
     bool sshHost = false,
     bool withParent = false,
+    String? pick,
   }) async {
     final waiting = _approvals[approvalId];
     final token = decision == 'always' && (waiting?.wantClientToken ?? false)
@@ -196,6 +197,7 @@ class TomSecretsServiceConnection extends ChangeNotifier {
       'clientToken': ?token,
       if (sshHost) 'sshHost': true,
       if (withParent) 'withParent': true,
+      'pick': ?pick,
     });
     _approvals.remove(approvalId);
     notifyListeners();
@@ -540,6 +542,8 @@ final class TomSecretsApprovalPrompt {
     required this.remote,
     required this.ssh,
     required this.confirmOnly,
+    required this.pick,
+    required this.url,
   });
 
   /// The prompt of [event], or null when it names no approval.
@@ -564,6 +568,18 @@ final class TomSecretsApprovalPrompt {
       remote: event['hostHint'] == 'remote',
       ssh: TomSecretsSshPromptInfo.fromJson(event['ssh']),
       confirmOnly: event['confirmOnly'] == true,
+      pick: event['pick'] is List
+          ? [
+              for (final p in (event['pick'] as List).cast<Map>())
+                (
+                  entryId: p['entryId'] as String? ?? '',
+                  title: p['title'] as String? ?? '',
+                  userName: p['userName'] as String? ?? '',
+                  matchedUrl: p['matchedUrl'] as String? ?? '',
+                ),
+            ]
+          : null,
+      url: event['url'] as String?,
     );
   }
 
@@ -598,6 +614,16 @@ final class TomSecretsApprovalPrompt {
   /// A confirmation of one signature a grant allows: answered once or
   /// never, nothing written.
   final bool confirmOnly;
+
+  /// A helper's pick prompt (git asks one credential, protocol.md 5.5): the
+  /// logins of the host to pick from; null for any other prompt.
+  final List<
+    ({String entryId, String title, String userName, String matchedUrl})
+  >?
+  pick;
+
+  /// The page or host a pick prompt's logins match.
+  final String? url;
 
   /// The client's executable.
   String get exe => identity['exe'] as String? ?? '';

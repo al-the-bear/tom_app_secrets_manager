@@ -65,8 +65,11 @@ Future<void> main(List<String> args) async {
     loginItem = null;
   }
   const files = TomSecretsDesktopFiles();
+  final serviceHost = TomSecretsDesktopServiceHost();
+  final home =
+      Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
   final host = TomSecretsHost(
-    service: TomSecretsDesktopServiceHost(),
+    service: serviceHost,
     tray: tray,
     window: window,
     notifier: notifier,
@@ -89,6 +92,11 @@ Future<void> main(List<String> args) async {
       TomSecretsFirstRunActions.import: tomSecretsShowImport,
       TomSecretsFirstRunActions.pair: tomSecretsShowPairing,
     },
+    // Settings › Integrations writes into this user's tool configuration;
+    // the git helper links to the tsm beside the service.
+    integrationPaths: home == null
+        ? null
+        : (home: home, tsmExecutable: serviceHost.tsmExecutable),
   );
   runApp(TomSecretsApp(host: host));
 }

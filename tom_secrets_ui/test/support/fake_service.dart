@@ -185,6 +185,9 @@ final class FakeService implements TomSecretsAdminChannel {
   /// The keys with a date (`keys`), as the service would compute them.
   List<Map<String, Object?>> keys = [];
 
+  /// The ssh-agent endpoint `status` reports (`{socket}`), or null.
+  Map<String, Object?>? agent;
+
   /// The answers `history.resolve` got.
   final List<Map<String, Object?>> resolutions = [];
 
@@ -292,6 +295,7 @@ final class FakeService implements TomSecretsAdminChannel {
                 },
           ],
           'admins': 1,
+          'agent': ?agent,
           'hardening': {'noCoreDumps': true},
           'expiring': [
             for (final k in keys)

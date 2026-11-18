@@ -2,6 +2,13 @@
 
 ## 0.1.0
 
+- git's credential helper and the integrations (part-os-integration): the
+  pick prompt ("A tool asks for a login": the host's logins, this time,
+  always this login, none; `approve` with `pick`), Settings › Integrations
+  (ssh using the agent with its host patterns, git asking the helper;
+  `TomSecretsHost.integrationPaths`) and the check at every start that
+  repairs a block naming another agent or helper. On `tom_secrets_client`
+  ^0.2.8.
 - The ssh-agent (protocol.md 7.6): the approval prompt of an SSH signature
   (the key, the destination host by its `known_hosts` names, the purpose;
   "Only for this host"; a confirmation answered for one signature), "Only

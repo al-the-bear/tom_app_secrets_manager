@@ -14,8 +14,13 @@
 /// - **Shared**, in the primary vault: the dimensions with their priority and
 ///   the files per environment (`tsm.config`, BP-43).
 ///
+/// - **Integrations** (part-os-integration): ssh using the service's agent
+///   (`IdentityAgent` in `~/.ssh/config`, its host patterns editable) and
+///   git asking `git-credential-tsm`, each a marked block written and
+///   removed by the client library; what is not right is said.
+///
 /// The keys (protection layers, the GitHub token, rotation ages) are on the
-/// Keys screen (tsm_a26); the phase-B integrations are not here yet.
+/// Keys screen.
 library;
 
 import 'dart:async';
@@ -23,12 +28,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
-import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_client/admin.dart'
+    show
+        TomSecretsAdminException,
+        TomSecretsIntegration,
+        TomSecretsIntegrationState;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../host_bridge.dart' show TomSecretsHostPreferenceKeys;
 import '../ports/desktop_ports.dart';
 import '../state/clients.dart';
+import '../state/integrations.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../widgets/style.dart';
@@ -52,6 +62,9 @@ class _SettingsState extends State<TomSecretsSettingsView> {
   late final TextEditingController _config;
   String? _configError;
   final _link = TextEditingController();
+  final _sshHosts = TextEditingController(text: '*');
+  Map<TomSecretsIntegration, TomSecretsIntegrationState>? _integrations;
+  String? _integrationError;
 
   TomSecretsClientsApi get _api =>
       TomSecretsClientsApi(context.read<TomSecretsServiceConnection>());
@@ -77,10 +90,58 @@ class _SettingsState extends State<TomSecretsSettingsView> {
   void dispose() {
     _config.dispose();
     _link.dispose();
+    _sshHosts.dispose();
     super.dispose();
   }
 
+  Future<void> _loadIntegrations() async {
+    final integrations = await tomSecretsIntegrationsOf(
+      context.read<TomSecretsHost>(),
+      context.read<TomSecretsServiceConnection>(),
+    );
+    if (integrations == null) return;
+    final states = {
+      for (final i in TomSecretsIntegration.values)
+        i: await integrations.status(i),
+    };
+    if (!mounted) return;
+    setState(() {
+      _integrations = states;
+      final hosts = states[TomSecretsIntegration.ssh]?.hosts;
+      if (hosts != null) _sshHosts.text = hosts;
+    });
+  }
+
+  Future<void> _switchIntegration(
+    TomSecretsIntegration integration,
+    bool on,
+  ) async {
+    final integrations = await tomSecretsIntegrationsOf(
+      context.read<TomSecretsHost>(),
+      context.read<TomSecretsServiceConnection>(),
+    );
+    if (integrations == null) return;
+    try {
+      if (on) {
+        final hosts = _sshHosts.text.trim();
+        await integrations.install(
+          integration,
+          hosts: integration == TomSecretsIntegration.ssh && hosts.isNotEmpty
+              ? hosts
+              : null,
+        );
+      } else {
+        await integrations.uninstall(integration);
+      }
+      if (mounted) setState(() => _integrationError = null);
+    } on Object catch (e) {
+      if (mounted) setState(() => _integrationError = '$e');
+    }
+    await _loadIntegrations();
+  }
+
   Future<void> _load() async {
+    unawaited(_loadIntegrations());
     try {
       final report = await _api.settings();
       if (!mounted) return;
@@ -207,6 +268,7 @@ class _SettingsState extends State<TomSecretsSettingsView> {
               children: [
                 _device(context, session),
                 _app(context, host),
+                if (host.integrationPaths != null) _integrationsSection(theme),
                 _shared(context, theme),
               ],
             ),
@@ -534,6 +596,97 @@ class _SettingsState extends State<TomSecretsSettingsView> {
             },
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _integrationsSection(ThemeData theme) {
+    final states = _integrations;
+    Widget row(TomSecretsIntegration integration, String title, String what) {
+      final state = states?[integration];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchListTile(
+            key: Key('tsm-integration-${integration.name}'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(title),
+            subtitle: Text(
+              state == null
+                  ? what
+                  : '$what\n${state.file}'
+                        '${state.installed && !state.current ? ' — needs repair' : ''}',
+            ),
+            value: state?.installed ?? false,
+            onChanged: state == null
+                ? null
+                : (v) => unawaited(_switchIntegration(integration, v)),
+          ),
+          for (final p in state?.problems ?? const <String>[])
+            Text(
+              p,
+              key: Key('tsm-integration-${integration.name}-problem'),
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+        ],
+      );
+    }
+
+    final ssh = states?[TomSecretsIntegration.ssh];
+    return TomSecretsSection(
+      key: const Key('tsm-settings-integrations'),
+      title: 'Integrations',
+      icon: Icons.extension_rounded,
+      children: [
+        _whose(
+          "This user's tool configuration on this machine; each is a marked "
+          'block (# >>> tom secrets >>>) the app writes and removes; nothing '
+          'outside it changes.',
+        ),
+        row(
+          TomSecretsIntegration.ssh,
+          'ssh uses the ssh-agent',
+          'IdentityAgent in ~/.ssh/config: ssh, git, scp and rsync sign '
+              'with the vaults\' SSH keys.',
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('tsm-integration-ssh-hosts'),
+                controller: _sshHosts,
+                decoration: const InputDecoration(
+                  labelText: 'For the hosts (ssh Host patterns)',
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const Key('tsm-integration-ssh-apply'),
+              onPressed: ssh?.installed ?? false
+                  ? () => unawaited(
+                      _switchIntegration(TomSecretsIntegration.ssh, true),
+                    )
+                  : null,
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        row(
+          TomSecretsIntegration.git,
+          'git asks Tom Secrets Manager for credentials',
+          'credential.helper tsm in ~/.gitconfig and git-credential-tsm '
+              'beside tsm: git takes the login of its host from the vaults.',
+        ),
+        if (_integrationError != null)
+          Text(
+            _integrationError!,
+            key: const Key('tsm-integration-error'),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
       ],
     );
   }

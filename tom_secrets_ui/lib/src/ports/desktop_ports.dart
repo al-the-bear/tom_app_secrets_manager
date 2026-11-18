@@ -222,6 +222,7 @@ final class TomSecretsHost {
     this.clipboard = const TomFlutterClipboardPort(),
     this.startedHidden = false,
     this.firstRunActions = const {},
+    this.integrationPaths,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -289,4 +290,9 @@ final class TomSecretsHost {
   /// [TomSecretsFirstRunActions]; an offer without one is shown as not
   /// available yet.
   final Map<String, TomSecretsFirstRunAction> firstRunActions;
+
+  /// Where the developer-tool integrations write (part-os-integration,
+  /// Settings › Integrations): the user's home folder and `tsm`'s
+  /// executable (the helper link goes beside it); null hides them.
+  final ({String home, String? tsmExecutable})? integrationPaths;
 }

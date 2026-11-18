@@ -1,0 +1,204 @@
+// Copyright (c) 2026 Peter Nicolai Alexis Kyaw
+// SPDX-License-Identifier: BSD-3-Clause
+
+/// The developer-tool helpers in the app (part-os-integration): the pick
+/// prompt of git's credential helper (protocol.md 5.5), and Settings ›
+/// Integrations writing the ssh and git blocks into a demo home, with the
+/// check at every start that repairs a block naming another agent. Demo
+/// data and a temporary home only.
+@TestOn('mac-os || linux')
+library;
+
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:tom_basics/utilities.dart';
+import 'package:tom_secrets_client/admin.dart';
+import 'package:tom_secrets_ui/tom_secrets_ui.dart';
+
+import 'support/fake_service.dart';
+
+final class _Clipboard implements TomClipboardPort {
+  @override
+  Future<TomClipboardReceipt?> placeConcealed(String text) async =>
+      TomClipboardReceipt(text);
+
+  @override
+  Future<bool> clearIfHolding(TomClipboardReceipt receipt) async => true;
+}
+
+final class _Window implements TomSecretsWindowHost {
+  @override
+  Future<void> show() async {}
+  @override
+  Future<void> hide() async {}
+  @override
+  Future<bool> isVisible() async => true;
+  @override
+  Future<void> quit() async {}
+}
+
+void main() {
+  late FakeService service;
+  late Directory home;
+  late String tsm;
+
+  setUp(() async {
+    service = FakeService(await demoStores())
+      ..agent = {'socket': '/run/demo/tsm/agent.sock'};
+    home = Directory.systemTemp.createTempSync('tsm_app_home');
+    addTearDown(() => home.deleteSync(recursive: true));
+    Directory('${home.path}/bin').createSync();
+    tsm = '${home.path}/bin/tsm';
+    File(tsm).writeAsStringSync('demo');
+  });
+
+  TomSecretsHost host() => TomSecretsHost(
+    service: FakeHost(service),
+    preferences: TomSecretsMemoryPreferences(),
+    clipboard: _Clipboard(),
+    window: _Window(),
+    integrationPaths: (home: home.path, tsmExecutable: tsm),
+  );
+
+  Future<void> wait(WidgetTester tester, [int rounds = 3]) async {
+    for (var i = 0; i < rounds; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+    }
+  }
+
+  Future<void> unlocked(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1700, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(TomSecretsApp(host: host()));
+    await wait(tester, 1);
+    await tester.enterText(
+      find.byKey(const Key('tsm-unlock-passphrase')),
+      demoPassword,
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tsm-unlock')));
+    await wait(tester, 10);
+  }
+
+  testWidgets("git's pick prompt: the host's logins, one picked and "
+      'remembered with "Always this login"', (tester) async {
+    await unlocked(tester);
+    service.ask({
+      'approvalId': 'a-1',
+      'host': 'demo-host',
+      'identity': {
+        'kind': 'exe',
+        'exe': '/opt/tsm/bin/tsm',
+        'args': ['get'],
+        'cwd': '/home/demo/work',
+        'parent': {'exe': '/usr/bin/git'},
+      },
+      'refs': ['team/~01', 'team/~02'],
+      'resolved': [
+        {'store': 'team', 'path': 'Code/Git personal', 'kind': 'login'},
+        {'store': 'team', 'path': 'Code/Git work', 'kind': 'login'},
+      ],
+      'pick': [
+        {
+          'entryId': 'team/~01',
+          'title': 'Git personal',
+          'userName': 'demo',
+          'matchedUrl': 'https://git.example.com',
+        },
+        {
+          'entryId': 'team/~02',
+          'title': 'Git work',
+          'userName': 'demo-work',
+          'matchedUrl': 'https://git.example.com/work',
+        },
+      ],
+      'url': 'https://git.example.com/',
+    });
+    await wait(tester);
+    expect(find.text('A tool asks for a login'), findsOneWidget);
+    expect(
+      find.text('Which login for https://git.example.com/'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('tsm-approval-secret')), findsNothing);
+    expect(find.byKey(const Key('tsm-approval-decision-folder')), findsNothing);
+    await tester.tap(find.byKey(const Key('tsm-approval-pick-team/~02')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tsm-approval-decision-always')));
+    await tester.pump();
+    expect(find.byKey(const Key('tsm-approval-pick-always')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tsm-approval-answer')));
+    await wait(tester);
+    expect(service.approvals.single, {
+      'approvalId': 'a-1',
+      'decision': 'always',
+      'secret': 'ref',
+      'pick': 'team/~02',
+    });
+  });
+
+  testWidgets('Settings › Integrations: ssh and git switched on and off, the '
+      'blocks written and removed', (tester) async {
+    await unlocked(tester);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await wait(tester);
+    await tester.ensureVisible(find.byKey(const Key('tsm-integration-ssh')));
+    await tester.tap(find.byKey(const Key('tsm-integration-ssh')));
+    await wait(tester);
+    final config = File('${home.path}/.ssh/config');
+    expect(config.readAsStringSync(), contains('Host *'));
+    expect(
+      config.readAsStringSync(),
+      contains('IdentityAgent /run/demo/tsm/agent.sock'),
+    );
+    await tester.enterText(
+      find.byKey(const Key('tsm-integration-ssh-hosts')),
+      '*.example.com',
+    );
+    await tester.tap(find.byKey(const Key('tsm-integration-ssh-apply')));
+    await wait(tester);
+    expect(config.readAsStringSync(), contains('Host *.example.com'));
+
+    await tester.ensureVisible(find.byKey(const Key('tsm-integration-git')));
+    await tester.tap(find.byKey(const Key('tsm-integration-git')));
+    await wait(tester);
+    expect(
+      File('${home.path}/.gitconfig').readAsStringSync(),
+      contains('helper = tsm'),
+    );
+    expect(Link('${home.path}/bin/git-credential-tsm').targetSync(), tsm);
+    // The demo PATH does not hold the demo bin folder: said.
+    expect(
+      find.byKey(const Key('tsm-integration-git-problem')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('tsm-integration-ssh')));
+    await wait(tester);
+    expect(config.readAsStringSync(), isEmpty);
+  });
+
+  testWidgets('at every start an ssh block naming another agent is written '
+      'again, and the user is told', (tester) async {
+    Directory('${home.path}/.ssh').createSync();
+    File('${home.path}/.ssh/config').writeAsStringSync(
+      tomSecretsWithBlock('Host build\n  User demo\n', [
+        'Host *',
+        '  IdentityAgent /run/old/agent.sock',
+      ], atTop: true),
+    );
+    await unlocked(tester);
+    await wait(tester, 5);
+    final text = File('${home.path}/.ssh/config').readAsStringSync();
+    expect(text, contains('IdentityAgent /run/demo/tsm/agent.sock'));
+    expect(text, contains('Host build\n  User demo'));
+    expect(find.textContaining('Updated the ssh integration'), findsOneWidget);
+  });
+}

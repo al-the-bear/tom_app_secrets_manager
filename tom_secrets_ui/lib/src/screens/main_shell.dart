@@ -16,8 +16,10 @@ import 'package:provider/provider.dart';
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
 import 'package:tom_core_sync/tom_core_sync.dart' show TomSyncState;
 import 'package:tom_sync_ui/tom_sync_ui.dart';
+import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
 
 import '../ports/desktop_ports.dart';
+import '../state/integrations.dart';
 import '../state/reminders.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
@@ -91,7 +93,34 @@ class _MainShellState extends State<TomSecretsMainShell> {
       _connection?.removeListener(_onConnection);
       _connection = c..addListener(_onConnection);
       WidgetsBinding.instance.addPostFrameCallback((_) => _onConnection());
+      if (!_integrationsChecked) {
+        _integrationsChecked = true;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(_checkIntegrations()),
+        );
+      }
     }
+  }
+
+  bool _integrationsChecked = false;
+
+  /// At every start (part-os-integration, "Keeping it right"): the
+  /// installed integrations still name this machine's agent and helper,
+  /// else they are written again and the user is told.
+  Future<void> _checkIntegrations() async {
+    final repaired = await tomSecretsCheckIntegrations(
+      context.read<TomSecretsHost>(),
+      context.read<TomSecretsServiceConnection>(),
+    );
+    if (repaired.isEmpty || !mounted) return;
+    tomShowNotice(
+      ScaffoldMessenger.maybeOf(context),
+      kind: 'integrations',
+      message:
+          'Updated the ${repaired.map((i) => i.name).join(' and ')} '
+          'integration to name this machine\'s '
+          '${repaired.length == 1 && repaired.single.name == 'git' ? 'helper' : 'agent'}.',
+    );
   }
 
   @override

@@ -99,6 +99,15 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
     );
   }
 
+  /// `tsm` beside the service executable (the distribution's `tsm/bin`, or a
+  /// development layout), where the git integration links its helper.
+  String get tsmExecutable {
+    final service = serviceExecutable;
+    final cut = service.lastIndexOf(RegExp(r'[/\\]'));
+    final dir = cut < 0 ? '.' : service.substring(0, cut);
+    return '$dir${Platform.pathSeparator}tsm${Platform.isWindows ? '.exe' : ''}';
+  }
+
   @override
   Future<TomSecretsAttach> attach() async {
     final rt = runtime;

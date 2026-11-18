@@ -12,6 +12,10 @@
 /// host and what the signature is for; a lasting answer may hold only for
 /// that host. A confirmation (a forwarded agent, or a key or vault that asks
 /// for it) is answered for this signature only.
+///
+/// A helper's pick prompt (git's credential helper, protocol.md 5.5) lists
+/// the logins of the host for the user to pick one: once, or always (the
+/// pick remembered as a grant), or never (nothing given).
 library;
 
 import 'package:flutter/material.dart';
@@ -58,6 +62,7 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
   TextEditingController? _folder;
   bool _sshHost = true;
   bool _withParent = false;
+  String? _picked;
   bool _sending = false;
   String? _error;
   bool _closing = false;
@@ -75,7 +80,9 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
     });
     final prompt = c.prompt(widget.approvalId);
     final ssh = prompt?.ssh;
-    final lasting = _decision != 'once' && !(prompt?.confirmOnly ?? false);
+    final picking = prompt?.pick != null;
+    final lasting =
+        _decision != 'once' && !(prompt?.confirmOnly ?? false) && !picking;
     try {
       await c.approve(
         widget.approvalId,
@@ -85,6 +92,7 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
         pin: lasting ? _pin : null,
         sshHost: lasting && _sshHost && ssh?.hostKeyFingerprint != null,
         withParent: lasting && _withParent && _decision != 'folder',
+        pick: picking && _decision != 'never' ? _picked : null,
       );
       if (mounted) Navigator.of(context).pop();
     } on TomSecretsAdminException catch (e) {
@@ -115,8 +123,13 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
     _folder ??= TextEditingController(text: prompt.suggestedFolder);
     final ssh = prompt.ssh;
     final confirmOnly = prompt.confirmOnly;
+    final pick = prompt.pick;
     if (confirmOnly && _decision != 'once' && _decision != 'never') {
       _decision = 'once';
+    }
+    if (pick != null) {
+      if (_decision == 'folder') _decision = 'once';
+      _picked ??= pick.firstOrNull?.entryId;
     }
     // `exe-from` names an executable with its parent (not a script).
     final canWithParent = prompt.parentExe != null && prompt.script == null;
@@ -153,7 +166,9 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              ssh == null
+              pick != null
+                  ? 'A tool asks for a login'
+                  : ssh == null
                   ? 'A program asks for secrets'
                   : confirmOnly
                   ? 'Confirm an SSH signature'
@@ -196,7 +211,32 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     ),
                 ],
               ),
-              if (ssh == null)
+              if (pick != null)
+                TomSecretsSection(
+                  key: const Key('tsm-approval-pick'),
+                  title: 'Which login for ${prompt.url ?? 'this host'}',
+                  icon: Icons.person_search_rounded,
+                  children: [
+                    RadioGroup<String>(
+                      groupValue: _picked,
+                      onChanged: (v) => setState(() => _picked = v),
+                      child: Column(
+                        children: [
+                          for (final p in pick)
+                            RadioListTile<String>(
+                              key: Key('tsm-approval-pick-${p.entryId}'),
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              value: p.entryId,
+                              title: Text(p.title),
+                              subtitle: Text('${p.userName} · ${p.matchedUrl}'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              else if (ssh == null)
                 TomSecretsSection(
                   title: 'Which secrets',
                   icon: Icons.key_rounded,
@@ -238,7 +278,13 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     runSpacing: 4,
                     children: [
                       for (final (value, text)
-                          in confirmOnly
+                          in pick != null
+                              ? const [
+                                  ('once', 'This time'),
+                                  ('always', 'Always this login'),
+                                  ('never', 'None'),
+                                ]
+                              : confirmOnly
                               ? const [
                                   ('once', 'Allow this signature'),
                                   ('never', 'Refuse it'),
@@ -276,7 +322,14 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                       key: const Key('tsm-approval-confirm-only'),
                       style: label,
                     ),
-                  if (_decision != 'once' && !confirmOnly) ...[
+                  if (pick != null && _decision == 'always')
+                    Text(
+                      'The next time this tool asks for this host, it gets '
+                      'the login picked without asking.',
+                      key: const Key('tsm-approval-pick-always'),
+                      style: label,
+                    ),
+                  if (_decision != 'once' && !confirmOnly && pick == null) ...[
                     const SizedBox(height: 6),
                     Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
