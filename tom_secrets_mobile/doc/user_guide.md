@@ -14,6 +14,7 @@ shows.
 - [Unlocking and locking](#unlocking-and-locking)
 - [Finding and copying a login](#finding-and-copying-a-login)
 - [Editing](#editing)
+- [Vaults in Files](#vaults-in-files)
 - [Staying current](#staying-current)
 - [Settings](#settings)
 - [Troubleshooting](#troubleshooting)
@@ -27,7 +28,8 @@ own, in the iOS keychain or the Android keystore, and — once you unlocked
 with the master password — the vault's key behind Face ID, Touch ID or your
 fingerprint. The master password itself is never stored.
 
-So the phone needs a connection to unlock. System vaults (the ones the fleet
+So the phone needs a connection to unlock (a vault you keep in Files, such
+as iCloud Drive, is read from there instead). System vaults (the ones the fleet
 reads) are shown but read-only here. iOS fills nothing into other apps: you
 copy a login from this app and paste it.
 
@@ -85,14 +87,27 @@ The phone locks:
   default);
 - when the app is closed.
 
+Without a connection the unlock says "No connection: the vaults are only on
+GitHub. The unlock is tried again by itself when the network is back." —
+leave the screen open; it opens once the phone is online (for ten minutes).
+
+If the unlock says a vault "needs N MiB of memory to open", its key
+derivation is set heavier than this phone can afford: open it in the desktop
+app and lower its memory setting.
+
+If GitHub refused this phone's token (it expired, or you revoked it), tap
+**"Set this device up again"** below the unlock form and pair again with a
+desktop, which gives the phone a new token.
+
 If a change could not be written to GitHub yet, the lock button asks: "Write
 now" tries again, "Discard" drops it (the phone keeps no copy).
 
 ## Finding and copying a login
 
 On a phone, **Vaults** lists the vaults, each with what it is ("read-only on
-this device: a system vault"), when it was fetched and the changes not yet
-written. Tap a vault for its entries, an entry to open it. **Search** looks
+this device: a system vault"), when it was fetched and how big the fetch
+was (on mobile data every unlock fetches the vaults again), and the changes
+not yet written. Tap a vault for its entries, an entry to open it. **Search** looks
 in every vault by title, user name, URL and key.
 
 On a tablet the list and the entry stand side by side; on a wide tablet in
@@ -121,11 +136,30 @@ settle" on the Vaults list.
 
 System vaults are read-only on the phone: change them on a desktop.
 
+**Attachments**: "Attach a file" in the entry's Attachments section takes a
+file from Files; the share button beside an attachment hands it to another
+app (to open or save it there). The shared copy is removed when you close
+the share sheet (iOS) or at the next share (Android).
+
 Without a connection a save is kept in the app's memory, and the vault shows
 "1 change not written to GitHub". The next time the app reaches GitHub it
 writes it, merged with what other devices changed meanwhile. Until then the
 change exists only in the running app: locking asks "Write now" (try again)
 or "Discard".
+
+## Vaults in Files
+
+A KDBX file of your own — in iCloud Drive, On My iPhone, or Google Drive and
+the like on Android — can be a vault on the phone: **Settings › "Add a vault
+from a file"**, pick the file, give the vault a name and type its password.
+The phone reads the file into its memory when you unlock and writes it back
+when you save; when it changed meanwhile (edited on the Mac, say), both
+changes are merged. No copy is kept on the phone.
+
+The vault is listed in your primary vault with its password, as every vault
+is, under a name of this phone (`file:/tsm-document/<phone>/<file name>`):
+your desktops and other phones list it, but cannot reach the file. Settings
+lists every vault with where it is.
 
 ## Staying current
 
@@ -142,16 +176,23 @@ closed.
 - **"Look for changes on GitHub every"**: 5, 15, 30 or 60 minutes.
 - **"Lock in the background after"**: at once, 30 seconds, 1 or 5 minutes.
 - **"Clear the clipboard after"**: 15, 30, 60 or 120 seconds.
+- **"Vaults"**: every vault with where it is (`github:…` or a file), and
+  "Add a vault from a file".
 - **"This device"**: its name and the primary vault.
 - **"Set this device up again"**: locks and goes back to the setup screen (to
   pair again, e.g. after the keys were rotated on the desktop).
 
 ## Troubleshooting
 
-- **"no connection: the vaults are only on GitHub"**: connect to the
-  internet; the phone has no copy to open.
-- **"GitHub refused the token"**: make a new token for this phone on GitHub
-  and pair again, or set it up by hand.
+- **"No connection: the vaults are only on GitHub"**: connect to the
+  internet; the phone has no copy to open, and the unlock is tried again by
+  itself.
+- **"GitHub refused this device's token"**: "Set this device up again" below
+  the unlock form, then pair again (the desktop gives a new token) or set it
+  up by hand.
+- **A banner says the GitHub token is due**: two weeks before it expires;
+  make a new one and pair again before then (Settings › "Set this device up
+  again").
 - **"Wrong code: the desktop closed its pairing window"**: open a new pairing
   window on the desktop and type its new code.
 - **"The desktop declined"**: nothing was received; pair again and choose the

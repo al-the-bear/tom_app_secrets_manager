@@ -62,13 +62,22 @@ final class TomSecretsMobileSetup {
         await keychain.write(locator.repositoryKeyHandle, repositoryKey);
       }
     }
+    final settings = TomSecretsMobileSettings(preferences);
+    final expiries = {...settings.pairedTokenExpiries};
     for (final t in bundle.tokens) {
       final [owner, repository] = t.repository.split('/');
       await keychain.write(
         tomSecretsGitHubTokenHandle(owner, repository),
         t.token,
       );
+      final expires = t.expires;
+      if (expires != null) {
+        expiries[t.repository] = expires;
+      } else {
+        expiries.remove(t.repository);
+      }
     }
+    await settings.setPairedTokenExpiries(expiries);
     await preferences.write(TomSecretsMobileKeys.device, device);
     await preferences.write(TomSecretsMobileKeys.primary, primary.locator);
   }

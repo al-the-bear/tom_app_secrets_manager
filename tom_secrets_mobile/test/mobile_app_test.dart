@@ -12,6 +12,7 @@ library;
 import 'dart:convert';
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,8 @@ import 'package:tom_secrets_mobile/tom_secrets_mobile.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 import 'support/demo_vaults.dart';
+import 'support/fake_documents.dart';
+import 'support/net_switch.dart';
 
 final class _Clipboard implements TomClipboardPort {
   String? held;
@@ -54,6 +57,8 @@ void main() {
   DateTime? expiry;
   late _Scanner scanner;
   late _Discovery lan;
+  late NetSwitch net;
+  late FakeDocuments documents;
   late TomSecretsPairingPeerKeys giverKeys;
 
   setUpAll(() async {
@@ -77,6 +82,8 @@ void main() {
     expiry = null;
     scanner = _Scanner();
     lan = _Discovery();
+    net = NetSwitch(server.client);
+    documents = FakeDocuments();
   });
 
   Future<({String giver, TomSecretsPairingBundle bundle})> receive({
@@ -114,10 +121,11 @@ void main() {
     gated: gated,
     biometricLabel: 'Face ID',
     clipboard: clipboard,
-    httpClient: server.client,
+    httpClient: net,
     githubBaseUrl: FakeGitHubServer.baseUrl,
     receive: receive,
     scanner: scanner,
+    documents: documents,
     discovery: lan,
     ownAddresses: () async => [InternetAddress('10.8.0.6')],
   );
@@ -128,6 +136,15 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       );
       await tester.pump();
+    }
+  }
+
+  /// Until [finder] shows, while a save goes to GitHub: the GitHub client
+  /// spaces its writes on a timer, so the fake clock moves too.
+  Future<void> writing(WidgetTester tester, Finder finder) async {
+    for (var i = 0; i < 60 && finder.evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+      await wait(tester, 1);
     }
   }
 
@@ -454,6 +471,164 @@ void main() {
           .text,
       'otpauth://totp/Demo?secret=JBSWY3DPEHPK3PXP',
     );
+  });
+
+  testWidgets('Settings lists the vaults with their locators and adds a file '
+      'as a vault; the vault list shows each fetch\'s size', (tester) async {
+    size(tester, const Size(400, 860));
+    documents.files['doc-1'] = (await tester.runAsync(
+      () => DemoVaults.vault(
+        'notes',
+        Credentials(ProtectedValue.fromString('notes-pw')),
+        {'Wifi': 'demo-wifi'},
+      ).save(),
+    ))!;
+    documents.nextVault = const TomSecretsPickedDocument(
+      id: 'doc-1',
+      name: 'Notes.kdbx',
+    );
+    await setUpByPairing(tester);
+    await unlock(tester);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tsm-mobile-vault-team')),
+        matching: find.textContaining(RegExp(r'fetched just now \(\d+ KB\)')),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tsm-mobile-vault-locator-team')),
+        matching: find.text(demoTeam),
+      ),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('tsm-mobile-add-file-vault')),
+      100,
+    );
+    await tester.tap(find.byKey(const Key('tsm-mobile-add-file-vault')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const Key('tsm-mobile-file-vault-name')),
+          )
+          .controller!
+          .text,
+      'notes',
+    );
+    await tester.enterText(
+      find.byKey(const Key('tsm-mobile-file-vault-password')),
+      'notes-pw',
+    );
+    await tester.tap(find.byKey(const Key('tsm-mobile-file-vault-add')));
+    await tester.pumpAndSettle();
+    await writing(tester, find.textContaining('Notes.kdbx is'));
+    expect(find.text('Notes.kdbx is the vault notes.'), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('tsm-mobile-tabs')),
+        matching: find.text('Vaults'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await wait(tester, 4);
+    expect(find.byKey(const Key('tsm-mobile-vault-notes')), findsOneWidget);
+  });
+
+  testWidgets('attachments: added from the documents, handed to the share '
+      'sheet', (tester) async {
+    size(tester, const Size(400, 860));
+    await setUpByPairing(tester);
+    await unlock(tester);
+    await tester.tap(find.byKey(const Key('tsm-mobile-vault-team')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tsm-mobile-entry-Api')));
+    await tester.pumpAndSettle();
+    documents.nextFile = (
+      name: 'cert.pem',
+      bytes: Uint8List.fromList(utf8.encode('demo certificate')),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('tsm-attachment-add')),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(TomSecretsEntryEditor),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.byKey(const Key('tsm-attachment-add')));
+    final share = find.byKey(const Key('tsm-attachment-save-cert.pem'));
+    await writing(tester, share);
+    expect(share, findsOneWidget);
+    expect(tester.widget<IconButton>(share).tooltip, 'Share…');
+    await tester.tap(share);
+    await wait(tester, 1);
+    expect(documents.shared.single.$1, 'cert.pem');
+    expect(utf8.decode(documents.shared.single.$2), 'demo certificate');
+  });
+
+  testWidgets('the GitHub token\'s reminder two weeks ahead opens Settings', (
+    tester,
+  ) async {
+    size(tester, const Size(400, 860));
+    await setUpByPairing(tester);
+    await TomSecretsMobileSettings(preferences).setPairedTokenExpiries({
+      demoRepo: DateTime.now().add(const Duration(days: 9)),
+    });
+    await unlock(tester);
+    expect(find.byKey(const Key('tsm-reminder-banner')), findsOneWidget);
+    expect(
+      find.textContaining('the GitHub token for $demoRepo'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('tsm-reminder-open')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('tsm-mobile-settings')), findsOneWidget);
+  });
+
+  testWidgets('no network at the unlock: the screen says the unlock is tried '
+      'again, and opens by itself once the network is back', (tester) async {
+    size(tester, const Size(400, 860));
+    await setUpByPairing(tester);
+    net.down = true;
+    await unlock(tester);
+    expect(
+      find.textContaining('tried again by itself when the network is back'),
+      findsOneWidget,
+    );
+    net.down = false;
+    // The engine tries again every 15 seconds (on the fake clock).
+    for (
+      var i = 0;
+      i < 40 && find.byKey(const Key('tsm-mobile-tabs')).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(seconds: 1));
+      await wait(tester, 1);
+    }
+    expect(find.byKey(const Key('tsm-mobile-tabs')), findsOneWidget);
+  });
+
+  testWidgets('a refused GitHub token: the unlock screen sets the device up '
+      'again', (tester) async {
+    size(tester, const Size(400, 860));
+    await setUpByPairing(tester);
+    expect(
+      find.byKey(const Key('tsm-mobile-unlock-setup-again')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('tsm-mobile-unlock-setup-again')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tsm-mobile-unlock-setup-again-go')));
+    await wait(tester, 4);
+    expect(find.byKey(const Key('tsm-mobile-setup-pair')), findsOneWidget);
+    expect(preferences.read(TomSecretsMobileKeys.primary), isNull);
   });
 }
 

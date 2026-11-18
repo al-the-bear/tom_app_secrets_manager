@@ -8,8 +8,10 @@
 library;
 
 export 'src/mobile_app.dart';
+export 'src/mobile_documents.dart';
 export 'src/mobile_engine.dart';
 export 'src/mobile_host.dart';
+export 'src/mobile_kdf_guard.dart';
 export 'src/mobile_keychain.dart';
 export 'src/mobile_lifecycle.dart';
 export 'src/mobile_ports.dart';

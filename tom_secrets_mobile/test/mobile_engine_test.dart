@@ -23,25 +23,12 @@ import 'package:tom_secrets_ui/tom_secrets_ui.dart'
     show TomSecretsMemoryPreferences;
 
 import 'support/demo_vaults.dart';
+import 'support/net_switch.dart';
 
 final class _Offline extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) =>
       Future.error(http.ClientException('no network', request.url));
-}
-
-/// The fake GitHub's client behind a switch: [down] answers every request
-/// with a network failure.
-final class _Switch extends http.BaseClient {
-  _Switch(this.inner);
-
-  final http.Client inner;
-  bool down = false;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) => down
-      ? Future.error(http.ClientException('no network', request.url))
-      : inner.send(request);
 }
 
 void main() {
@@ -238,7 +225,7 @@ void main() {
 
   test('a save without a network stays in memory, shown as not written; the '
       'next refresh with the network writes it; the lock drops it', () async {
-    final net = _Switch(server.client);
+    final net = NetSwitch(server.client);
     final phone = newEngine(client: net);
     addTearDown(phone.close);
     final states = <Map<String, Object?>>[];

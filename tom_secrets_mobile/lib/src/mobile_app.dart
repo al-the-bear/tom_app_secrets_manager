@@ -19,6 +19,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart'
     show tomSecretsPairingAddresses;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
+import 'mobile_documents.dart';
 import 'mobile_engine.dart';
 import 'mobile_host.dart';
 import 'mobile_lifecycle.dart';
@@ -47,6 +48,8 @@ class TomSecretsMobileApp extends StatefulWidget {
     this.scanner,
     this.discovery,
     this.ownAddresses,
+    this.documents,
+    this.kdfMemoryLimit = TomSecretsMobileEngine.defaultKdfMemoryLimit,
   });
 
   /// The device preferences.
@@ -89,6 +92,12 @@ class TomSecretsMobileApp extends StatefulWidget {
   /// This device's addresses; default its network interfaces'.
   final Future<List<InternetAddress>> Function()? ownAddresses;
 
+  /// The phone's documents (`file:` vaults, attachments), or null.
+  final TomSecretsDocuments? documents;
+
+  /// The most memory a vault's key derivation may take on this device.
+  final int kdfMemoryLimit;
+
   @override
   State<TomSecretsMobileApp> createState() => _MobileAppState();
 }
@@ -121,6 +130,8 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
       preferences: widget.preferences,
       httpClient: widget.httpClient,
       githubBaseUrl: widget.githubBaseUrl ?? 'https://api.github.com',
+      documents: widget.documents,
+      kdfMemoryLimit: widget.kdfMemoryLimit,
     );
   }
 
@@ -129,6 +140,33 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
     setState(() => _engine = null);
     await engine?.close();
     await _setup.reset();
+  }
+
+  /// From the unlock screen (a refused GitHub token): asks, then forgets the
+  /// setup.
+  Future<void> _forgetAsked(BuildContext context) async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set this device up again?'),
+        content: const Text(
+          'Pair with a desktop again (it gives this device a new GitHub '
+          'token), or set the primary up by hand. The vaults stay on GitHub.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('tsm-mobile-unlock-setup-again-go'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Set up again'),
+          ),
+        ],
+      ),
+    );
+    if (sure == true) await _forget();
   }
 
   @override
@@ -171,6 +209,19 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
           clipboardClearAfter: clearAfter,
           systemVaultsReadOnly: true,
           scanner: widget.scanner,
+          files: widget.documents == null
+              ? null
+              : TomSecretsMobileFiles(widget.documents!),
+          attachmentsShare: true,
+          unlockFooter: (context) => Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('tsm-mobile-unlock-setup-again'),
+              icon: const Icon(Icons.restart_alt_rounded),
+              label: const Text('Set this device up again'),
+              onPressed: () => unawaited(_forgetAsked(context)),
+            ),
+          ),
           osUnlock: gated == null
               ? null
               : TomSecretsOsUnlockHost(

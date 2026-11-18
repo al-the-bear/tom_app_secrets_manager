@@ -655,7 +655,10 @@ On the other machine, use the First run wizard's "Pair with another desktop"
 mobile app's "Pair with a desktop", scanning the QR code ([mobile user
 guide](../../tom_secrets_mobile/doc/user_guide.md#setting-the-phone-up)).
 Tick the primary for a phone: it is set up from it. A phone needs a GitHub
-token of its own; it approves nothing and gets no approval link. When it has
+token of its own; it approves nothing and gets no approval link. A vault a
+phone keeps in its Files (`file:/tsm-document/<phone>/…`) is listed in the
+primary too; a desktop shows it as not reachable, as another machine's file
+vault. When it has
 proved the code, this machine shows "*name* proved the code. Choose what it
 gets:":
 

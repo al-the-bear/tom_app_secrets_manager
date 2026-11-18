@@ -336,9 +336,13 @@ pairing on the LAN (`pairingDiscovery`, `TomSecretsPairingDiscovery`: advertise
 an open window, browse for one; `TomSecretsBonsoirPairingDiscovery` over
 `bonsoir` for both apps), the camera's QR reader (`scanner`,
 `TomSecretsCodeScanner`: the entry editor's "Scan a QR code" for a TOTP secret,
-the mobile app's pairing code), the clipboard and what the First run wizard's
-last step offers. `tom_secrets_desktop` implements them on macOS, Windows and
-Linux, `tom_secrets_mobile` on iOS and Android; a test uses fakes.
+the mobile app's pairing code), the clipboard, whether an attachment's save is a
+share (`attachmentsShare`), what stands below the unlock form (`unlockFooter`),
+the unlocked screen in place of the main shell (`shell`), system vaults
+read-only (`systemVaultsReadOnly`), the clipboard timeout
+(`clipboardClearAfter`) and what the First run wizard's last step offers.
+`tom_secrets_desktop` implements them on macOS, Windows and Linux,
+`tom_secrets_mobile` on iOS and Android; a test uses fakes.
 
 ## Configuration
 

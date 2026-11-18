@@ -281,6 +281,8 @@ final class TomSecretsHost {
     this.shell,
     this.clipboardClearAfter,
     this.scanner,
+    this.attachmentsShare = false,
+    this.unlockFooter,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -371,6 +373,15 @@ final class TomSecretsHost {
   /// The camera's QR reader (the mobile app), or null: then a TOTP secret
   /// is pasted only.
   final TomSecretsCodeScanner? scanner;
+
+  /// Whether [files]' save hands a file to the share sheet (the mobile
+  /// app: an attachment is opened in another app) rather than to a save
+  /// dialog.
+  final bool attachmentsShare;
+
+  /// Shown below the unlock screen's form, or null (the mobile app: setting
+  /// the device up again when its GitHub token was refused).
+  final Widget Function(BuildContext context)? unlockFooter;
 
   /// The screen shown once unlocked, in place of the desktop's main shell
   /// (the mobile app's adaptive shell), or null.

@@ -104,23 +104,43 @@ class _ShellState extends State<TomSecretsMobileShell> {
       final reinstall =
           expiry != null &&
           expiry.difference(widget.clock()) < tomSecretsProfileWarning;
-      final content = reinstall
-          ? Column(
+      // The keys due (this device's GitHub token): renewed by setting the
+      // device up again, in Settings.
+      final reminders = TomSecretsReminders(
+        context.watch<TomSecretsServiceConnection>(),
+        context.read<TomSecretsHost>().preferences,
+      );
+      final banners = <Widget>[
+        if (reinstall)
+          MaterialBanner(
+            key: const Key('tsm-mobile-reinstall'),
+            leading: const Icon(Icons.update_rounded),
+            content: Text(
+              'This build stops starting on '
+              '${MaterialLocalizations.of(context).formatMediumDate(expiry.toLocal())}'
+              ': install it again from Xcode.',
+            ),
+            actions: const [SizedBox.shrink()],
+          ),
+        if (reminders.shown.isNotEmpty && _tab != _Tab.settings)
+          TomSecretsReminderBanner(
+            keys: reminders.shown,
+            openLabel: 'Settings',
+            onOpen: () => setState(() => _tab = _Tab.settings),
+            onSnooze: () async {
+              await reminders.snooze(reminders.shown);
+              if (mounted) setState(() {});
+            },
+          ),
+      ];
+      final content = banners.isEmpty
+          ? body
+          : Column(
               children: [
-                MaterialBanner(
-                  key: const Key('tsm-mobile-reinstall'),
-                  leading: const Icon(Icons.update_rounded),
-                  content: Text(
-                    'This build stops starting on '
-                    '${MaterialLocalizations.of(context).formatMediumDate(expiry.toLocal())}'
-                    ': install it again from Xcode.',
-                  ),
-                  actions: const [SizedBox.shrink()],
-                ),
+                ...banners,
                 Expanded(child: body),
               ],
-            )
-          : body;
+            );
       final scaffold = Scaffold(
         appBar: AppBar(
           title: const Text('Tom Secrets'),
@@ -302,13 +322,24 @@ class _VaultsPane extends StatelessWidget {
   ) {
     final parts = <String>[
       ?session.readOnlyReason(vault.store),
-      if (state?.fetchedAt case final at?) 'fetched ${_ago(at)}',
+      if (state?.state == 'token_expired')
+        'GitHub refused this device\'s token: Settings › Set this device up '
+            'again',
+      if (state?.fetchedAt case final at?)
+        'fetched ${_ago(at)}'
+            '${state?.fetchedBytes == null ? '' : ' (${_size(state!.fetchedBytes!)})'}',
       if ((state?.notPushed ?? 0) > 0)
         '${state!.notPushed} change${state.notPushed == 1 ? '' : 's'} not '
             'written to GitHub',
     ];
     return parts.isEmpty ? 'current' : parts.join(' · ');
   }
+
+  static String _size(int bytes) => bytes < 1024
+      ? '$bytes B'
+      : bytes < 1 << 20
+      ? '${(bytes / 1024).round()} KB'
+      : '${(bytes / (1 << 20)).toStringAsFixed(1)} MB';
 
   static String _ago(DateTime at) {
     final d = DateTime.now().difference(at);

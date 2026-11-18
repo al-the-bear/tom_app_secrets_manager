@@ -399,6 +399,7 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
                 )
               : const Text('Unlock'),
         ),
+        ?context.read<TomSecretsHost>().unlockFooter?.call(context),
       ],
     );
   }
@@ -525,6 +526,9 @@ String tomSecretsDescribeAdminError(TomSecretsAdminException e) => switch ((
   ('denied', 'stale_base') =>
     'The vault changed meanwhile; it was read again. Make the change once '
         'more.',
+  // Where there is no copy to serve (the mobile app holds none): the
+  // refusal says what to do itself.
+  ('offline', 'no_copy') || ('token_expired', 'no_copy') => e.message,
   ('offline', _) || ('token_expired', _) =>
     'The vault is served from its offline copy: '
         '${e.kind == 'offline' ? 'GitHub is not reachable' : 'the GitHub token expired'}. '

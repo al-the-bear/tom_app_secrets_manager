@@ -11,6 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
+import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+
+import 'mobile_documents.dart';
 import 'mobile_engine.dart';
 
 /// The settings view.
@@ -42,6 +45,45 @@ class _SettingsState extends State<TomSecretsMobileSettingsView> {
       });
     } else {
       await _settings.set(key, value);
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// A KDBX file picked, named and opened with its password, then listed in
+  /// the primary (`TomSecretsMobileEngine.addDocumentVault`).
+  Future<void> _addFileVault() async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final session = context.read<TomSecretsSession>();
+    final picked = await widget.engine.documents!.pickVault();
+    if (picked == null || !mounted) return;
+    final dot = picked.name.lastIndexOf('.');
+    final answer = await showDialog<({String name, String password})>(
+      context: context,
+      builder: (_) => _AddFileVaultDialog(
+        fileName: picked.name,
+        suggestedName: (dot > 0 ? picked.name.substring(0, dot) : picked.name)
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9_-]+'), '-'),
+      ),
+    );
+    if (answer == null || answer.name.isEmpty) return;
+    final vaultName = answer.name;
+    final secret = answer.password;
+    try {
+      await widget.engine.addDocumentVault(
+        name: vaultName,
+        document: picked,
+        password: secret,
+      );
+      // The screens open the new vault with the others.
+      await session.load();
+      messenger?.showSnackBar(
+        SnackBar(content: Text('${picked.name} is the vault $vaultName.')),
+      );
+    } on TomSecretsAdminException catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text(e.message)));
+    } on TomSecretsDocumentException catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text(e.message)));
     }
     if (mounted) setState(() {});
   }
@@ -130,6 +172,37 @@ class _SettingsState extends State<TomSecretsMobileSettingsView> {
         ),
         const Divider(),
         ListTile(
+          title: Text('Vaults', style: Theme.of(context).textTheme.titleSmall),
+        ),
+        for (final MapEntry(key: name, value: locator)
+            in widget.engine.locators.entries)
+          ListTile(
+            key: Key('tsm-mobile-vault-locator-$name'),
+            dense: true,
+            leading: Icon(
+              locator.startsWith('file:')
+                  ? Icons.description_outlined
+                  : Icons.cloud_outlined,
+            ),
+            title: Text(name),
+            subtitle: Text(
+              '$locator'
+              '${context.watch<TomSecretsServiceConnection>().stores[name]?.state == 'unavailable' ? ' · not reachable on this device' : ''}',
+            ),
+          ),
+        if (widget.engine.documents != null)
+          ListTile(
+            key: const Key('tsm-mobile-add-file-vault'),
+            leading: const Icon(Icons.note_add_outlined),
+            title: const Text('Add a vault from a file'),
+            subtitle: const Text(
+              'A KDBX file in Files (e.g. iCloud Drive): read when you '
+              'unlock, written back when you save; no copy is kept.',
+            ),
+            onTap: () => unawaited(_addFileVault()),
+          ),
+        const Divider(),
+        ListTile(
           title: const Text('This device'),
           subtitle: Text(
             '${widget.engine.device} · the primary '
@@ -177,4 +250,64 @@ class _SettingsState extends State<TomSecretsMobileSettingsView> {
       ],
     );
   }
+}
+
+/// The name and password of a file added as a vault.
+class _AddFileVaultDialog extends StatefulWidget {
+  const _AddFileVaultDialog({
+    required this.fileName,
+    required this.suggestedName,
+  });
+
+  final String fileName;
+  final String suggestedName;
+
+  @override
+  State<_AddFileVaultDialog> createState() => _AddFileVaultDialogState();
+}
+
+class _AddFileVaultDialogState extends State<_AddFileVaultDialog> {
+  late final _name = TextEditingController(text: widget.suggestedName);
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text('Add ${widget.fileName}'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          key: const Key('tsm-mobile-file-vault-name'),
+          controller: _name,
+          decoration: const InputDecoration(labelText: 'Vault name'),
+        ),
+        TextField(
+          key: const Key('tsm-mobile-file-vault-password'),
+          controller: _password,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Its password'),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const Key('tsm-mobile-file-vault-add'),
+        onPressed: () => Navigator.of(
+          context,
+        ).pop((name: _name.text.trim(), password: _password.text)),
+        child: const Text('Add'),
+      ),
+    ],
+  );
 }

@@ -29,6 +29,8 @@ import 'package:tom_core_storage/tom_core_storage.dart'
 import 'package:tom_crypto/protected_value.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 import 'package:tom_secrets_service/tom_secrets_service.dart';
+import 'mobile_documents.dart';
+import 'mobile_kdf_guard.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart'
     show TomSecretsAdminChannel, TomSecretsPreferences;
 
@@ -52,6 +54,10 @@ abstract final class TomSecretsMobileKeys {
 
   /// `off` when the user turned the biometric unlock off (default on).
   static const biometric = 'mobile.biometric';
+
+  /// The GitHub tokens' expiries the pairing delivered, JSON
+  /// (`owner/repository` → ISO 8601).
+  static const tokenExpires = 'mobile.tokenExpires';
 }
 
 /// The mobile app's settings (device preferences, never synced).
@@ -94,6 +100,35 @@ final class TomSecretsMobileSettings {
   Future<void> setBiometric(bool on) =>
       preferences.write(TomSecretsMobileKeys.biometric, on ? null : 'off');
 
+  /// The days before a GitHub token's expiry its reminders start (as the
+  /// desktop's `keyExpiryWarningDays`).
+  static const int tokenWarningDays = 14;
+
+  /// The GitHub tokens' expiries the pairing delivered.
+  Map<String, DateTime> get pairedTokenExpiries {
+    try {
+      final json = jsonDecode(
+        preferences.read(TomSecretsMobileKeys.tokenExpires) ?? '{}',
+      );
+      return {
+        for (final MapEntry(:key, :value) in (json as Map).entries)
+          if (DateTime.tryParse('$value') case final at?) '$key': at.toUtc(),
+      };
+    } on Object {
+      return const {};
+    }
+  }
+
+  /// Records [expiries] (`owner/repository` → expiry).
+  Future<void> setPairedTokenExpiries(Map<String, DateTime> expiries) =>
+      preferences.write(
+        TomSecretsMobileKeys.tokenExpires,
+        jsonEncode({
+          for (final MapEntry(:key, :value) in expiries.entries)
+            key: value.toUtc().toIso8601String(),
+        }),
+      );
+
   /// Sets [key] to [value].
   Future<void> set(String key, int value) => preferences.write(key, '$value');
 }
@@ -113,21 +148,64 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     http.Client? httpClient,
     String githubBaseUrl = 'https://api.github.com',
     DateTime Function()? clock,
+    TomSecretsDocuments? documents,
+    this.kdfMemoryLimit = defaultKdfMemoryLimit,
+    this.unlockRetryEvery = const Duration(seconds: 15),
+    this.unlockRetryFor = const Duration(minutes: 10),
   }) : settings = TomSecretsMobileSettings(preferences),
+       documentRegistry = TomSecretsDocumentRegistry(preferences),
        _clock = clock ?? DateTime.now {
+    _github = TomSecretsGitHubOpener(
+      device: device,
+      tokens: _token,
+      // No offline cache: a phone keeps no copy of a vault (part-mobile).
+      cacheDirectory: null,
+      baseUrl: githubBaseUrl,
+      httpClient: httpClient,
+      clock: _clock,
+    );
+    this.documents = documents;
     _vaults = TomSecretsVaultSet(
-      opener: TomSecretsGitHubOpener(
-        device: device,
-        tokens: _token,
-        // No offline cache: a phone keeps no copy of a vault (part-mobile).
-        cacheDirectory: null,
-        baseUrl: githubBaseUrl,
-        httpClient: httpClient,
-        clock: _clock,
+      opener: TomSecretsKdfGuardedOpener(
+        TomSecretsLocatorOpener(
+          // Without documents no locator is this phone's: every `file:`
+          // vault is another device's.
+          file: TomSecretsDocumentOpener(
+            documents: documents ?? const TomSecretsNoDocuments(),
+            registry: documentRegistry,
+            clock: _clock,
+          ),
+          github: _github,
+        ),
+        limit: kdfMemoryLimit,
       ),
       clock: _clock,
     );
   }
+
+  /// The memory a vault's key derivation may take when the device's is not
+  /// known: 256 MiB.
+  static const int defaultKdfMemoryLimit = 256 << 20;
+
+  /// The most memory a vault's Argon2 may take on this device (bytes); a
+  /// vault asking more is refused at the unlock, not opened.
+  final int kdfMemoryLimit;
+
+  /// How often an unlock refused for no network is tried again by itself.
+  final Duration unlockRetryEvery;
+
+  /// How long it is tried again.
+  final Duration unlockRetryFor;
+
+  /// The phone's documents (`file:` vaults), or null.
+  late final TomSecretsDocuments? documents;
+
+  /// Which document each of this phone's `file:` vaults is.
+  final TomSecretsDocumentRegistry documentRegistry;
+
+  late final TomSecretsGitHubOpener _github;
+  Timer? _retry;
+  final Map<String, int> _sizes = {};
 
   /// The primary vault's locator.
   final String primaryLocator;
@@ -167,7 +245,22 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   Map<String, Object?> _stateOf(TomSecretsStoreStatus status) => {
     ...status.toJson(),
     if (_pending.containsKey(status.name)) 'notPushed': 1,
+    'fetchedBytes': ?_sizes[status.name],
   };
+
+  /// The size of every vault as held now: what the last fetch brought
+  /// (part-mobile, Fetch: every unlock fetches them again, on mobile data
+  /// too).
+  Future<void> _recordSizes() async {
+    _sizes.clear();
+    for (final s in _vaults.status) {
+      try {
+        _sizes[s.name] = (await _vaults.vaultFile(s.name)).stored.length;
+      } on Object {
+        // Not open: no size.
+      }
+    }
+  }
 
   /// Whether the vaults are closed.
   bool get isLocked => !_vaults.isUnlocked;
@@ -222,13 +315,55 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   @override
   Future<void> unlockWithBundle(String vault, TomSecretsUnlockBundle bundle) =>
       _serial(() async {
-        final keys = TomSecretsHeldKeys.ofBundle(bundle);
-        if (!isLocked) {
-          keys.dispose();
-          return;
-        }
-        await _unlock(keys, bundle: true);
+        if (!isLocked) return;
+        await _unlockOrRetry(
+          () => TomSecretsHeldKeys.ofBundle(bundle),
+          bundle: true,
+        );
       });
+
+  /// Unlocks with [keys]; refused for no network, tries again by itself
+  /// every [unlockRetryEvery] for [unlockRetryFor] (part-mobile, Edge cases:
+  /// the network returns), until it opens, the user locks or the time is up.
+  Future<void> _unlockOrRetry(
+    TomSecretsHeldKeys Function() keys, {
+    bool bundle = false,
+  }) async {
+    try {
+      await _unlock(keys(), bundle: bundle);
+    } on TomSecretsAdminException catch (e) {
+      if (e.kind == TomSecretsStoreState.offline.wireName) {
+        _retryLater(keys, bundle: bundle);
+      }
+      rethrow;
+    }
+  }
+
+  void _retryLater(TomSecretsHeldKeys Function() keys, {required bool bundle}) {
+    _retry?.cancel();
+    final until = _clock().add(unlockRetryFor);
+    var trying = false;
+    _retry = Timer.periodic(unlockRetryEvery, (timer) {
+      if (_closed || !isLocked || _clock().isAfter(until)) {
+        timer.cancel();
+        return;
+      }
+      if (trying) return;
+      trying = true;
+      unawaited(
+        _serial(() async {
+          if (!isLocked || !timer.isActive) return;
+          try {
+            await _unlock(keys(), bundle: bundle);
+            timer.cancel();
+          } on Object {
+            // Still no network (or refused for good: the user sees it at
+            // the next attempt): tried again at the next tick.
+          }
+        }).whenComplete(() => trying = false),
+      );
+    });
+  }
 
   /// The keys of [given] completed from the keychain for the primary: its
   /// key file (unless a composite key holds it) and a `.tsmx` primary's
@@ -280,6 +415,9 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     } on TomSecretsAdminException {
       _vaults.lock();
       rethrow;
+    } on TomSecretsVaultTooHeavyException catch (e) {
+      _vaults.lock();
+      _refuse('unavailable', e.message, {'reason': 'kdf_memory'});
     } on Object catch (e) {
       _vaults.lock();
       final failure = tomSecretsFetchFailureOf(e);
@@ -288,21 +426,31 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         _refuse(
           kind,
           kind == 'token_expired'
-              ? 'GitHub refused the token'
-              : 'no connection: the vaults are only on GitHub',
+              ? 'GitHub refused this device\'s token: it expired or was '
+                    'revoked. Make a new one and set this device up again '
+                    '(below), by pairing or by hand.'
+              : 'No connection: the vaults are only on GitHub. The unlock '
+                    'is tried again by itself when the network is back.',
           {
+            'reason': 'no_copy',
             'stores': [primaryLocator],
           },
         );
       }
       rethrow;
     }
+    _retry?.cancel();
+    _retry = null;
+    await _recordSizes();
     _emit({'op': 'unlocked'});
   }
 
   /// Closes every vault: nothing of them stays on the device.
   void lock() {
     _pending.clear();
+    _retry?.cancel();
+    _retry = null;
+    _sizes.clear();
     if (isLocked) return;
     _vaults.lock();
     _emit({'op': 'locked'});
@@ -318,6 +466,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
       final report = await _vaults.refresh(force: force || waiting.isNotEmpty);
       final written = await _writePending();
       final changed = {...report.reopened, ...written};
+      if (changed.isNotEmpty) await _recordSizes();
       for (final s in report.states) {
         _emit({'op': 'store_state', ..._stateOf(s)});
       }
@@ -376,21 +525,30 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     return written;
   }
 
-  /// [pending] merged onto the copy of [name] held now.
-  Future<_Pending> _mergedOnto(String name, _Pending pending) async {
-    final held = await _vaults.vaultFile(name);
+  /// The credentials and outer key of [name] as the vault set holds them.
+  (Credentials, String?) _keysOf(String name) {
     final keys =
         ((_plain(_vaults.vaultKeys(stores: [name])) as List).single
                 as Map)['keys']!
             as Map;
     final keyFile = keys['keyFile'];
     final compositeKey = keys['compositeKey'];
-    final credentials = tomSecretsVaultCredentials(
-      password: keys['password'] as String?,
-      keyFile: keyFile is String ? base64.decode(keyFile) : null,
-      compositeKey: compositeKey is String ? base64.decode(compositeKey) : null,
+    return (
+      tomSecretsVaultCredentials(
+        password: keys['password'] as String?,
+        keyFile: keyFile is String ? base64.decode(keyFile) : null,
+        compositeKey: compositeKey is String
+            ? base64.decode(compositeKey)
+            : null,
+      ),
+      keys['outerKey'] as String?,
     );
-    final outerKey = keys['outerKey'] as String?;
+  }
+
+  /// [pending] merged onto the copy of [name] held now.
+  Future<_Pending> _mergedOnto(String name, _Pending pending) async {
+    final held = await _vaults.vaultFile(name);
+    final (credentials, outerKey) = _keysOf(name);
     final opener = _vaults.opener;
     Future<KdbxFile> open(Uint8List stored) =>
         opener.decode(held.location, stored, credentials, outerKey: outerKey);
@@ -402,10 +560,122 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
       location: held.location,
     );
     return _Pending(
-      await opener.encode(held.location, ours, outerKey: outerKey),
+      // The held file's outer cipher is kept.
+      await tomSecretsEncodeStored(
+        held.location,
+        ours,
+        outerKey: outerKey,
+        like: held.stored,
+      ),
       held.revision,
       held.stored,
     );
+  }
+
+  /// Adds the phone's [document] as the vault [name] opened with
+  /// [password] (part-mobile, `file:` vaults): listed in the primary under
+  /// a locator naming this device, so its keys are kept where every vault's
+  /// are; then opened. Answers the vault's locator. Refused: a wrong
+  /// password (`denied`, `bad_password`), a name already taken (`denied`,
+  /// `exists`), a file too heavy for the device, the primary not writable
+  /// now (no network: `offline`).
+  Future<String> addDocumentVault({
+    required String name,
+    required TomSecretsPickedDocument document,
+    required String password,
+  }) async {
+    final docs = documents;
+    if (docs == null) _refuse('unsupported', 'this device has no files');
+    _unlocked();
+    final primary = _vaults.primaryName!;
+    if (_vaults.status.any((s) => s.name == name) ||
+        _vaults.listed.any((k) => k.name == name)) {
+      _refuse('denied', 'a vault named $name is there already', {
+        'reason': 'exists',
+      });
+    }
+    final locator = documentRegistry.locatorFor(device, document.name);
+    await documentRegistry.put(locator, document.id);
+    try {
+      final stored = await docs.read(document.id);
+      try {
+        await _vaults.opener.decode(
+          locator,
+          stored,
+          tomSecretsVaultCredentials(password: password),
+        );
+      } on KdbxInvalidKeyException {
+        _refuse('denied', 'the password does not open ${document.name}', {
+          'reason': 'bad_password',
+        });
+      } on TomSecretsVaultTooHeavyException catch (e) {
+        _refuse('unavailable', e.message, {'reason': 'kdf_memory'});
+      }
+      final held = await _vaults.vaultFile(primary);
+      final (credentials, outerKey) = _keysOf(primary);
+      final file = await _vaults.opener.decode(
+        held.location,
+        held.stored,
+        credentials,
+        outerKey: outerKey,
+      );
+      TomSecretsPrimaryVaults(file, primaryLocator: primaryLocator).put(
+        TomSecretsVaultKeys(name: name, locator: locator, password: password),
+      );
+      await request('save', {
+        'store': primary,
+        'bytes': base64.encode(
+          await tomSecretsEncodeStored(
+            held.location,
+            file,
+            outerKey: outerKey,
+            like: held.stored,
+          ),
+        ),
+        'baseRevision': held.revision,
+      });
+      if (_pending.containsKey(primary)) {
+        _pending.remove(primary);
+        _refuse(
+          'offline',
+          'the primary could not be written to GitHub: add the file when '
+              'the network is back',
+          {'reason': 'no_copy'},
+        );
+      }
+    } on Object {
+      await documentRegistry.forget(locator);
+      rethrow;
+    }
+    await refresh(force: true);
+    return locator;
+  }
+
+  /// Every vault served, by name, with its locator (the settings' list).
+  Map<String, String> get locators => {
+    for (final s in _vaults.status) s.name: s.locator ?? '',
+  };
+
+  /// The GitHub tokens' expiries (`owner/repository` → UTC): the one GitHub
+  /// reports on its answers, else the one the pairing delivered.
+  Map<String, DateTime> get tokenExpiries => {
+    ...settings.pairedTokenExpiries,
+    ..._github.tokenExpiries,
+  };
+
+  /// The reminders due (`status.expiring`): this device's GitHub tokens,
+  /// from two weeks before they expire (as the desktop's, DP-85).
+  List<Map<String, Object?>> _expiring() {
+    final now = _clock();
+    return [
+      for (final MapEntry(key: slug, value: at) in tokenExpiries.entries)
+        ?TomSecretsKeyDate(
+          kind: 'github_token',
+          key: 'github-token:$slug',
+          expiresAt: at,
+          firstDays: TomSecretsMobileSettings.tokenWarningDays,
+        ).dueAt(now)?.toJson(),
+    ];
   }
 
   /// Whether [store] is a system vault (its metadata, as the vault set
@@ -424,7 +694,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     'protocol': 1,
     'service': {'version': 'mobile', 'start': start},
     'stores': [for (final s in _vaults.status) _stateOf(s)],
-    'expiring': const <Object?>[],
+    'expiring': _expiring(),
     'admins': 1,
     'hardening': const <String, Object?>{},
   };
@@ -457,14 +727,13 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
             'reason': 'password',
           });
         }
+        TomSecretsHeldKeys keys() => TomSecretsHeldKeys.of(
+          password: password,
+          keyFile: keyFile is String ? base64.decode(keyFile) : null,
+        );
         await _serial(() async {
           if (!isLocked) return;
-          await _unlock(
-            TomSecretsHeldKeys.of(
-              password: password,
-              keyFile: keyFile is String ? base64.decode(keyFile) : null,
-            ),
-          );
+          await _unlockOrRetry(keys);
         });
         return {'op': 'ok'};
       case 'unlockStore':
@@ -637,6 +906,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   @override
   Future<void> close() async {
     _closed = true;
+    _retry?.cancel();
     lock();
     await _events.close();
   }

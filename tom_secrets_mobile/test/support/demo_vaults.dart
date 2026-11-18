@@ -7,13 +7,15 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:tom_core_storage/github.dart';
 import 'package:tom_core_storage/settings.dart';
 import 'package:tom_core_storage/tom_core_storage.dart';
 import 'package:tom_github_api/testing.dart';
 import 'package:tom_github_api/tom_github_api.dart';
-import 'package:tom_kdbx_store/tom_kdbx_store.dart' show KdbxArgon2, KdbxArgon2Type;
+import 'package:tom_kdbx_store/tom_kdbx_store.dart'
+    show KdbxArgon2, KdbxArgon2Type;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 const demoRepo = 'al-the-bear/demo-vaults';
@@ -99,16 +101,35 @@ final class DemoVaults {
     }
   }
 
+  /// [locator]'s file on GitHub as stored.
+  Future<Uint8List> fetchStored(String locator) async {
+    final s = storage();
+    try {
+      final (bytes, _) = await TomSecretsVaultUnit.readAtHead(s, locator);
+      return bytes;
+    } finally {
+      s.close();
+    }
+  }
+
   /// Writes the three vaults to GitHub.
   Future<void> seed() async {
     server.repo(demoRepo);
     final primary = vault('primary', primaryCredentials, {'Main': 'demo-db'});
     TomSecretsPrimaryVaults(primary, primaryLocator: demoPrimary)
       ..put(
-        TomSecretsVaultKeys(name: 'team', locator: demoTeam, password: 'team-pw'),
+        TomSecretsVaultKeys(
+          name: 'team',
+          locator: demoTeam,
+          password: 'team-pw',
+        ),
       )
       ..put(
-        TomSecretsVaultKeys(name: 'fleet', locator: demoSystem, password: 'sys-pw'),
+        TomSecretsVaultKeys(
+          name: 'fleet',
+          locator: demoSystem,
+          password: 'sys-pw',
+        ),
       );
     await put(demoPrimary, primary);
     await put(demoTeam, vault('team', teamCredentials, {'Api': 'token-1'}));

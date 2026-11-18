@@ -16,6 +16,8 @@ import 'package:tom_basics/utilities.dart'
     show TomClipboardPort, TomClipboardReceipt;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart' show TomSecretsPreferences;
 
+import 'mobile_engine.dart';
+
 /// [TomSecretsPreferences] in a JSON file.
 final class TomSecretsMobilePreferences implements TomSecretsPreferences {
   TomSecretsMobilePreferences._(this.file, this._values);
@@ -118,4 +120,22 @@ Future<DateTime?> tomSecretsMobileProfileExpiry({
   } on MissingPluginException {
     return null;
   }
+}
+
+/// The most memory a vault's Argon2 may take on this device: a quarter of
+/// its physical memory (iOS ends an app well before it holds half; the app
+/// and the vaults need the rest), or the engine's default when the platform
+/// does not tell.
+Future<int> tomSecretsMobileKdfMemoryLimit({
+  MethodChannel channel = const MethodChannel('tom_secrets_mobile/app'),
+}) async {
+  try {
+    final physical = await channel.invokeMethod<int>('physicalMemory');
+    if (physical != null && physical > 0) return physical ~/ 4;
+  } on PlatformException {
+    // Unknown: the default.
+  } on MissingPluginException {
+    // Unknown: the default.
+  }
+  return TomSecretsMobileEngine.defaultKdfMemoryLimit;
 }

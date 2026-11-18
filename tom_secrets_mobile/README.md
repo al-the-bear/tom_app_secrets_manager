@@ -11,8 +11,17 @@ adaptive shell and an in-app engine in place of the secrets service.
 A phone runs no secrets service and keeps no copy of a vault:
 
 - **The vaults stay on GitHub.** At the unlock the app fetches the primary
-  and the vaults it lists into memory; at the lock they are dropped. Without
-  a connection a locked phone cannot open them: the unlock says so.
+  and the vaults it lists into memory (the vault list shows each fetch's
+  size); at the lock they are dropped. Without a connection a locked phone
+  cannot open them: the unlock says so and tries again by itself every 15
+  seconds for 10 minutes, so it opens once the network is back.
+- **Vaults in Files.** Settings › "Add a vault from a file" takes a KDBX
+  file from the document picker (e.g. iCloud Drive; Android's Storage Access
+  Framework): it is read into memory at the unlock and written back on save,
+  merged when it changed there meanwhile; the app keeps no copy. It is
+  listed in the primary (its password kept there, as every vault's) under
+  `file:/tsm-document/<device>/<file name>`, which only this phone can
+  reach: other devices list it as not reachable.
 - **Sync while open.** Every minute the app looks for vaults whose refresh
   interval (15 minutes by default, 5 at least) is due, one conditional
   request each, and at every return to the foreground and on pull-to-refresh
@@ -33,6 +42,16 @@ A phone runs no secrets service and keeps no copy of a vault:
   vaults' locators, key files, repository keys and a GitHub token of its
   own; the master password never travels.
 - **System vaults are read-only** on a phone (BP-40).
+- **Attachments** are added from the document picker and opened in another
+  app through the share sheet (the shared copy is removed when the sheet
+  closes on iOS, at the next share or start on Android).
+- **Reminders.** Two weeks before this phone's GitHub token expires (the
+  date the pairing delivered, or the one GitHub reports) a banner leads to
+  Settings; a refused token tells, also on the unlock screen, to set the
+  device up again ("Set this device up again": pair, or by hand).
+- **A vault too heavy for the phone** (Argon2 asking more than a quarter of
+  its memory) is refused at the unlock with a message, before the key
+  derivation could exhaust the memory.
 - **iOS has no autofill** from this app: logins are shown and copied from it
   (TD-4). Android's Autofill service is its own package.
 
@@ -63,6 +82,11 @@ switch on their own.
 - `lib/src/mobile_engine.dart`: the engine, the admin protocol answered
   in-process over `tom_secrets_service`'s vault set and its GitHub opener
   without an offline cache; the saves GitHub could not take yet.
+- `lib/src/mobile_documents.dart`: the documents port and its channel, the
+  `file:` vaults' opener (`TomSecretsDocumentOpener`) and which document
+  each locator is, the attachments' files.
+- `lib/src/mobile_kdf_guard.dart`: the Argon2 memory read from the KDBX 4
+  header and checked before a vault is opened (`TomSecretsKdfGuardedOpener`).
 - `lib/src/mobile_setup.dart`, `lib/src/setup_screen.dart`: the setup, what
   a pairing delivered into the keychain and the preferences, or a primary
   set up by hand.
@@ -77,11 +101,14 @@ switch on their own.
   clipboard channel, the profile expiry.
 - `lib/src/mobile_app.dart`, `lib/main.dart`: the composition.
 - `android/app/src/main/`: `FlutterFragmentActivity` (the biometric prompt
-  needs it), `FLAG_SECURE`, the sensitive clipboard, no backup; the release
+  needs it), `FLAG_SECURE`, the sensitive clipboard, the documents (the
+  Storage Access Framework with persisted permissions, the share sheet
+  through a `FileProvider`), the physical memory, no backup; the release
   signing in `android/app/build.gradle.kts`.
 - `ios/Runner/`: the local-only expiring pasteboard, the privacy cover, the
-  profile expiry, the Face ID, camera and local-network texts and the
-  Bonjour service type (`_tsm-pair._tcp`).
+  documents (security-scoped bookmarks, NSFileCoordinator, the share sheet),
+  the physical memory, the profile expiry, the Face ID, camera and
+  local-network texts and the Bonjour service type (`_tsm-pair._tcp`).
 
 ## Building and running
 
@@ -114,13 +141,19 @@ GitHub is out of reach and written (merged) when it is back, the phone and
 tablet layouts, the biometric unlock and its switch, the background lock,
 the clipboard timeout, the setup reset, the reinstall banner, the
 desktop's QR code scanned (a fake scanner), the window found on the network
-by the code (a fake discovery), a TOTP secret scanned. Demo data only. The
+by the code (a fake discovery), a TOTP secret scanned; a file added as a
+vault, written back and merged with a change made there, unreachable on
+another device; an attachment added and shared; a too heavy vault refused;
+the token reminder; the unlock retried once the network is back; the fetch
+sizes (documents in memory). Demo data only. The
 camera itself is checked on a device.
 
 ## Limits
 
 - No offline copy: a locked phone without a connection cannot open a vault.
-- Only `github:` vaults (a `file:` vault on a desktop disk is not reachable).
+- A desktop's `file:` vault (a path on its disk) is not reachable from a
+  phone, as a phone's file is not from a desktop.
+- A phone does not re-key, move or create a vault: the desktop app does.
 - The phone approves nothing and is no approval link's peer: it receives no
   trust material from the pairing.
 - The GitHub App sign-in (device flow) is a desktop feature; the phone uses

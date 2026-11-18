@@ -403,7 +403,7 @@ class _MainShellState extends State<TomSecretsMainShell> {
                     const Divider(height: 1),
                     if (reminders.shown.isNotEmpty &&
                         _destination != TomSecretsDestination.keys)
-                      _ReminderBanner(
+                      TomSecretsReminderBanner(
                         keys: reminders.shown,
                         onOpen: () => setState(
                           () => _destination = TomSecretsDestination.keys,
@@ -467,17 +467,29 @@ TomSyncSummary tomSecretsSyncSummary(TomSecretsStoreState s) => TomSyncSummary(
 );
 
 /// The banner of the keys due (part-key-rotation, Reminders): what is due,
-/// Open Keys, and Snooze until each key's next reminder step.
-class _ReminderBanner extends StatelessWidget {
-  const _ReminderBanner({
+/// [openLabel] (the screen where the key is renewed), and Snooze until each
+/// key's next reminder step.
+class TomSecretsReminderBanner extends StatelessWidget {
+  /// The banner of [keys].
+  const TomSecretsReminderBanner({
+    super.key,
     required this.keys,
     required this.onOpen,
     required this.onSnooze,
+    this.openLabel = 'Open Keys',
   });
 
+  /// The keys due.
   final List<TomSecretsDueKey> keys;
+
+  /// Opens where they are renewed.
   final VoidCallback onOpen;
+
+  /// Snoozes them until their next step.
   final Future<void> Function() onSnooze;
+
+  /// The open button's label.
+  final String openLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -507,7 +519,7 @@ class _ReminderBanner extends StatelessWidget {
         FilledButton.tonal(
           key: const Key('tsm-reminder-open'),
           onPressed: onOpen,
-          child: const Text('Open Keys'),
+          child: Text(openLabel),
         ),
       ],
     );

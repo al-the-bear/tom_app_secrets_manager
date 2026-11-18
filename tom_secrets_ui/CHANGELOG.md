@@ -2,6 +2,12 @@
 
 ## 0.1.0
 
+- For the mobile app (part-mobile): `TomSecretsStoreState.fetchedBytes` (the
+  size of the last fetch, when the host reports it);
+  `TomSecretsReminderBanner` (the keys-due banner, public, its open button
+  named by the host); `TomSecretsHost.unlockFooter` (below the unlock form)
+  and `attachmentsShare` (an attachment's save is a share); the unlock
+  screen shows a refusal with reason `no_copy` as its host wrote it.
 - Pairing by QR code (DP-56, DP-61): `TomSecretsPairingInvitation` (the
   window's addresses, port and code as `tsm-pair:<address>,…:<port>?code=…`,
   and the address nearest the scanning device), shown by the Pairing screen

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one folder an attachment is shared from (MainActivity's share):
+     emptied at the next share and the next start. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

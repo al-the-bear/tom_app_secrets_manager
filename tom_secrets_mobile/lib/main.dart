@@ -29,6 +29,8 @@ Future<void> main() async {
           ? 'Face ID or Touch ID'
           : 'your fingerprint',
       scanner: const TomSecretsMobileCodeScanner(),
+      documents: const TomSecretsChannelDocuments(),
+      kdfMemoryLimit: await tomSecretsMobileKdfMemoryLimit(),
       discovery: const TomSecretsBonsoirPairingDiscovery(),
     ),
   );

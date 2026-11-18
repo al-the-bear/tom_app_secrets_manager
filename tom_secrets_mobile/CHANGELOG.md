@@ -19,3 +19,12 @@
   (`TomSecretsMobileCodeScanner` over `mobile_scanner`), or by the code
   alone on the same network (the desktop's `_tsm-pair._tcp` announcement);
   TOTP secrets scanned in the entry editor.
+- `file:` vaults from the phone's Files (`TomSecretsDocumentOpener`): listed
+  in the primary under `file:/tsm-document/<device>/<file name>`, read into
+  memory, written back, merged when changed there; Settings lists every
+  vault with its locator. Attachments from the document picker and to the
+  share sheet. The GitHub token's reminder two weeks ahead and, on a refused
+  token, "Set this device up again" on the unlock screen. The unlock retried
+  by itself when the network returns. A vault whose Argon2 needs more than a
+  quarter of the device's memory refused at the unlock
+  (`TomSecretsKdfGuardedOpener`). The size of each fetch on the vault list.

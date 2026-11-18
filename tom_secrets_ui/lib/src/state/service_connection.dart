@@ -63,6 +63,7 @@ final class TomSecretsStoreState {
     this.fetchedAt,
     this.notPushed = 0,
     this.rewrittenHead,
+    this.fetchedBytes,
   });
 
   /// Read from a `statusReport` store or a `store_state` event.
@@ -75,6 +76,7 @@ final class TomSecretsStoreState {
       fetchedAt: fetched is String ? DateTime.tryParse(fetched) : null,
       notPushed: m['notPushed'] is int ? m['notPushed']! as int : 0,
       rewrittenHead: (m['rewritten'] as Map?)?['head'] as String?,
+      fetchedBytes: m['fetchedBytes'] is int ? m['fetchedBytes']! as int : null,
     );
   }
 
@@ -97,6 +99,10 @@ final class TomSecretsStoreState {
   /// force push), while the service waits for the user's answer
   /// (`history.resolve`, protocol.md 6.4); null otherwise.
   final String? rewrittenHead;
+
+  /// The size of the file as last fetched, in bytes, when the host reports
+  /// it (the mobile app: every unlock fetches it again, on mobile data too).
+  final int? fetchedBytes;
 
   /// Whether it is served from its offline copy.
   bool get isOffline =>

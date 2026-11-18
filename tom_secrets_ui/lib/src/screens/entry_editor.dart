@@ -1005,8 +1005,13 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                   children: [
                     if (host.files != null)
                       IconButton(
-                        tooltip: 'Save as…',
-                        icon: const Icon(Icons.download),
+                        key: Key('tsm-attachment-save-${name.key}'),
+                        tooltip: host.attachmentsShare ? 'Share…' : 'Save as…',
+                        icon: Icon(
+                          host.attachmentsShare
+                              ? Icons.ios_share_rounded
+                              : Icons.download,
+                        ),
                         onPressed: () =>
                             unawaited(host.files!.save(name.key, binary.value)),
                       ),
@@ -1028,6 +1033,7 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
+                  key: const Key('tsm-attachment-add'),
                   icon: const Icon(Icons.attach_file),
                   label: const Text('Attach a file'),
                   onPressed: () => unawaited(_addAttachment()),
