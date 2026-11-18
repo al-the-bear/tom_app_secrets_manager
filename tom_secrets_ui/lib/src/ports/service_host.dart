@@ -9,6 +9,7 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:tom_secrets_client/admin.dart' show TomSecretsUnlockBundle;
 import 'package:tom_secrets_core/tom_secrets_core.dart' show TomSecretsFirstRun;
 
 /// An authenticated admin connection (protocol.md 6).
@@ -23,6 +24,11 @@ abstract interface class TomSecretsAdminChannel {
   /// The events after `subscribe`; the stream closes when the connection
   /// ends (the service stopped or died).
   Stream<Map<String, Object?>> get events;
+
+  /// Unlocks [vault] with the OS unlock's key [bundle] (`unlock {vault,
+  /// bundle}`, protocol.md 6.4), sealed under this connection's bundle key;
+  /// throws the admin library's `TomSecretsAdminException`.
+  Future<void> unlockWithBundle(String vault, TomSecretsUnlockBundle bundle);
 
   /// Closes the connection.
   Future<void> close();

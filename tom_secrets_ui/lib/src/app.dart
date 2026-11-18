@@ -15,6 +15,7 @@ import 'screens/first_run_wizard.dart';
 import 'screens/gate_screens.dart';
 import 'screens/main_shell.dart';
 import 'state/first_run_model.dart';
+import 'state/os_unlock.dart';
 import 'state/service_connection.dart';
 import 'state/session_state.dart';
 import 'widgets/style.dart';
@@ -45,9 +46,15 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
   late final TomProtectedClipboard _clipboard = TomProtectedClipboard(
     port: widget.host.clipboard,
   );
+  late final TomSecretsOsUnlock _osUnlock = TomSecretsOsUnlock(
+    connection: _connection,
+    host: widget.host.osUnlock,
+    preferences: widget.host.preferences,
+  );
   late final TomSecretsHostBridge _bridge = TomSecretsHostBridge(
     host: widget.host,
     connection: _connection,
+    osUnlock: _osUnlock,
   );
 
   @override
@@ -60,6 +67,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
   @override
   void dispose() {
     _bridge.dispose();
+    _osUnlock.dispose();
     _session.dispose();
     if (widget.connection == null) _connection.dispose();
     super.dispose();
@@ -71,6 +79,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
       Provider<TomSecretsHost>.value(value: widget.host),
       ChangeNotifierProvider.value(value: _connection),
       ChangeNotifierProvider.value(value: _session),
+      ChangeNotifierProvider.value(value: _osUnlock),
     ],
     child: MaterialApp(
       title: 'Tom Secrets Manager',

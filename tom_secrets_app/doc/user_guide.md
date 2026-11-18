@@ -196,6 +196,45 @@ Other screens you may meet before unlocking:
 A vault with a password of its own shows "has a password of its own" in the
 vault browser; "Open…" asks for it.
 
+### Unlocking with Touch ID or Windows Hello
+
+On macOS and Windows the app can keep the unlock of the primary vault under
+the operating system's own check, and open the vaults with it instead of
+the master password:
+
+- **For this session:** choose "(c) idle or screen lock" as the service's
+  lock mode in [Settings](#settings). The first unlock with the master
+  password is kept; from then on the service locks when you are idle or
+  lock the screen, and "Unlock with Touch ID" (or "Windows Hello") opens it
+  again. It ends when the service stops or you choose "Lock completely" in
+  the tray menu; then only the master password unlocks.
+- **Saved:** tick "Remember the master password with Touch ID" when you
+  unlock, or switch it on in Settings. The unlock then survives restarts of
+  the service and the app. A saved unlock opens the vault even when you
+  have forgotten the password, so on this machine you could set a new one;
+  switch it off where that is not wanted.
+
+What is kept is the vault's composite key (the key the master password and
+key file make) and its repository key, never the password itself. When
+there is one, the app asks for the check as soon as the unlock screen
+appears; cancel it to type the master password instead.
+
+The master password always works. The app asks for it once, and keeps the
+unlock again afterwards, when:
+
+- the vault's master password was changed (perhaps on another machine);
+- a fingerprint or face was added or removed, or Windows Hello was set up
+  again;
+- the check is locked after too many attempts, or cannot be used (a remote
+  session, a closed lid).
+
+**On macOS before the app is signed by its developer team** (as now), Touch
+ID is the weaker, gate-only form: it guards the unlock, but the unlock is
+kept in the login keychain, where a program running as you can read it
+without Touch ID. Settings say so. With Windows Hello the key exists only
+after Hello has signed, so nothing without Hello opens it. **Linux has no
+OS unlock**: the master password is the only way to unlock there.
+
 ## The main window
 
 The rail on the left holds the screens: **Vaults**, **Environments**,
@@ -647,7 +686,11 @@ Each setting says whose it is.
 - "Serve every file the primary vault names", or only the ones you pick;
 - "Default environment";
 - "The service locks": "(b) when idle" after "Idle minutes before it locks",
-  or "(a) never"; and "Longest unlocked time, hours (0: no limit)";
+  "(a) never", or on macOS and Windows "(c) idle or screen lock" with Touch
+  ID or Windows Hello ([Unlocking with Touch ID or Windows
+  Hello](#unlocking-with-touch-id-or-windows-hello)); "Remember the master
+  password with Touch ID"; "Lock when the system sleeps"; and "Longest
+  unlocked time, hours (0: no limit)";
 - "Seconds a request waits for an approval";
 - "Minutes an approval code is valid";
 - "Minutes between pulls of the GitHub vaults (0: off)";
@@ -661,7 +704,9 @@ on this machine pre-approve clients and make approval tokens without a
 person; it is off by default and switched only here.
 
 **This app** (kept in its preferences): "Keep the window out of screenshots
-and screen sharing" (Linux cannot), "Start the app at login, in the tray",
+and screen sharing" (Linux cannot), "Start the app at login, in the tray"
+(macOS: a login item; Windows: the `Run` key of your user; Linux: an
+autostart entry in `~/.config/autostart`),
 and "Stop the service" (programs then get no secrets until it is started and
 unlocked again).
 

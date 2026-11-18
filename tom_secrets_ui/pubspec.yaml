@@ -18,9 +18,9 @@ dependencies:
   provider: ^6.1.5
   # The vaults: KDBX through the one gateway (DP-29), the TOTP, the password
   # generator, the stored-file codec and the entry fields.
-  tom_secrets_core: ^0.2.7
+  tom_secrets_core: ^0.2.8
   # The admin errors and the reference grammar ("How clients name it").
-  tom_secrets_client: ^0.2.8
+  tom_secrets_client: ^0.2.9
   # The key fields, notices, sync indicator and the masked editing surface.
   tom_ui_support: ^0.1.0
   tom_host_ui: ^0.1.0
@@ -29,7 +29,7 @@ dependencies:
   # The protected clipboard (cleared after a timeout).
   tom_basics: ">=3.3.0"
   # The token prompt's types (the First run wizard's GitHub token).
-  tom_core_storage: ^0.1.2
+  tom_core_storage: ^0.1.3
   # The sync states the top bar's indicator presents.
   tom_core_sync: ^0.1.0
   pdf: ^3.13.1

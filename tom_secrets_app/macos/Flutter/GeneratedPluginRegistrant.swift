@@ -11,6 +11,7 @@ import flutter_local_notifications
 import flutter_secure_storage_darwin
 import printing
 import screen_retriever_macos
+import tom_biometric_storage
 import tom_secrets_desktop
 import tray_manager
 import url_launcher_macos
@@ -23,6 +24,7 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FlutterSecureStorageDarwinPlugin.register(with: registry.registrar(forPlugin: "FlutterSecureStorageDarwinPlugin"))
   PrintingPlugin.register(with: registry.registrar(forPlugin: "PrintingPlugin"))
   ScreenRetrieverMacosPlugin.register(with: registry.registrar(forPlugin: "ScreenRetrieverMacosPlugin"))
+  BiometricStoragePlugin.register(with: registry.registrar(forPlugin: "BiometricStoragePlugin"))
   TomSecretsDesktopPlugin.register(with: registry.registrar(forPlugin: "TomSecretsDesktopPlugin"))
   TrayManagerPlugin.register(with: registry.registrar(forPlugin: "TrayManagerPlugin"))
   UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))

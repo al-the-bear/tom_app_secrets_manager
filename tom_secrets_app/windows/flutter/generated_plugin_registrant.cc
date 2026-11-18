@@ -11,6 +11,7 @@
 #include <flutter_secure_storage_windows/flutter_secure_storage_windows_plugin.h>
 #include <printing/printing_plugin.h>
 #include <screen_retriever_windows/screen_retriever_windows_plugin_c_api.h>
+#include <tom_biometric_storage/biometric_storage_plugin_c_api.h>
 #include <tom_secrets_desktop/tom_secrets_desktop_plugin_c_api.h>
 #include <tray_manager/tray_manager_plugin.h>
 #include <url_launcher_windows/url_launcher_windows.h>
@@ -27,6 +28,8 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("PrintingPlugin"));
   ScreenRetrieverWindowsPluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("ScreenRetrieverWindowsPluginCApi"));
+  BiometricStoragePluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("BiometricStoragePluginCApi"));
   TomSecretsDesktopPluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("TomSecretsDesktopPluginCApi"));
   TrayManagerPluginRegisterWithRegistrar(

@@ -75,6 +75,10 @@ Future<void> main(List<String> args) async {
     notifier: notifier,
     loginItem: loginItem,
     captureGuard: TomSecretsPlatformCaptureGuard(),
+    // The OS unlock (Touch ID, Windows Hello; none on Linux) and the screen
+    // lock and sleep it senses for the service (part-os-unlock).
+    osUnlock: tomSecretsDesktopOsUnlock(),
+    sessionEvents: TomSecretsDesktopSessionEvents(),
     preferences: await TomSecretsFilePreferences.open(
       File('$data${Platform.pathSeparator}app-preferences.json'),
     ),

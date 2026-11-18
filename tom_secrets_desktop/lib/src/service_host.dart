@@ -42,6 +42,10 @@ final class TomSecretsAdminClientChannel implements TomSecretsAdminChannel {
   Stream<Map<String, Object?>> get events => client.events;
 
   @override
+  Future<void> unlockWithBundle(String vault, TomSecretsUnlockBundle bundle) =>
+      client.unlockWithBundle(vault, bundle);
+
+  @override
   Future<void> close() => client.close();
 }
 

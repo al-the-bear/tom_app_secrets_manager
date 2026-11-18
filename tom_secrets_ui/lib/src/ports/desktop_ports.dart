@@ -13,6 +13,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:tom_basics/utilities.dart' show TomClipboardPort;
+import 'package:tom_core_storage/settings.dart' show TomGatedSecretStore;
 import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFilePicker;
 import 'package:tom_host_ui/tom_host_ui.dart' show TomFlutterClipboardPort;
@@ -103,6 +104,37 @@ abstract interface class TomSecretsLoginItem {
 
   /// Turns starting at login on or off.
   Future<void> setEnabled(bool enabled);
+}
+
+/// A signal of the desktop session the app senses for the service (part-
+/// service: the app is the sensor of the screen lock and of sleep).
+enum TomSecretsSessionEvent {
+  /// The screen was locked.
+  screenLocked,
+
+  /// The system goes to sleep.
+  sleep,
+}
+
+/// The desktop session's signals: macOS distributed notifications, Windows
+/// `WM_WTSSESSION_CHANGE` and `WM_POWERBROADCAST`.
+abstract interface class TomSecretsSessionEvents {
+  /// The signals as they come.
+  Stream<TomSecretsSessionEvent> get events;
+}
+
+/// The OS unlock of this host (part-os-unlock): the gated store the unlock
+/// bundle is kept in, and how the platform's check is named.
+final class TomSecretsOsUnlockHost {
+  /// The OS unlock over [store], its check named [label] ("Touch ID",
+  /// "Windows Hello").
+  const TomSecretsOsUnlockHost({required this.store, required this.label});
+
+  /// The gated store.
+  final TomGatedSecretStore store;
+
+  /// The check's name, for the buttons and the settings.
+  final String label;
 }
 
 /// Keeping the window out of screenshots and screen sharing (DP-33).
@@ -223,6 +255,8 @@ final class TomSecretsHost {
     this.startedHidden = false,
     this.firstRunActions = const {},
     this.integrationPaths,
+    this.osUnlock,
+    this.sessionEvents,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -295,4 +329,11 @@ final class TomSecretsHost {
   /// Settings › Integrations): the user's home folder and `tsm`'s
   /// executable (the helper link goes beside it); null hides them.
   final ({String home, String? tsmExecutable})? integrationPaths;
+
+  /// The OS unlock (Touch ID, Windows Hello), or null where the platform has
+  /// none (Linux, DP-70): then the master password is the only unlock.
+  final TomSecretsOsUnlockHost? osUnlock;
+
+  /// The desktop session's screen lock and sleep, or null.
+  final TomSecretsSessionEvents? sessionEvents;
 }

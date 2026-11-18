@@ -15,7 +15,12 @@ import ServiceManagement
 ///   `clearIfUnchanged`);
 /// - `tom_secrets_desktop/login`: starting the app at login (DP-30) through
 ///   `SMAppService.mainApp` (macOS 13 and later), in place of a plugin that
-///   needs a package added to the app's runner by hand (DP-32).
+///   needs a package added to the app's runner by hand (DP-32);
+/// - `tom_secrets_desktop/session`: the desktop session's screen lock and
+///   sleep, which the app senses for the service (part-service): the
+///   distributed notification `com.apple.screenIsLocked` and NSWorkspace's
+///   `willSleepNotification`, each sent to Dart as `event` with
+///   `screenLocked` or `sleep`.
 public class TomSecretsDesktopPlugin: NSObject, FlutterPlugin {
   private weak var registrar: FlutterPluginRegistrar?
 
@@ -31,6 +36,7 @@ public class TomSecretsDesktopPlugin: NSObject, FlutterPlugin {
     registrar.addMethodCallDelegate(instance, channel: channel)
     TomSecretsClipboard.register(messenger: registrar.messenger)
     TomSecretsLoginItem.register(messenger: registrar.messenger)
+    TomSecretsSessionEvents.register(messenger: registrar.messenger)
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -140,5 +146,31 @@ enum TomSecretsLoginItem {
       }
     }
     TomSecretsLoginItem.channel = channel
+  }
+}
+
+/// The session's screen lock and sleep, sent to Dart (`event`).
+enum TomSecretsSessionEvents {
+  static var channel: FlutterMethodChannel?
+  static var observers: [NSObjectProtocol] = []
+
+  static func register(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(
+      name: "tom_secrets_desktop/session", binaryMessenger: messenger)
+    TomSecretsSessionEvents.channel = channel
+    let send: (String) -> Void = { event in
+      DispatchQueue.main.async {
+        TomSecretsSessionEvents.channel?.invokeMethod("event", arguments: event)
+      }
+    }
+    observers.append(
+      DistributedNotificationCenter.default().addObserver(
+        forName: NSNotification.Name("com.apple.screenIsLocked"), object: nil,
+        queue: .main
+      ) { _ in send("screenLocked") })
+    observers.append(
+      NSWorkspace.shared.notificationCenter.addObserver(
+        forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+      ) { _ in send("sleep") })
   }
 }

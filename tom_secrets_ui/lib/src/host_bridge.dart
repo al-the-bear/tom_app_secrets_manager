@@ -12,6 +12,7 @@ library;
 import 'dart:async';
 
 import 'ports/desktop_ports.dart';
+import 'state/os_unlock.dart';
 import 'state/reminders.dart';
 import 'state/service_connection.dart';
 
@@ -28,8 +29,13 @@ abstract final class TomSecretsHostPreferenceKeys {
 
 /// Connects the host's capabilities to the connection's state.
 final class TomSecretsHostBridge {
-  /// A bridge for [host] following [connection].
-  TomSecretsHostBridge({required this.host, required this.connection});
+  /// A bridge for [host] following [connection]; [osUnlock] keeps the OS
+  /// unlock's items.
+  TomSecretsHostBridge({
+    required this.host,
+    required this.connection,
+    this.osUnlock,
+  });
 
   /// The host.
   final TomSecretsHost host;
@@ -37,7 +43,12 @@ final class TomSecretsHostBridge {
   /// The connection.
   final TomSecretsServiceConnection connection;
 
+  /// The OS unlock, or null.
+  final TomSecretsOsUnlock? osUnlock;
+
   StreamSubscription<Map<String, Object?>>? _events;
+  StreamSubscription<TomSecretsSessionEvent>? _session;
+  int? _lastStart;
   Timer? _daily;
   bool _reminding = false;
   bool _started = false;
@@ -51,6 +62,9 @@ final class TomSecretsHostBridge {
     _started = true;
     connection.addListener(_update);
     _events = connection.events.listen(_onEvent);
+    _session = host.sessionEvents?.events.listen(
+      (e) => unawaited(onSessionEvent(e)),
+    );
     unawaited(applyCaptureSetting());
     unawaited(_initLoginItem());
     // While the app runs, a due key is notified once a day (part-key-
@@ -108,7 +122,46 @@ final class TomSecretsHostBridge {
     }
   }
 
+  /// Stops the service; its session's OS unlock items are forgotten.
+  Future<void> stopService() async {
+    await osUnlock?.forgetSession();
+    try {
+      await connection.stopService();
+    } on Object {
+      // Stopped already, or it refuses: the next start asks for the unlock.
+    }
+  }
+
+  /// The desktop session's [event] (the app is the sensor, part-service):
+  /// the screen lock locks the service in lock mode (c), sleep when the
+  /// service's settings say `lockOnSleep`.
+  Future<void> onSessionEvent(TomSecretsSessionEvent event) async {
+    final c = connection;
+    if (c.phase != TomSecretsConnectionPhase.attached || c.locked) return;
+    try {
+      switch (event) {
+        case TomSecretsSessionEvent.screenLocked:
+          if (c.lockMode == 'c') await c.lock();
+        case TomSecretsSessionEvent.sleep:
+          final settings = await c.request('settings.get');
+          final lock =
+              ((settings['device'] as Map?)?['serviceLock'] as Map?) ??
+              const {};
+          if (lock['lockOnSleep'] == true) await c.lock();
+      }
+    } on Object {
+      // Locked meanwhile, or the service went away.
+    }
+  }
+
   void _update() {
+    // A service of another start (started again, or after a crash) drops
+    // the session items of the older one.
+    final start = connection.serviceStart;
+    if (start != null && start != _lastStart) {
+      _lastStart = start;
+      unawaited(osUnlock?.dropStale().catchError((Object _) {}));
+    }
     // The keys due arrive with the status at the unlock, too.
     if (connection.expiringKeys.isNotEmpty) unawaited(remind());
     final tray = host.tray;
@@ -138,6 +191,13 @@ final class TomSecretsHostBridge {
               'Lock',
               onSelected: () => unawaited(c.lock().catchError((Object _) {})),
             ),
+          if (attached && (osUnlock?.hasSession ?? false))
+            TomSecretsTrayItem(
+              'Lock completely (forget the ${osUnlock!.label} unlock)',
+              onSelected: () => unawaited(
+                osUnlock!.lockCompletely().catchError((Object _) {}),
+              ),
+            ),
           if (attached && c.locked && window != null)
             TomSecretsTrayItem(
               'Unlock…',
@@ -160,8 +220,7 @@ final class TomSecretsHostBridge {
           if (attached)
             TomSecretsTrayItem(
               'Stop the service',
-              onSelected: () =>
-                  unawaited(c.stopService().catchError((Object _) {})),
+              onSelected: () => unawaited(stopService()),
             ),
         ],
       ),
@@ -234,5 +293,6 @@ final class TomSecretsHostBridge {
     connection.removeListener(_update);
     _daily?.cancel();
     unawaited(_events?.cancel());
+    unawaited(_session?.cancel());
   }
 }

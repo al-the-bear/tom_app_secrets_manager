@@ -11,7 +11,10 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:tom_secrets_client/admin.dart'
-    show TomSecretsAdminException, tomSecretsRandomBytes;
+    show
+        TomSecretsAdminException,
+        TomSecretsUnlockBundle,
+        tomSecretsRandomBytes;
 
 import 'package:tom_secrets_core/tom_secrets_core.dart'
     show TomSecretsOfflineCache;
@@ -259,6 +262,34 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     _unlockNeeded = false;
     notifyListeners();
     await refreshStatus();
+  }
+
+  /// Unlocks [vault] (the primary) with the OS unlock's key [bundle]
+  /// (protocol.md 6.4). Throws `TomSecretsAdminException` (`denied`, reason
+  /// `bad_password` when the vault was re-keyed, `bad_bundle`).
+  Future<void> unlockWithBundle(
+    String vault,
+    TomSecretsUnlockBundle bundle,
+  ) async {
+    final channel = _channel;
+    if (channel == null || _phase != TomSecretsConnectionPhase.attached) {
+      throw TomSecretsAdminException(
+        'not_running',
+        'not attached to the service',
+      );
+    }
+    await channel.unlockWithBundle(vault, bundle);
+    _locked = false;
+    _unlockNeeded = false;
+    notifyListeners();
+    await refreshStatus();
+  }
+
+  /// The service's start (`statusReport.service.start`, milliseconds since
+  /// the epoch), or null before the first status.
+  int? get serviceStart {
+    final start = (_report['service'] as Map?)?['start'];
+    return start is int ? start : null;
   }
 
   /// Opens [store], a file with a password of its own (BP-8).

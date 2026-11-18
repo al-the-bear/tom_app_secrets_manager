@@ -6,10 +6,12 @@
 /// on macOS.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:launch_at_startup/launch_at_startup.dart';
+import 'package:tom_biometric_storage/tom_gated_secret_store.dart';
+import 'package:win32_registry/win32_registry.dart';
 import 'package:tom_basics/utilities.dart' show TomClipboardPort;
 import 'package:tom_host_ui/desktop.dart' show TomDesktopClipboardPort;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
@@ -23,6 +25,57 @@ const MethodChannel tomSecretsCaptureChannel = MethodChannel(
 const MethodChannel tomSecretsClipboardChannel = MethodChannel(
   'tom_secrets_desktop/clipboard',
 );
+
+/// The channel of the desktop session's screen lock and sleep.
+const MethodChannel tomSecretsSessionChannel = MethodChannel(
+  'tom_secrets_desktop/session',
+);
+
+/// The desktop session's screen lock and sleep from this package's own code
+/// (`event` with `screenLocked` or `sleep`): macOS distributed notifications
+/// and NSWorkspace, Windows `WM_WTSSESSION_CHANGE` and `WM_POWERBROADCAST`.
+/// Linux sends none: it has no lock mode (c) (no OS unlock, DP-70).
+final class TomSecretsDesktopSessionEvents implements TomSecretsSessionEvents {
+  /// The events of [channel].
+  TomSecretsDesktopSessionEvents({
+    MethodChannel channel = tomSecretsSessionChannel,
+  }) {
+    channel.setMethodCallHandler((call) async {
+      if (call.method != 'event') return;
+      final event = switch (call.arguments) {
+        'screenLocked' => TomSecretsSessionEvent.screenLocked,
+        'sleep' => TomSecretsSessionEvent.sleep,
+        _ => null,
+      };
+      if (event != null) _events.add(event);
+    });
+  }
+
+  final StreamController<TomSecretsSessionEvent> _events =
+      StreamController.broadcast();
+
+  @override
+  Stream<TomSecretsSessionEvent> get events => _events.stream;
+}
+
+/// The OS unlock of this desktop (part-os-unlock): Touch ID on macOS (the
+/// gate-only form in an ad-hoc signed build, DP-181), Windows Hello
+/// (key-bound, DP-69), through `tom_biometric_storage`; null on Linux, which
+/// has none (DP-70).
+TomSecretsOsUnlockHost? tomSecretsDesktopOsUnlock({String? operatingSystem}) {
+  final os = operatingSystem ?? Platform.operatingSystem;
+  return switch (os) {
+    'macos' => TomSecretsOsUnlockHost(
+      store: TomBiometricGatedSecretStore(operatingSystem: os),
+      label: 'Touch ID',
+    ),
+    'windows' => TomSecretsOsUnlockHost(
+      store: TomBiometricGatedSecretStore(operatingSystem: os),
+      label: 'Windows Hello',
+    ),
+    _ => null,
+  };
+}
 
 /// The channel of the macOS login item.
 const MethodChannel tomSecretsLoginChannel = MethodChannel(
@@ -69,45 +122,100 @@ final class TomSecretsPlatformCaptureGuard implements TomSecretsCaptureGuard {
 TomClipboardPort tomSecretsDesktopClipboard() =>
     const TomDesktopClipboardPort(channel: tomSecretsClipboardChannel);
 
-/// Starting at login: macOS through this package's `SMAppService` code,
-/// Windows (the Run key) and Linux (an autostart entry) through
-/// `launch_at_startup`, with `--hidden`, so the app starts in the tray
-/// (DP-30).
+/// Starting at login with `--hidden`, so the app starts in the tray
+/// (DP-30), by this package's own code (DP-32): macOS through `SMAppService`
+/// (the login channel), Windows through the user's `Run` key
+/// (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, the value named
+/// [appName]), Linux through an XDG autostart entry
+/// (`$XDG_CONFIG_HOME/autostart/<appName>.desktop`, default `~/.config`).
 final class TomSecretsDesktopLoginItem implements TomSecretsLoginItem {
   /// The login item of the app named [appName] at [appPath] (default this
-  /// executable).
+  /// executable); [environment] (default the process's) gives the home and
+  /// config folders on Linux.
   TomSecretsDesktopLoginItem({
-    required String appName,
+    required this.appName,
     String? appPath,
     String? operatingSystem,
+    Map<String, String>? environment,
     MethodChannel channel = tomSecretsLoginChannel,
   }) : _os = operatingSystem ?? Platform.operatingSystem,
-       _channel = channel {
-    if (_os != 'macos') {
-      launchAtStartup.setup(
-        appName: appName,
-        appPath: appPath ?? Platform.resolvedExecutable,
-        args: const [tomSecretsHiddenArgument],
-      );
+       _path = appPath ?? Platform.resolvedExecutable,
+       _environment = environment ?? Platform.environment,
+       _channel = channel;
+
+  /// The app's name: the Run value's, the autostart entry's.
+  final String appName;
+
+  final String _os;
+  final String _path;
+  final Map<String, String> _environment;
+  final MethodChannel _channel;
+
+  static const String _runKey =
+      r'Software\Microsoft\Windows\CurrentVersion\Run';
+
+  /// The command the login runs: the app, quoted, with `--hidden`.
+  String get command => '"$_path" $tomSecretsHiddenArgument';
+
+  /// The Linux autostart entry's file.
+  File get autostartFile {
+    final config = _environment['XDG_CONFIG_HOME'];
+    final base = config != null && config.isNotEmpty
+        ? config
+        : '${_environment['HOME'] ?? ''}/.config';
+    return File('$base/autostart/$appName.desktop');
+  }
+
+  /// The autostart entry's text.
+  String get autostartEntry =>
+      '[Desktop Entry]\n'
+      'Type=Application\n'
+      'Name=$appName\n'
+      'Exec=$command\n'
+      'X-GNOME-Autostart-enabled=true\n';
+
+  @override
+  Future<bool> isEnabled() async {
+    switch (_os) {
+      case 'macos':
+        return await _channel.invokeMethod<bool>('isEnabled') ?? false;
+      case 'windows':
+        final key = CURRENT_USER.open(_runKey);
+        try {
+          return key.getString(appName) == command;
+        } finally {
+          key.close();
+        }
+      default:
+        final file = autostartFile;
+        return file.existsSync() && file.readAsStringSync() == autostartEntry;
     }
   }
 
-  final String _os;
-  final MethodChannel _channel;
-
-  @override
-  Future<bool> isEnabled() async => _os == 'macos'
-      ? await _channel.invokeMethod<bool>('isEnabled') ?? false
-      : launchAtStartup.isEnabled();
-
   @override
   Future<void> setEnabled(bool enabled) async {
-    if (_os == 'macos') {
-      await _channel.invokeMethod<bool>('setEnabled', enabled);
-    } else if (enabled) {
-      await launchAtStartup.enable();
-    } else {
-      await launchAtStartup.disable();
+    switch (_os) {
+      case 'macos':
+        await _channel.invokeMethod<bool>('setEnabled', enabled);
+      case 'windows':
+        final key = CURRENT_USER.create(_runKey);
+        try {
+          if (enabled) {
+            key.setValue(appName, RegistryValue.string(command));
+          } else if (key.getString(appName) != null) {
+            key.removeValue(appName);
+          }
+        } finally {
+          key.close();
+        }
+      default:
+        final file = autostartFile;
+        if (enabled) {
+          file.parent.createSync(recursive: true);
+          file.writeAsStringSync(autostartEntry);
+        } else if (file.existsSync()) {
+          file.deleteSync();
+        }
     }
   }
 }

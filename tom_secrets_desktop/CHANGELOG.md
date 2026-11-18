@@ -2,6 +2,16 @@
 
 ## 0.1.0
 
+- The OS unlock: `tomSecretsDesktopOsUnlock()` (Touch ID on macOS, Windows
+  Hello on Windows, none on Linux) over `tom_biometric_storage`'s
+  `TomBiometricGatedSecretStore`; `TomSecretsAdminClientChannel.unlockWithBundle`.
+- `TomSecretsDesktopSessionEvents`: the screen lock and sleep from this
+  package's own code (`tom_secrets_desktop/session`: macOS distributed
+  notifications and NSWorkspace, Windows `WM_WTSSESSION_CHANGE` and
+  `WM_POWERBROADCAST`).
+- Start at login on Windows and Linux is this package's own code (the `Run`
+  key through `win32_registry` 3, an XDG autostart entry) in place of
+  `launch_at_startup`, which holds `win32` 5.
 - `TomSecretsBonsoirPairingDiscovery`: the pairing discovery port over
   `bonsoir` (mDNS, `_tsm-pair._tcp`).
 - `tom_credentials_ui` and `tom_host_ui` from pub.dev in place of

@@ -60,7 +60,10 @@ void main() {
     final again = await TomSecretsFilePreferences.open(file);
     expect(again.read('view.layout'), 'list');
     await again.write('view.layout', null);
-    expect((await TomSecretsFilePreferences.open(file)).read('view.layout'), isNull);
+    expect(
+      (await TomSecretsFilePreferences.open(file)).read('view.layout'),
+      isNull,
+    );
     file.writeAsStringSync('not json');
     expect((await TomSecretsFilePreferences.open(file)).read('x'), isNull);
   });
@@ -102,4 +105,60 @@ void main() {
       expect(file.existsSync(), isTrue, reason: path);
     }
   });
+
+  test('start at login on Linux: an XDG autostart entry starting the app '
+      'hidden, written and removed', () async {
+    final item = TomSecretsDesktopLoginItem(
+      appName: 'Tom Secrets Manager',
+      appPath: '/opt/tsm/tom_secrets_app',
+      operatingSystem: 'linux',
+      environment: {'XDG_CONFIG_HOME': dir.path},
+    );
+    expect(await item.isEnabled(), isFalse);
+    await item.setEnabled(true);
+    final entry = File('${dir.path}/autostart/Tom Secrets Manager.desktop');
+    expect(
+      entry.readAsStringSync(),
+      contains('Exec="/opt/tsm/tom_secrets_app" --hidden'),
+    );
+    expect(await item.isEnabled(), isTrue);
+    await item.setEnabled(false);
+    expect(entry.existsSync(), isFalse);
+    expect(await item.isEnabled(), isFalse);
+  });
+
+  test(
+    'the session channel: screenLocked and sleep as events; the OS '
+    'unlock is Touch ID on macOS, Windows Hello on Windows, none on Linux',
+    () async {
+      final events = TomSecretsDesktopSessionEvents();
+      final seen = <TomSecretsSessionEvent>[];
+      final sub = events.events.listen(seen.add);
+      for (final e in ['screenLocked', 'sleep', 'unknown']) {
+        await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+              tomSecretsSessionChannel.name,
+              const StandardMethodCodec().encodeMethodCall(
+                MethodCall('event', e),
+              ),
+              (_) {},
+            );
+      }
+      await Future<void>.delayed(Duration.zero);
+      await sub.cancel();
+      expect(seen, [
+        TomSecretsSessionEvent.screenLocked,
+        TomSecretsSessionEvent.sleep,
+      ]);
+      expect(
+        tomSecretsDesktopOsUnlock(operatingSystem: 'macos')!.label,
+        'Touch ID',
+      );
+      expect(
+        tomSecretsDesktopOsUnlock(operatingSystem: 'windows')!.label,
+        'Windows Hello',
+      );
+      expect(tomSecretsDesktopOsUnlock(operatingSystem: 'linux'), isNull);
+    },
+  );
 }

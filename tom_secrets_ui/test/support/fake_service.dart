@@ -13,7 +13,8 @@ import 'dart:typed_data';
 
 import 'package:tom_kdbx_store/tom_kdbx_store.dart'
     show KdbxArgon2, KdbxArgon2Type;
-import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_client/admin.dart'
+    show TomSecretsAdminException, TomSecretsUnlockBundle;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
@@ -64,9 +65,20 @@ final class FakeStore {
   /// Its locator (`vault.move` changes it).
   String location;
 
+  /// Whether the service opened it with an OS unlock's composite key, which
+  /// it then holds in place of the password (protocol.md 6.4).
+  bool viaComposite = false;
+
+  /// Its composite key.
+  Uint8List get compositeKey =>
+      tomSecretsCompositeKey(password: password, keyFile: keyFile);
+
   /// The keys as `vaultKeySet` carries them.
   Map<String, Object?> get wireKeys => {
-    'password': password,
+    if (viaComposite)
+      'compositeKey': base64.encode(compositeKey)
+    else
+      'password': password,
     if (keyFile != null) 'keyFile': base64.encode(keyFile!),
     'outerKey': ?outerKey,
   };
@@ -125,6 +137,42 @@ final class FakeService implements TomSecretsAdminChannel {
   /// (protocol.md 6.4): editable by name, never in `status`.
   final List<FakeStore> unserved;
   bool locked;
+
+  /// The service's lock mode letter (`status`).
+  String lockMode = 'a';
+
+  /// The bundles `unlock {vault, bundle}` was given, in order.
+  final List<({String vault, Uint8List compositeKey, String? outerKey})>
+  bundles = [];
+
+  @override
+  Future<void> unlockWithBundle(
+    String vault,
+    TomSecretsUnlockBundle bundle,
+  ) async {
+    requests.add({'op': 'unlock', 'vault': vault, 'bundle': '(sealed)'});
+    bundles.add((
+      vault: vault,
+      compositeKey: Uint8List.fromList(bundle.compositeKey),
+      outerKey: bundle.outerKey,
+    ));
+    final primary = stores.first;
+    if (vault != primary.name) {
+      throw TomSecretsAdminException('not_found', 'no primary $vault');
+    }
+    if (base64.encode(bundle.compositeKey) !=
+        base64.encode(primary.compositeKey)) {
+      throw TomSecretsAdminException(
+        'denied',
+        'the key bundle no longer opens the vault',
+        details: {'reason': 'bad_password'},
+      );
+    }
+    primary.viaComposite = true;
+    locked = false;
+    emit({'op': 'unlocked'});
+  }
+
   final StreamController<Map<String, Object?>> _events =
       StreamController.broadcast();
   final List<Map<String, Object?>> requests = [];
@@ -292,7 +340,7 @@ final class FakeService implements TomSecretsAdminChannel {
         return {
           'op': 'statusReport',
           'locked': locked,
-          'lockMode': 'a',
+          'lockMode': lockMode,
           'protocol': 1,
           'service': {'version': '0.1.0', 'start': 1763100000000},
           'stores': [

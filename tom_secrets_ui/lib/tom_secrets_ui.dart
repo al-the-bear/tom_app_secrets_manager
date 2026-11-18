@@ -37,6 +37,7 @@ export 'src/state/first_run_model.dart';
 export 'src/state/import_model.dart';
 export 'src/state/integrations.dart';
 export 'src/state/new_vault.dart';
+export 'src/state/os_unlock.dart';
 export 'src/state/overlays.dart';
 export 'src/state/pairing_model.dart';
 export 'src/state/reminders.dart';

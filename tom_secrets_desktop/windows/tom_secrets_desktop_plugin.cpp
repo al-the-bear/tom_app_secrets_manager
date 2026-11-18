@@ -3,12 +3,15 @@
 
 // The Windows half of tom_secrets_desktop's own platform code (DP-33): keeps
 // the app's window out of screenshots and screen sharing with
-// SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE), Windows 10 2004 and later.
+// SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE), Windows 10 2004 and later;
+// and sends the desktop session's screen lock and sleep to Dart
+// (`tom_secrets_desktop/session`), which the app senses for the service.
 
 #include "tom_secrets_desktop_plugin.h"
 
 // This must be included before many other Windows headers.
 #include <windows.h>
+#include <wtsapi32.h>
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
@@ -42,9 +45,46 @@ void TomSecretsDesktopPlugin::RegisterWithRegistrar(
 
 TomSecretsDesktopPlugin::TomSecretsDesktopPlugin(
     flutter::PluginRegistrarWindows *registrar)
-    : registrar_(registrar) {}
+    : registrar_(registrar) {
+  session_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      registrar->messenger(), "tom_secrets_desktop/session",
+      &flutter::StandardMethodCodec::GetInstance());
+  window_proc_id_ = registrar->RegisterTopLevelWindowProcDelegate(
+      [this](HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+        return HandleWindowProc(hwnd, message, wparam, lparam);
+      });
+  // The session change messages come only to a window registered for them.
+  HWND view = registrar->GetView() == nullptr
+                  ? nullptr
+                  : registrar->GetView()->GetNativeWindow();
+  session_window_ = view == nullptr ? nullptr : GetAncestor(view, GA_ROOT);
+  if (session_window_ != nullptr) {
+    WTSRegisterSessionNotification(session_window_, NOTIFY_FOR_THIS_SESSION);
+  }
+}
 
-TomSecretsDesktopPlugin::~TomSecretsDesktopPlugin() {}
+TomSecretsDesktopPlugin::~TomSecretsDesktopPlugin() {
+  registrar_->UnregisterTopLevelWindowProcDelegate(window_proc_id_);
+  if (session_window_ != nullptr) {
+    WTSUnRegisterSessionNotification(session_window_);
+  }
+}
+
+std::optional<LRESULT> TomSecretsDesktopPlugin::HandleWindowProc(
+    HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+  const char *event = nullptr;
+  if (message == WM_WTSSESSION_CHANGE && wparam == WTS_SESSION_LOCK) {
+    event = "screenLocked";
+  } else if (message == WM_POWERBROADCAST && wparam == PBT_APMSUSPEND) {
+    event = "sleep";
+  }
+  if (event != nullptr && session_ != nullptr) {
+    session_->InvokeMethod(
+        "event", std::make_unique<flutter::EncodableValue>(std::string(event)));
+  }
+  // Never consumed: the window's own handling goes on.
+  return std::nullopt;
+}
 
 void TomSecretsDesktopPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,

@@ -483,8 +483,20 @@ class TomSecretsSession extends ChangeNotifier {
     final old = held[store]!;
     final location = isPrimary ? primary.location : listed!.locator;
 
-    // 1. The new keys.
+    // 1. The new keys. After an OS unlock the service holds the primary's
+    // composite key, not its password: a rotation that keeps the password
+    // keeps the composite key, unless the key file changes, which needs the
+    // password itself.
     final password = rotation.password ?? old['password'] as String?;
+    final keptComposite =
+        isPrimary && rotation.password == null && old['compositeKey'] is String;
+    if (keptComposite && rotation.keyFile != TomSecretsKeyFileChange.keep) {
+      throw StateError(
+        'Changing the key file keeps the master password, which this '
+        'unlock (the OS unlock) does not hold: lock, unlock with the master '
+        'password, and rotate again.',
+      );
+    }
     final oldKeyFile = old['keyFile'] is String
         ? base64.decode(old['keyFile']! as String)
         : null;
@@ -496,7 +508,9 @@ class TomSecretsSession extends ChangeNotifier {
       TomSecretsKeyFileChange.renew => newKeyFile,
       TomSecretsKeyFileChange.remove => null,
     };
-    if ((password == null || password.isEmpty) && keyFile == null) {
+    if (!keptComposite &&
+        (password == null || password.isEmpty) &&
+        keyFile == null) {
       throw ArgumentError('a vault needs a master password or a key file');
     }
     final oldOuter = old['outerKey'] as String?;
@@ -567,21 +581,26 @@ class TomSecretsSession extends ChangeNotifier {
         githubAppClientId: m.githubAppClientId,
       ).writeTo(primary.file);
       final keys = held[primary.store]!;
-      final pw = isPrimary ? password : keys['password'] as String?;
-      final kf = isPrimary
-          ? keyFile
-          : (keys['keyFile'] is String
-                ? base64.decode(keys['keyFile']! as String)
-                : null);
-      primary.file.credentials = tomSecretsVaultCredentials(
-        password: pw,
-        keyFile: kf,
-      );
+      // The primary's own keys unchanged (another vault rotated, or only its
+      // repository key): its held keys, a composite key included.
+      final unchanged = !isPrimary || keptComposite;
+      if (unchanged) {
+        primary.file.credentials = _credentialsOf(keys);
+      } else {
+        primary.file.credentials = tomSecretsVaultCredentials(
+          password: password,
+          keyFile: keyFile,
+        );
+      }
       if (newOuter != null) primary.outerKey = newOuter;
       if (rotation.cipher != null) primary.cipher = rotation.cipher;
       primaryKeys = {
-        'password': pw ?? '',
-        if (kf != null) 'keyFile': base64.encode(kf),
+        ...(unchanged
+            ? _heldKeysWire(keys)
+            : {
+                'password': password ?? '',
+                if (keyFile != null) 'keyFile': base64.encode(keyFile),
+              }),
         'outerKey': ?primary.outerKey,
       };
     }
@@ -754,11 +773,7 @@ class TomSecretsSession extends ChangeNotifier {
         'location': to,
         'bytes': base64.encode(bytes),
         'baseRevision': vault.revision,
-        'keys': {
-          'password': held['password'] as String? ?? '',
-          'keyFile': ?held['keyFile'],
-          'outerKey': ?key,
-        },
+        'keys': {..._heldKeysWire(held), 'outerKey': ?key},
       });
     } finally {
       bytes.fillRange(0, bytes.length, 0);
@@ -946,10 +961,47 @@ class TomSecretsSession extends ChangeNotifier {
     final listedKeyFile = listed.keyFile == null
         ? null
         : base64.encode(listed.keyFile!);
+    final composite = held['compositeKey'];
+    if (composite is String) {
+      // Opened with an OS unlock's composite key: the same key when the
+      // listed password and key file make it.
+      final listedComposite = tomSecretsCompositeKey(
+        password: listed.password,
+        keyFile: listed.keyFile == null
+            ? null
+            : Uint8List.fromList(listed.keyFile!),
+      );
+      return base64.encode(listedComposite) == composite &&
+          listed.outerKey == held['outerKey'];
+    }
     return listed.password == held['password'] &&
         listed.outerKey == held['outerKey'] &&
         listedKeyFile == keyFile;
   }
+
+  /// The credentials of the keys the service holds (`vaultKeys`): an OS
+  /// unlock's `compositeKey` (protocol.md 6.4), else the password and key
+  /// file.
+  static Credentials _credentialsOf(Map<String, Object?> keys) {
+    final composite = keys['compositeKey'];
+    final keyFile = keys['keyFile'];
+    return tomSecretsVaultCredentials(
+      password: keys['password'] as String?,
+      keyFile: keyFile is String ? base64.decode(keyFile) : null,
+      compositeKey: composite is String ? base64.decode(composite) : null,
+    );
+  }
+
+  /// The primary's `keys` for `save` and `vault.move` as the service holds
+  /// them: after an OS unlock the composite key in place of the password
+  /// (protocol.md 6.4), the key file beside it for the keychain.
+  static Map<String, Object?> _heldKeysWire(Map<String, Object?> held) =>
+      held['compositeKey'] is String
+      ? {'compositeKey': held['compositeKey'], 'keyFile': ?held['keyFile']}
+      : {
+          'password': held['password'] as String? ?? '',
+          'keyFile': ?held['keyFile'],
+        };
 
   /// The keys the service holds for [stores] (`vaultKeys`), by store.
   Future<Map<String, Map<String, Object?>>> _heldKeys(
@@ -1320,15 +1372,11 @@ class TomSecretsSession extends ChangeNotifier {
     final answer = await connection.request('vaultFile', {'store': store});
     final location = answer['location'] as String;
     final stored = base64.decode(answer['bytes'] as String);
-    final keyFile = keys['keyFile'];
     final outerKey = keys['outerKey'] as String?;
     final file = await tomSecretsDecodeStored(
       location,
       stored,
-      tomSecretsVaultCredentials(
-        password: keys['password'] as String?,
-        keyFile: keyFile is String ? base64.decode(keyFile) : null,
-      ),
+      _credentialsOf(keys),
       outerKey: outerKey,
     );
     final cipher = location.endsWith(tomSecretsOuterSuffix)

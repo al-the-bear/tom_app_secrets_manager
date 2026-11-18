@@ -14,6 +14,7 @@ import 'package:tom_credentials_ui/tom_credentials_ui.dart';
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 
 import '../ports/desktop_ports.dart';
+import '../state/os_unlock.dart';
 import '../state/service_connection.dart';
 import '../widgets/style.dart';
 
@@ -252,14 +253,36 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
   final TomKeyStepController _key = TomKeyStepController();
   String? _error;
   bool _busy = false;
+  bool _remember = false;
 
   @override
   void initState() {
     super.initState();
     _key.addListener(_rebuild);
+    // A kept unlock (lock mode (c), a saved master password) is tried at
+    // once: the OS prompt, then the vaults open (part-os-unlock).
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final os = context.read<TomSecretsOsUnlock>();
+      await os.refresh();
+      if (mounted && os.offered && os.usable != null) await _osUnlock();
+    });
   }
 
   void _rebuild() => setState(() {});
+
+  Future<void> _osUnlock() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await context.read<TomSecretsOsUnlock>().unlock();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _unlock() async {
     final material = _key.material;
@@ -270,11 +293,14 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
       _error = null;
     });
     try {
+      final os = context.read<TomSecretsOsUnlock>();
       await context.read<TomSecretsServiceConnection>().unlock(
         password,
         keyFile: material.keyFileBytes,
       );
       _key.passphrase.clear();
+      // Lock mode (c) or "remember": the bundle goes into the gated store.
+      await os.keep(remember: _remember);
     } on TomSecretsAdminException catch (e) {
       if (mounted) setState(() => _error = tomSecretsDescribeAdminError(e));
     } finally {
@@ -291,9 +317,35 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<TomSecretsServiceConnection>();
+    final os = context.watch<TomSecretsOsUnlock>();
+    final kept = os.offered && os.usable != null;
     return TomSecretsGateCard(
       title: 'Unlock',
       children: [
+        if (kept) ...[
+          FilledButton.icon(
+            key: const Key('tsm-unlock-os'),
+            onPressed: _busy ? null : _osUnlock,
+            icon: const Icon(Icons.fingerprint_rounded),
+            label: Text('Unlock with ${os.label}'),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'or with the master password:',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (os.message != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              os.message!,
+              key: const Key('tsm-unlock-os-message'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
         if (c.unlockNeeded)
           const Padding(
             padding: EdgeInsets.only(bottom: 12),
@@ -309,9 +361,25 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
           keyFiles: widget.keyFiles,
           pickerContext: context,
           offersRemember: false,
-          autofocus: true,
+          autofocus: !kept,
           onSubmitted: _unlock,
         ),
+        if (os.offered && !os.saved)
+          CheckboxListTile(
+            key: const Key('tsm-unlock-remember'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: _remember,
+            onChanged: (v) => setState(() => _remember = v ?? false),
+            title: Text('Remember the master password with ${os.label}'),
+            subtitle: Text(
+              os.gateOnly
+                  ? 'The weaker, gate-only form here (see Settings). It also '
+                        'opens the vault when the password is forgotten.'
+                  : 'On this machine only. It also opens the vault when the '
+                        'password is forgotten.',
+            ),
+          ),
         if (_error != null) ...[
           const SizedBox(height: 8),
           Text(

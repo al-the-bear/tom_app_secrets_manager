@@ -201,6 +201,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  ffi_leak_tracker:
+    dependency: transitive
+    description:
+      name: ffi_leak_tracker
+      sha256: "4093d4ef9ca06ffe2786e73bfb25e22aa92112b9bb4ec941f11e3e6b61489a97"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
   file:
     dependency: transitive
     description:
@@ -378,10 +386,10 @@ packages:
     dependency: transitive
     description:
       name: flutter_secure_storage_windows
-      sha256: "3b7c8e068875dfd46719ff57c90d8c459c87f2302ed6b00ff006b3c9fcad1613"
+      sha256: "471951813a97006d899db4948acc654a4f28c440083ea08178935ce20b173ec1"
       url: "https://pub.dev"
     source: hosted
-    version: "4.1.0"
+    version: "4.2.2"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -464,14 +472,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.12.0"
-  launch_at_startup:
-    dependency: transitive
-    description:
-      name: launch_at_startup
-      sha256: "7db33398b76ec0ed9e27f9f4640553e239977437564046625e215be89c91f084"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.5.1"
   leak_tracker:
     dependency: transitive
     description:
@@ -853,14 +853,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.3.0"
+  tom_biometric_storage:
+    dependency: transitive
+    description:
+      name: tom_biometric_storage
+      sha256: b652fe8a21dd73067f2e95b0cf2b2db1cee57ed60189a8a0250ae52d6027694e
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.0.0-dev.10+tom.1"
   tom_core_storage:
     dependency: transitive
     description:
       name: tom_core_storage
-      sha256: cb2f6e5d0b8a839047aed7e3c481c656473f45f42827aa6ed2414412dda9e527
+      sha256: "665cc24b89b067b68c5ca2abfc0aae4862b54f8328f017accf4eca1b84d032db"
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.2"
+    version: "0.1.3"
   tom_core_sync:
     dependency: transitive
     description:
@@ -913,10 +921,10 @@ packages:
     dependency: transitive
     description:
       name: tom_kdbx_store
-      sha256: d377cff5d111ef0c0bc7773077e9e3c4334ad79bf71da99f536cd4160e4ded38
+      sha256: "958fdd0a9caa608434af3d7b1ce698c6fdbe7184efa51883dfe93c4177f9adf2"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.4"
+    version: "0.2.5"
   tom_kpasslib:
     dependency: transitive
     description:
@@ -937,18 +945,18 @@ packages:
     dependency: "direct main"
     description:
       name: tom_secrets_client
-      sha256: a0468d6e530f1595b0aa09ba3cdc8424cb348f77d5bc21dcf707c284037d46cf
+      sha256: c693f85e2dd88dab2e095461c18bff58f05cb98d0aab71dd264a586da9a29390
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.8"
+    version: "0.2.9"
   tom_secrets_core:
     dependency: transitive
     description:
       name: tom_secrets_core
-      sha256: "964fbbde41c606ab7c4ad202cd873468aa851e0fae87d01016138264f0b50e34"
+      sha256: "1ad20f0de179f18939224f356660c12a1047c6b8d5585eae98a0d58ef5359ffb"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.7"
+    version: "0.2.8"
   tom_secrets_desktop:
     dependency: "direct main"
     description:
@@ -1095,18 +1103,18 @@ packages:
     dependency: transitive
     description:
       name: win32
-      sha256: d7cb55e04cd34096cd3a79b3330245f54cb96a370a1c27adb3c84b917de8b08e
+      sha256: a0b93865d5644f11cf6a8c3f6db909f1ec168958b5805f6cc684adea957cd63d
       url: "https://pub.dev"
     source: hosted
-    version: "5.15.0"
+    version: "6.4.0"
   win32_registry:
     dependency: transitive
     description:
       name: win32_registry
-      sha256: "6f1b564492d0147b330dd794fee8f512cec4977957f310f9951b5f9d83618dae"
+      sha256: "73b1d78920a9d6e03f8b4e43e612b87bf3152a0e5c5e5150267762b7c4116904"
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.0"
+    version: "3.0.3"
   window_manager:
     dependency: transitive
     description:

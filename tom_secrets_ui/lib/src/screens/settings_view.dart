@@ -39,6 +39,7 @@ import '../host_bridge.dart' show TomSecretsHostPreferenceKeys;
 import '../ports/desktop_ports.dart';
 import '../state/clients.dart';
 import '../state/integrations.dart';
+import '../state/os_unlock.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../widgets/style.dart';
@@ -76,6 +77,7 @@ class _SettingsState extends State<TomSecretsSettingsView> {
       text: context.read<TomSecretsSession>().sharedConfigYaml ?? '',
     );
     unawaited(_load());
+    unawaited(context.read<TomSecretsOsUnlock>().refresh());
     final login = context.read<TomSecretsHost>().loginItem;
     if (login != null) {
       unawaited(
@@ -191,6 +193,17 @@ class _SettingsState extends State<TomSecretsSettingsView> {
       final later = await _api.writeSettings(
         TomSecretsDeviceSettings.fromJson(draft),
       );
+      if (!mounted) return;
+      // Lock mode (c) keeps the session's OS unlock now, so the next lock
+      // opens with it; another mode forgets it.
+      final connection = context.read<TomSecretsServiceConnection>();
+      final osUnlock = context.read<TomSecretsOsUnlock>();
+      await connection.refreshStatus();
+      if (connection.lockMode == 'c') {
+        await osUnlock.keep();
+      } else {
+        await osUnlock.forgetSession();
+      }
       if (!mounted) return;
       setState(() {
         _draft = draft;
@@ -308,6 +321,8 @@ class _SettingsState extends State<TomSecretsSettingsView> {
     }.toList()..sort();
     final lock = _lock;
     final never = lock['mode'] == 'never';
+    final mode = (lock['mode'] as String?) ?? 'idle';
+    final os = context.watch<TomSecretsOsUnlock>();
     int seconds(String key, int fallback) =>
         _draft[key] is int ? _draft[key]! as int : fallback;
     return TomSecretsSection(
@@ -368,18 +383,30 @@ class _SettingsState extends State<TomSecretsSettingsView> {
         Row(
           children: [
             const Text('The service locks  '),
-            SegmentedButton<String>(
-              key: const Key('tsm-settings-lock'),
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: 'idle', label: Text('(b) when idle')),
-                ButtonSegment(value: 'never', label: Text('(a) never')),
-              ],
-              selected: {never ? 'never' : 'idle'},
-              onSelectionChanged: (s) => _setLock('mode', s.single),
+            Flexible(
+              child: SegmentedButton<String>(
+                key: const Key('tsm-settings-lock'),
+                showSelectedIcon: false,
+                segments: [
+                  const ButtonSegment(
+                    value: 'idle',
+                    label: Text('(b) when idle'),
+                  ),
+                  const ButtonSegment(value: 'never', label: Text('(a) never')),
+                  if (os.host != null)
+                    ButtonSegment(
+                      value: 'osUnlock',
+                      enabled: os.offered || mode == 'osUnlock',
+                      label: Text('(c) idle or screen lock, ${os.label}'),
+                    ),
+                ],
+                selected: {mode},
+                onSelectionChanged: (s) => _setLock('mode', s.single),
+              ),
             ),
           ],
         ),
+        _osUnlockNote(os, mode),
         if (!never)
           _number(
             'tsm-settings-idle',
@@ -388,6 +415,14 @@ class _SettingsState extends State<TomSecretsSettingsView> {
             (v) => _setLock('idleSeconds', v * 60),
             min: 1,
           ),
+        SwitchListTile(
+          key: const Key('tsm-settings-lock-sleep'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Lock when the system sleeps'),
+          value: lock['lockOnSleep'] == true,
+          onChanged: (v) => _setLock('lockOnSleep', v),
+        ),
         _number(
           'tsm-settings-max',
           'Longest unlocked time, hours (0: no limit)',
@@ -476,6 +511,73 @@ class _SettingsState extends State<TomSecretsSettingsView> {
           value: report.cliApprovals,
           onChanged: (on) => unawaited(_setCli(on)),
         ),
+      ],
+    );
+  }
+
+  /// Under the lock mode: what the OS unlock is here (part-os-unlock), and
+  /// the saved master password (BP-37).
+  Widget _osUnlockNote(TomSecretsOsUnlock os, String mode) {
+    final muted = TextStyle(color: Theme.of(context).hintColor);
+    if (os.host == null) {
+      return Text(
+        'This machine has no OS unlock (on Linux the master password is the '
+        'only unlock): lock mode (c) and a saved master password are not '
+        'offered.',
+        key: const Key('tsm-settings-os-unlock-none'),
+        style: muted,
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!os.offered)
+          Text(
+            '${os.label} is not set up here or cannot be used now (a remote '
+            'session): lock mode (c) and a saved master password need it.',
+            key: const Key('tsm-settings-os-unlock-unavailable'),
+            style: muted,
+          ),
+        if (os.offered && os.gateOnly)
+          Text(
+            '${os.label} here is the weaker, gate-only form: it guards the '
+            'unlock, but the unlock is kept in the login keychain, where a '
+            'program running as you can read it without ${os.label}. The '
+            'key-bound form comes with a team-signed build of the app.',
+            key: const Key('tsm-settings-os-unlock-gate-only'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        if (mode == 'osUnlock')
+          Text(
+            'In mode (c) the first unlock with the master password is kept '
+            'under ${os.label} until the service stops or you lock '
+            'completely (the tray).',
+            style: muted,
+          ),
+        SwitchListTile(
+          key: const Key('tsm-settings-os-unlock-saved'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            'Remember the master password of ${os.primary ?? 'the primary'} '
+            'with ${os.label}',
+          ),
+          subtitle: const Text(
+            'On this machine only, and it unlocks after restarts too. It '
+            'opens the vault even when the password is forgotten, so on this '
+            'machine a new one could be set.',
+          ),
+          value: os.saved,
+          onChanged: os.offered && !os.busy
+              ? (on) => unawaited(os.setSaved(on))
+              : null,
+        ),
+        if (os.message != null)
+          Text(
+            os.message!,
+            key: const Key('tsm-settings-os-unlock-message'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
       ],
     );
   }
@@ -591,6 +693,9 @@ class _SettingsState extends State<TomSecretsSettingsView> {
                 ),
               );
               if (ok == true && context.mounted) {
+                // The session's OS unlock ends with the service.
+                await context.read<TomSecretsOsUnlock>().forgetSession();
+                if (!context.mounted) return;
                 await context.read<TomSecretsServiceConnection>().stopService();
               }
             },

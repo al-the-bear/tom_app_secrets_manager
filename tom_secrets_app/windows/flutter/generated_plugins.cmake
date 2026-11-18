@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_secure_storage_windows
   printing
   screen_retriever_windows
+  tom_biometric_storage
   tom_secrets_desktop
   tray_manager
   url_launcher_windows

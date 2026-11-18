@@ -2,6 +2,21 @@
 
 ## 0.1.0
 
+- The OS unlock (part-os-unlock, DP-68–DP-71, DP-181): `TomSecretsOsUnlock`
+  keeps the primary's composite key and repository key in the host's gated
+  store (`TomSecretsHost.osUnlock`) — a session item in lock mode (c), a
+  saved one with "Remember the master password with Touch ID" (BP-37) — and
+  unlocks the service with it (`unlockWithBundle`); the unlock screen tries
+  it at once and offers the button; a re-keyed vault, a changed enrolment
+  and a session item of an older start are forgotten, the password asked;
+  "Lock completely" (tray) and a service stop forget the session. Settings:
+  lock mode (c), the saved master password, the gate-only form named the
+  weaker one, no OS unlock on Linux, "Lock when the system sleeps". The
+  bridge locks the service at the screen lock in mode (c) and at sleep with
+  `lockOnSleep` (`TomSecretsHost.sessionEvents`). The editing path opens and
+  saves the primary with the composite key the service holds after an OS
+  unlock. On `tom_secrets_core` ^0.2.8, `tom_secrets_client` ^0.2.9,
+  `tom_core_storage` ^0.1.3.
 - "Sign in with GitHub" on the Keys screen (`TomSecretsGitHubSignInSection`,
   part-key-rotation §3, DP-83): naming the GitHub App once (its client id
   into the primary), the device code shown and its page opened, the state
