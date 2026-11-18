@@ -183,6 +183,8 @@ class TomSecretsPairingModel extends ChangeNotifier {
       approverKeySince: time('approverKeySince'),
       linkKeySince: time('linkKeySince'),
       revoked: time('revoked'),
+      githubAuth: TomSecretsGitHubAuth.of(m['githubAuth'] as String?),
+      githubTokenExpires: time('githubTokenExpires'),
     );
   }
 

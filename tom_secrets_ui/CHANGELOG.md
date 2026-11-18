@@ -2,6 +2,13 @@
 
 ## 0.1.0
 
+- "Sign in with GitHub" on the Keys screen (`TomSecretsGitHubSignInSection`,
+  part-key-rotation §3, DP-83): naming the GitHub App once (its client id
+  into the primary), the device code shown and its page opened, the state
+  (signed in as …, until when unused, sign in again), "Use a personal
+  access token instead"; the Pairing screen shows how each device reaches
+  GitHub and the revoke says what cuts it off there. The metadata writers
+  keep the App's client id. On `tom_secrets_core` ^0.2.7.
 - git's credential helper and the integrations (part-os-integration): the
   pick prompt ("A tool asks for a login": the host's logins, this time,
   always this login, none; `approve` with `pick`), Settings › Integrations

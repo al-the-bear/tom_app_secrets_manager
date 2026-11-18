@@ -417,6 +417,7 @@ class TomSecretsSession extends ChangeNotifier {
         configYaml: m.configYaml,
         keysDue: at,
         sshConfirm: m.sshConfirm,
+        githubAppClientId: m.githubAppClientId,
       ).writeTo(primary.file);
     } else {
       final list = TomSecretsPrimaryVaults(primary.file);
@@ -563,6 +564,7 @@ class TomSecretsSession extends ChangeNotifier {
         configYaml: m.configYaml,
         keysDue: tomSecretsAddMonths(at, device.primaryKeyAgeMonths),
         sshConfirm: m.sshConfirm,
+        githubAppClientId: m.githubAppClientId,
       ).writeTo(primary.file);
       final keys = held[primary.store]!;
       final pw = isPrimary ? password : keys['password'] as String?;
@@ -996,6 +998,7 @@ class TomSecretsSession extends ChangeNotifier {
       configYaml: text.isEmpty ? null : '$text\n',
       keysDue: m.keysDue,
       sshConfirm: m.sshConfirm,
+      githubAppClientId: m.githubAppClientId,
     ).writeTo(primary.file);
     await save(primary.store);
   }

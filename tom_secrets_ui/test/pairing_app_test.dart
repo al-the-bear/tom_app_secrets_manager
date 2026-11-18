@@ -308,6 +308,46 @@ void main() {
     );
   });
 
+  testWidgets("a device's GitHub kind in the list, and the revoke says what "
+      'cuts it off GitHub (DP-83)', (tester) async {
+    service.pairedDevices
+      ..add(
+        TomSecretsDeviceRecord(
+          device: 'phone',
+          paired: DateTime.utc(2026, 11, 2),
+          githubAuth: TomSecretsGitHubAuth.app,
+        ),
+      )
+      ..add(
+        TomSecretsDeviceRecord(
+          device: 'bigbeast',
+          paired: DateTime.utc(2026, 11, 2),
+          githubAuth: TomSecretsGitHubAuth.token,
+          githubTokenExpires: DateTime.utc(2027, 2, 1),
+        ),
+      );
+    await pairingScreen(tester);
+    expect(
+      find.textContaining('GitHub: signed in with the App'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('GitHub: a pasted token until 2027-02-01'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('tsm-paired-revoke-phone')));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('every signed-in device must sign in again'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tsm-paired-revoke-bigbeast')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining("delete this device's token"), findsOneWidget);
+  });
+
   testWidgets('locking closes the window', (tester) async {
     await pairingScreen(tester);
     final (_, port) = await openWindow(tester);

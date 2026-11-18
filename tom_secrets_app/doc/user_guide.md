@@ -518,6 +518,30 @@ a key is due (see "Rotation ages and reminders" below), then 7 days and 1
 day before, and once a day once it is due; a notification comes once a day
 while the app runs.
 
+### Signing in with GitHub
+
+"GitHub sign-in (this machine)", at the top of Keys, signs the machine in
+with your own GitHub App instead of a token pasted per repository; the
+service then renews the App's tokens itself (every 8 hours; a sign-in
+unused for six months must be renewed with "Sign in again").
+
+1. **Once, for all your devices:** register the App on GitHub ("Register on
+   GitHub…" opens the page): "Repository permissions › Contents: Read and
+   write", "Enable Device Flow" on, no webhook; install it on the vault
+   repositories only. Enter its client id and "Save": it is kept in the
+   primary vault, so every device knows it.
+2. **On each device:** "Sign in with GitHub" shows a code (also put on the
+   clipboard) and opens github.com/login/device; enter the code there, on
+   any device. The section then says "Signed in with the GitHub App as …".
+   A headless machine signs in with `tsm login`.
+
+"Use a personal access token instead" signs the machine out; it uses the
+tokens pasted for the repositories again. Keep a pasted token on a machine
+you may want to cut off alone: revoking the App's authorization on GitHub
+signs out every device at once, while a pasted token is deleted for one
+device. The Pairing screen shows how each device reaches GitHub, and
+"Revoke" says what to do on GitHub for it.
+
 ### Renewing a GitHub token
 
 "Renew…" on a token opens "Renew the GitHub token for" the repository:

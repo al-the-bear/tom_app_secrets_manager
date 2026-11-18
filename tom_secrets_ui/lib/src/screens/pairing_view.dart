@@ -347,6 +347,11 @@ class _PairingState extends State<TomSecretsPairingView> {
                   'approver key since ${date(d.approverKeySince)}',
                 if (d.linkKeySince != null)
                   'link key since ${date(d.linkKeySince)}',
+                if (d.githubAuth == TomSecretsGitHubAuth.app)
+                  'GitHub: signed in with the App'
+                else if (d.githubAuth == TomSecretsGitHubAuth.token)
+                  'GitHub: a pasted token'
+                      '${d.githubTokenExpires == null ? '' : ' until ${date(d.githubTokenExpires)}'}',
                 if (d.isRevoked) 'revoked ${date(d.revoked)}',
               ].join(' · '),
             ),
@@ -374,7 +379,9 @@ class _PairingState extends State<TomSecretsPairingView> {
             'It no longer approves for this machine, and this machine no '
             'longer approves for it. It keeps the keys it received: rotate '
             '${d.keyIds.isEmpty ? 'nothing it was given' : 'the keys ${d.keyIds.join(', ')}'} '
-            'on the Keys screen if it is lost or no longer trusted.',
+            'on the Keys screen if it is lost or no longer trusted.'
+            '${tomSecretsLostDeviceGitHubAdvice(d.githubAuth)}',
+            key: const Key('tsm-paired-revoke-text'),
           ),
         ),
         actions: [
@@ -398,3 +405,17 @@ class _PairingState extends State<TomSecretsPairingView> {
     }
   }
 }
+
+/// What cuts a lost device off GitHub, by how it reaches it
+/// (part-key-rotation §3, DP-83): a leading space and the advice, or empty.
+String tomSecretsLostDeviceGitHubAdvice(TomSecretsGitHubAuth? auth) =>
+    switch (auth) {
+      TomSecretsGitHubAuth.token =>
+        ' On GitHub, delete this device\'s token (Settings › Developer '
+            'settings › Personal access tokens).',
+      TomSecretsGitHubAuth.app =>
+        ' It is signed in with the GitHub App: revoke the App\'s '
+            'authorization on GitHub (Settings › Applications › Authorized '
+            'GitHub Apps); every signed-in device must sign in again.',
+      null => '',
+    };

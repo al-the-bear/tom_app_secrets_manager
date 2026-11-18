@@ -26,6 +26,7 @@ import '../state/rotation.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../widgets/style.dart';
+import 'github_sign_in.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 import 'renew_token_dialog.dart';
 import 'rotate_dialog.dart';
@@ -222,6 +223,7 @@ class _KeysState extends State<TomSecretsKeysView> {
                       ),
                     ),
                   ),
+                const TomSecretsGitHubSignInSection(),
                 TomSecretsSection(
                   title: 'Keys and their dates',
                   icon: Icons.key_rounded,

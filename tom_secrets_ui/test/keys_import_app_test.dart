@@ -89,8 +89,10 @@ void main() {
   late _Notifier notifier;
   late TomSecretsMemoryPreferences preferences;
   late TomSecretsHost host;
+  late List<Uri> opened;
 
   setUp(() async {
+    opened = [];
     service = FakeService(await demoStores());
     files = _Files();
     notifier = _Notifier();
@@ -101,6 +103,10 @@ void main() {
       clipboard: _Clipboard(),
       files: files,
       notifier: notifier,
+      openUrl: (url) async {
+        opened.add(url);
+        return true;
+      },
     );
   });
 
@@ -215,6 +221,50 @@ void main() {
         tester.widget<Text>(find.byKey(const Key('tsm-import-error'))).data,
         startsWith('Not a Enpass (JSON) export'),
       );
+    });
+  });
+
+  group('Sign in with GitHub on the Keys screen (DP-83)', () {
+    Future<void> keysScreen(WidgetTester tester) async {
+      await unlocked(tester);
+      await tester.tap(find.text('Keys'));
+      await tester.pumpAndSettle();
+      await wait(tester);
+    }
+
+    String state(WidgetTester tester) =>
+        tester.widget<Text>(find.byKey(const Key('tsm-github-state'))).data!;
+
+    testWidgets('the App named once; the code shown, signed in; using a '
+        'pasted token instead signs out', (tester) async {
+      await keysScreen(tester);
+      expect(find.byKey(const Key('tsm-github-client-id')), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('tsm-github-client-id')),
+        'Iv23demo',
+      );
+      await tester.tap(find.byKey(const Key('tsm-github-configure')));
+      await wait(tester);
+      expect(service.githubApp['clientId'], 'Iv23demo');
+      expect(state(tester), startsWith('Not signed in'));
+
+      await tester.tap(find.byKey(const Key('tsm-github-sign-in-button')));
+      await wait(tester);
+      expect(find.byKey(const Key('tsm-github-code')), findsOneWidget);
+      expect(find.text('WDJB-MJHT'), findsOneWidget);
+      expect(opened, [Uri.parse('https://github.com/login/device')]);
+
+      service.signedIn('demo-user');
+      await wait(tester);
+      expect(find.byKey(const Key('tsm-github-code')), findsNothing);
+      expect(find.text('Signed in as demo-user.'), findsOneWidget);
+      expect(state(tester), contains('as demo-user'));
+      expect(state(tester), contains('2027-05-15'));
+
+      await tester.tap(find.byKey(const Key('tsm-github-sign-out')));
+      await wait(tester);
+      expect(service.requests.map((r) => r['op']), contains('github.signOut'));
+      expect(state(tester), startsWith('Not signed in'));
     });
   });
 

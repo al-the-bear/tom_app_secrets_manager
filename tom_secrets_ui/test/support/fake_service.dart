@@ -185,6 +185,20 @@ final class FakeService implements TomSecretsAdminChannel {
   /// The keys with a date (`keys`), as the service would compute them.
   List<Map<String, Object?>> keys = [];
 
+  /// What `github.app` answers (the GitHub App sign-in).
+  Map<String, Object?> githubApp = {'state': 'not_configured'};
+
+  /// The user entered the device code on GitHub: signed in as [login].
+  void signedIn(String login) {
+    githubApp = {
+      ...githubApp,
+      'state': 'signed_in',
+      'login': login,
+      'refreshExpiresAt': '2027-05-15T09:00:00Z',
+    };
+    emit({'op': 'github_sign_in', 'outcome': 'signed_in', 'login': login});
+  }
+
   /// The ssh-agent endpoint `status` reports (`{socket}`), or null.
   Map<String, Object?>? agent;
 
@@ -406,6 +420,31 @@ final class FakeService implements TomSecretsAdminChannel {
           throw TomSecretsAdminException('not_found', 'no prompt $id');
         }
         approvals.add(args);
+        return {'op': 'ok'};
+      case 'github.app':
+        return {'op': 'githubApp', ...githubApp};
+      case 'github.app.configure':
+        _unlocked();
+        final id = args['clientId']! as String;
+        githubApp = {
+          ...githubApp,
+          'state': id.isEmpty ? 'not_configured' : 'signed_out',
+          'clientId': ?(id.isEmpty ? null : id),
+        };
+        if (id.isEmpty) githubApp.remove('clientId');
+        return {'op': 'ok'};
+      case 'github.signIn':
+        githubApp = {...githubApp, 'state': 'pending'};
+        return {
+          'op': 'deviceCode',
+          'userCode': 'WDJB-MJHT',
+          'verificationUri': 'https://github.com/login/device',
+          'expiresIn': 900,
+          'interval': 5,
+        };
+      case 'github.signOut':
+        githubApp = {'state': 'signed_out', 'clientId': ?githubApp['clientId']};
+        emit({'op': 'github_sign_in', 'outcome': 'signed_out'});
         return {'op': 'ok'};
       case 'grants.list':
         _unlocked();
