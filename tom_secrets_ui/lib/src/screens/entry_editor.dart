@@ -113,6 +113,8 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
   bool _saving = false;
   String? _keyError;
   String? _otpError;
+  bool _keyBusy = false;
+  String? _sshError;
 
   TomSecretsSession get _session => context.read<TomSecretsSession>();
 
@@ -386,6 +388,168 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
     super.dispose();
   }
 
+  /// Generates a key into the entry ([algorithm], DP-179), or takes a key
+  /// file the user picks; a key already there is replaced after asking (the
+  /// old one stays in the entry's history).
+  Future<void> _setKey({TomSecretsSshKeyAlgorithm? algorithm}) async {
+    final entry = _session.entryOf(widget.ref);
+    if (entry != null && tomSecretsSshKeyOf(entry) != null) {
+      final replace = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          key: const Key('tsm-ssh-replace'),
+          title: const Text('Replace the key?'),
+          content: const Text(
+            'The entry has a key. The new one replaces it; the old one stays '
+            'in the entry\'s history. Servers that trust the old key need the '
+            'new public key.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('tsm-ssh-replace-ok'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      );
+      if (replace != true) return;
+    }
+    if (!mounted) return;
+    final files = context.read<TomSecretsHost>().files;
+    setState(() {
+      _keyBusy = true;
+      _sshError = null;
+    });
+    try {
+      if (algorithm != null) {
+        await _session.generateSshKey(widget.ref, algorithm: algorithm);
+      } else {
+        final picked = await files?.pick();
+        if (picked == null) return;
+        await _session.setSshKeyFile(widget.ref, picked.name, picked.bytes);
+      }
+      _type = TomSecretsEntryType.sshKey;
+    } on FormatException catch (e) {
+      if (mounted) setState(() => _sshError = e.message);
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) setState(() => _sshError = tomSecretsDescribeAdminError(e));
+    } finally {
+      if (mounted) setState(() => _keyBusy = false);
+    }
+  }
+
+  Widget _sshSection(BuildContext context, KdbxEntry entry, bool readOnly) {
+    final theme = Theme.of(context);
+    final key = tomSecretsSshKeyOf(entry);
+    final info = key?.info;
+    final publicKey = info?.publicKey;
+    final canPick = context.read<TomSecretsHost>().files != null;
+    return _section('SSH key', Icons.terminal_rounded, [
+      if (key == null)
+        const Text(
+          'No key yet: generate one, or choose a private key file.',
+          key: Key('tsm-ssh-none'),
+        )
+      else ...[
+        Text(
+          [
+            info!.keyType ?? 'unknown type',
+            if (info.bits != null) '${info.bits} bits',
+            'attachment ${key.name}',
+            if (info.encrypted) 'encrypted: its passphrase below',
+          ].join(' · '),
+          key: const Key('tsm-ssh-summary'),
+        ),
+        if (info.fingerprint != null)
+          SelectableText(
+            info.fingerprint!,
+            key: const Key('tsm-ssh-fingerprint'),
+            style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+          ),
+        if (publicKey != null)
+          Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  publicKey,
+                  key: const Key('tsm-ssh-public'),
+                  maxLines: 3,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const Key('tsm-ssh-copy-public'),
+                tooltip: 'Copy the public key',
+                icon: const Icon(Icons.copy_rounded),
+                onPressed: () async {
+                  // The public key is no secret: the plain clipboard.
+                  await Clipboard.setData(ClipboardData(text: publicKey));
+                  if (!context.mounted) return;
+                  tomShowNotice(
+                    ScaffoldMessenger.maybeOf(context),
+                    kind: 'copied',
+                    message: 'The public key is copied.',
+                  );
+                },
+              ),
+            ],
+          )
+        else
+          Text(
+            'The key file is encrypted in a form that hides its public key; '
+            '`ssh-keygen -y -f <file>` prints it with the passphrase.',
+            style: theme.textTheme.bodySmall,
+          ),
+      ],
+      if (!readOnly)
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            FilledButton.tonalIcon(
+              key: const Key('tsm-ssh-generate'),
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('Generate an Ed25519 key'),
+              onPressed: _keyBusy
+                  ? null
+                  : () => unawaited(
+                      _setKey(algorithm: TomSecretsSshKeyAlgorithm.ed25519),
+                    ),
+            ),
+            OutlinedButton(
+              key: const Key('tsm-ssh-generate-rsa'),
+              onPressed: _keyBusy
+                  ? null
+                  : () => unawaited(
+                      _setKey(algorithm: TomSecretsSshKeyAlgorithm.rsa),
+                    ),
+              child: const Text('RSA 4096 (for a tool that needs RSA)'),
+            ),
+            if (canPick)
+              OutlinedButton(
+                key: const Key('tsm-ssh-file'),
+                onPressed: _keyBusy ? null : () => unawaited(_setKey()),
+                child: const Text('Choose a key file…'),
+              ),
+          ],
+        ),
+      if (_keyBusy) const LinearProgressIndicator(key: Key('tsm-ssh-busy')),
+      if (_sshError != null)
+        Text(
+          _sshError!,
+          key: const Key('tsm-ssh-error'),
+          style: TextStyle(color: theme.colorScheme.error),
+        ),
+    ]);
+  }
+
   Widget _section(String title, IconData icon, List<Widget> children) =>
       TomSecretsSection(
         title: title,
@@ -480,12 +644,14 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                       TomSecretsEntryType.login,
                       TomSecretsEntryType.apiToken,
                       TomSecretsEntryType.note,
+                      TomSecretsEntryType.sshKey,
                     ])
                       DropdownMenuItem(
                         value: t,
                         child: Text(switch (t) {
                           TomSecretsEntryType.apiToken => 'API token',
                           TomSecretsEntryType.note => 'Secure note',
+                          TomSecretsEntryType.sshKey => 'SSH key',
                           _ => 'Login',
                         }),
                       ),
@@ -500,15 +666,19 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
               ],
             ),
           ),
+          if (_type == TomSecretsEntryType.sshKey)
+            _sshSection(context, entry, readOnly != null),
           _section(
             switch (_type) {
               TomSecretsEntryType.apiToken => 'Token',
               TomSecretsEntryType.note => 'Secret',
+              TomSecretsEntryType.sshKey => 'Passphrase',
               _ => 'Sign-in',
             },
             Icons.password_rounded,
             [
-              if (_type != TomSecretsEntryType.note)
+              if (_type != TomSecretsEntryType.note &&
+                  _type != TomSecretsEntryType.sshKey)
                 TextField(
                   key: const Key('tsm-field-user'),
                   controller: _user,
@@ -520,9 +690,12 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                 ),
               TomSecretsProtectedField(
                 name: 'password',
-                label: _type == TomSecretsEntryType.apiToken
-                    ? 'Token'
-                    : 'Password',
+                label: switch (_type) {
+                  TomSecretsEntryType.apiToken => 'Token',
+                  TomSecretsEntryType.sshKey =>
+                    'Passphrase (only when the key is encrypted)',
+                  _ => 'Password',
+                },
                 controller: _password,
                 reveal: _reveal,
                 clipboard: widget.clipboard,
@@ -549,7 +722,8 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
               ),
             ],
           ),
-          if (_type != TomSecretsEntryType.note)
+          if (_type != TomSecretsEntryType.note &&
+              _type != TomSecretsEntryType.sshKey)
             _section('URLs', Icons.link_rounded, [
               for (var i = 0; i < _urls.length; i++)
                 TextField(

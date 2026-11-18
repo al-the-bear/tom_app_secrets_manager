@@ -2,6 +2,13 @@
 
 ## 0.1.0
 
+- The typed SSH key: the entry editor's "SSH key" type with its section
+  (type and bits, fingerprint, the public key with Copy; "Generate an
+  Ed25519 key", "RSA 4096" for a tool that needs RSA, "Choose a key file…",
+  replacing after a confirmation), the type in the New entry menu and the
+  type filter; `TomSecretsSession.generateSshKey` and `setSshKeyFile`; at
+  every load the notes holding a private key in a writable vault become
+  `ssh-key` entries and the vault is saved (`migratedSshKeys`).
 - The First run wizard by pairing takes "This machine's approval link"
   (optional, checked: `host:port`, never every interface): the giving
   machine is told it with the pairing and opens the link, and the machine

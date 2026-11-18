@@ -265,8 +265,8 @@ and replace your emergency sheet.
 
 ### The entry editor
 
-An entry is a "Login", an "API token" or a "Secure note" (imported entries
-can also be an SSH key, a certificate or a PGP key). The editor holds:
+An entry is a "Login", an "API token", a "Secure note" or an "SSH key"
+(imported entries can also be a certificate or a PGP key). The editor holds:
 
 - "Title", "User name", "Password" (or "Token");
 - the password generator (the dice button, "Generate a password"): the
@@ -293,6 +293,32 @@ copies it to the clipboard, which is cleared after 30 seconds.
 
 When the entry changed elsewhere while you edit, the editor says so; your
 unsaved edits are saved over it field by field, or "Discard my edits".
+
+### SSH keys
+
+An "SSH key" entry holds a private key as its attachment, with a
+`KeeAgent.settings` attachment beside it, so KeePassXC's SSH agent finds the
+key in the same file. Its "SSH key" section shows the key's type and bits,
+the attachment's name, the fingerprint (`SHA256:…`) and the public key
+(the `authorized_keys` line, with "Copy the public key"). The section offers:
+
+- "Generate an Ed25519 key": the key to use by default, written as
+  `id_ed25519` and commented with the entry's title;
+- "RSA 4096 (for a tool that needs RSA)": an RSA key of 4096 bits, written
+  as `id_rsa`;
+- "Choose a key file…": a private key file you have (OpenSSH, PEM or
+  PKCS#8); a file without a private key is refused.
+
+A key already there is replaced only after you confirm; the old key stays in
+the entry's history. The "Passphrase" field holds the key's passphrase,
+needed only when the key file is encrypted. An encrypted OpenSSH key still
+shows its public key; an encrypted PEM key hides it (`ssh-keygen -y -f
+<file>` prints it with the passphrase).
+
+Vaults from before SSH keys had their own type kept such keys as secure
+notes. When the app loads a vault it can write, it turns every note (or
+KeePassXC entry) whose attachment is a private key into an "SSH key" entry
+and saves the vault; the note as it was stays in the entry's history.
 
 ## System secrets
 

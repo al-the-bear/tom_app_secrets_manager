@@ -431,6 +431,7 @@ class _ListFilters extends StatelessWidget {
               TomSecretsEntryType.login,
               TomSecretsEntryType.apiToken,
               TomSecretsEntryType.note,
+              TomSecretsEntryType.sshKey,
             ])
               DropdownMenuItem(value: t, child: Text(tomSecretsTypeName(t))),
           ],
@@ -560,6 +561,7 @@ class _EntryList extends StatelessWidget {
                           TomSecretsEntryType.login,
                           TomSecretsEntryType.apiToken,
                           TomSecretsEntryType.note,
+                          TomSecretsEntryType.sshKey,
                         ])
                           PopupMenuItem(
                             value: t,

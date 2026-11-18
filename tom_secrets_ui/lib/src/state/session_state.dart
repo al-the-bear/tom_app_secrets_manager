@@ -1193,6 +1193,84 @@ class TomSecretsSession extends ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
+    await _migrateSshKeys();
+  }
+
+  /// The SSH keys retyped since the session started, by store (the
+  /// migration of [load]).
+  final Map<String, int> migratedSshKeys = {};
+
+  /// Retypes phase A's SSH keys in every vault that can be written
+  /// (part-structure, DP-5): a `note` (or a KeePassXC entry) holding a
+  /// private key becomes an `ssh-key` entry with `KeeAgent.settings`, its
+  /// old state in the history (`tomSecretsMigrateSshKeys`), and the vault is
+  /// saved. Runs at every load and finds nothing once a vault is migrated;
+  /// a vault the service refuses to save is left for the next load.
+  Future<void> _migrateSshKeys() async {
+    for (final vault in _vaults.values.toList()) {
+      if (readOnlyReason(vault.store) != null) continue;
+      if (tomSecretsSshKeyCandidates(vault.file).isEmpty) continue;
+      final migrated = tomSecretsMigrateSshKeys(vault.file);
+      try {
+        await save(vault.store);
+        migratedSshKeys.update(
+          vault.store,
+          (n) => n + migrated.length,
+          ifAbsent: () => migrated.length,
+        );
+      } on TomSecretsAdminException {
+        // Not written: the vault was read again and keeps its notes.
+      }
+    }
+  }
+
+  /// Generates an SSH key (DP-179: [algorithm] Ed25519, or RSA 4096 for a
+  /// tool that needs RSA) into the entry [ref], commented with its title, as
+  /// the attachment `id_ed25519` or `id_rsa`, and saves it. Answers the
+  /// key's type, public key and fingerprint.
+  Future<TomSecretsSshKeyInfo> generateSshKey(
+    TomSecretsEntryRef ref, {
+    TomSecretsSshKeyAlgorithm algorithm = TomSecretsSshKeyAlgorithm.ed25519,
+    int rsaBits = 4096,
+  }) async {
+    final entry = entryOf(ref);
+    if (entry == null) throw StateError('$ref is not open');
+    final key = await tomSecretsGenerateSshKey(
+      algorithm: algorithm,
+      comment: entry.label ?? '',
+      rsaBits: rsaBits,
+    );
+    await updateEntry(
+      ref,
+      (e) => tomSecretsWriteSshKey(
+        e,
+        attachmentName: algorithm == TomSecretsSshKeyAlgorithm.rsa
+            ? 'id_rsa'
+            : 'id_ed25519',
+        privateKey: key.privateKey,
+      ),
+    );
+    key.privateKey.fillRange(0, key.privateKey.length, 0);
+    return key.info;
+  }
+
+  /// Takes the private key file [bytes] named [name] into the entry [ref]
+  /// as its SSH key and saves it. Throws [FormatException] when the file
+  /// holds no private key.
+  Future<TomSecretsSshKeyInfo> setSshKeyFile(
+    TomSecretsEntryRef ref,
+    String name,
+    Uint8List bytes,
+  ) async {
+    final info = TomSecretsSshKeyInfo.parse(bytes);
+    if (info == null) {
+      throw const FormatException('the file holds no SSH private key');
+    }
+    await updateEntry(
+      ref,
+      (e) => tomSecretsWriteSshKey(e, attachmentName: name, privateKey: bytes),
+    );
+    return info;
   }
 
   Future<TomSecretsOpenVault> _open(
