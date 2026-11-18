@@ -320,6 +320,36 @@ notes. When the app loads a vault it can write, it turns every note (or
 KeePassXC entry) whose attachment is a private key into an "SSH key" entry
 and saves the vault; the note as it was stays in the entry's history.
 
+### The ssh-agent
+
+The secrets service is an ssh-agent: `ssh`, `git`, `scp` and `rsync` sign
+with the vaults' SSH keys through it, and no private key file is needed on
+the machine. Point `ssh` at it once: `tsm status` names its socket (`agent`;
+on Linux and macOS `agent.sock` in the service's runtime directory, on
+Windows the pipe `\\.\pipe\tsm-ssh-agent`), and either
+
+```sh
+export SSH_AUTH_SOCK=<the agent socket>
+```
+
+or, in `~/.ssh/config`:
+
+```text
+Host *
+  IdentityAgent <the agent socket>
+```
+
+The "SSH key" section says whether the agent serves the key ("Served by the
+ssh-agent."), and if not, why: for example the key is encrypted and its
+passphrase is empty, or KeePassXC's agent settings do not allow it. "Confirm
+every signature the agent makes with it" asks you each time the key signs
+(KeePassXC's "require confirmation", which it reads too). A vault's menu in
+the tree has "Confirm every SSH signature" for all its keys.
+
+The first time a program signs with a key, the approval prompt asks you
+(see [Approvals](#approvals)). While the service is locked, a signature waits
+for you to unlock it.
+
 ## System secrets
 
 System secrets are the secrets programs ask for: API tokens, database
@@ -388,7 +418,23 @@ request" while the window is closed). It shows:
 
 "Allow" (or "Refuse" for Never) answers; "Later" leaves the request waiting
 under Clients. A program that asked for a client token gets one with an
-"Always" answer and is known by it from then on.
+"Always" answer and is known by it from then on. "Only when started by …"
+makes a lasting answer hold only while the program is started by the same
+parent (for example the `ssh` that `git` starts).
+
+**An SSH signature** (the ssh-agent) opens "A program wants to use an SSH
+key": "Which SSH key, for what" names the key and its fingerprint, "For
+host" the server (its names from your `known_hosts`, and its host key), and
+the "Purpose": "to log in", "to sign a git commit or tag" or "to sign". A
+lasting answer "Covers" "This key", "Its vault's keys" or "All keys", and
+"Only for this host" (on by default) keeps it to that server.
+
+**"Confirm an SSH signature"** asks about one signature only, answered
+"Allow this signature" or "Refuse it": for a key (or vault) that confirms
+every signature, and for a signature asked over a forwarded agent (`ssh -A`,
+a program on another machine using your key). A forwarded agent gets a key
+only with a grant that allows forwarding for that key and host, made under
+Clients › Pre-approve; without one it is refused without asking.
 
 ### The Clients screen
 
@@ -398,13 +444,20 @@ Its tabs:
 - **"Allow list"**: every grant, of every host or one ("Every host"), with
   what it covers, when it was last used, and "Revoke".
 - **"Pre-approve"**: "Pre-approve a client for a host" before it asks:
-  the "Host", "Who" (an executable, a script with its interpreter, a folder
-  or an interpreter, by path), the "Secret" (a reference such as
-  `telegram.bot_token`, `store <name>`, or `all`), "Allow" or "Never", and
-  pinning; "Add the grant". It applies once that host reads the vault again.
+  the "Host", "Who" (an executable, an executable started by a parent, a
+  script with its interpreter, a folder or an interpreter, by path), the
+  "Secret" (a reference such as `telegram.bot_token`, `store <name>`, or
+  `all`), "Allow" or "Never", and pinning; "Add the grant". It applies once
+  that host reads the vault again. "For the ssh-agent (SSH keys)" makes it a
+  grant for the agent: the "Keys" (a key entry's reference, `store <name>`
+  or `all`), "Only for these hosts" (their host key fingerprints, as
+  `ssh-keygen -lf` prints them) and "Also over a forwarded agent", which
+  needs one key and its hosts; every forwarded signature is still
+  confirmed.
 - **"Approval code"**: see below.
 - **"Audit log"**: who read what and with which outcome, filtered by time
-  ("Last 1 h" to "Last 30 days"), host, outcome, client and reference.
+  ("Last 1 h" to "Last 30 days"), host, outcome, client and reference. An
+  SSH signature names its key, the host and whether it was forwarded.
 
 ### Approval codes
 

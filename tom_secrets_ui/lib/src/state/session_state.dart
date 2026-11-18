@@ -416,6 +416,7 @@ class TomSecretsSession extends ChangeNotifier {
         binding: m.binding,
         configYaml: m.configYaml,
         keysDue: at,
+        sshConfirm: m.sshConfirm,
       ).writeTo(primary.file);
     } else {
       final list = TomSecretsPrimaryVaults(primary.file);
@@ -561,6 +562,7 @@ class TomSecretsSession extends ChangeNotifier {
         binding: m.binding,
         configYaml: m.configYaml,
         keysDue: tomSecretsAddMonths(at, device.primaryKeyAgeMonths),
+        sshConfirm: m.sshConfirm,
       ).writeTo(primary.file);
       final keys = held[primary.store]!;
       final pw = isPrimary ? password : keys['password'] as String?;
@@ -993,6 +995,7 @@ class TomSecretsSession extends ChangeNotifier {
       binding: m.binding,
       configYaml: text.isEmpty ? null : '$text\n',
       keysDue: m.keysDue,
+      sshConfirm: m.sshConfirm,
     ).writeTo(primary.file);
     await save(primary.store);
   }
@@ -1252,6 +1255,40 @@ class TomSecretsSession extends ChangeNotifier {
     );
     key.privateKey.fillRange(0, key.privateKey.length, 0);
     return key.info;
+  }
+
+  /// Sets whether the ssh-agent confirms every signature with the key of
+  /// [ref] (KeeAgent's "require confirmation",
+  /// `UseConfirmConstraintWhenAdding`, which KeePassXC reads too), and saves.
+  Future<void> setSshKeyConfirm(TomSecretsEntryRef ref, bool confirm) =>
+      updateEntry(ref, (e) {
+        final settings =
+            tomSecretsKeeAgentSettingsOf(e) ??
+            TomSecretsKeeAgentSettings(
+              attachmentName: tomSecretsSshKeyOf(e)?.name,
+            );
+        tomSecretsWriteKeeAgentSettings(
+          e,
+          settings.copyWith(useConfirmConstraintWhenAdding: confirm),
+        );
+      });
+
+  /// Whether the ssh-agent confirms every signature with a key of [store]
+  /// (the vault's `tsm.ssh-confirm`).
+  bool sshConfirmOf(String store) {
+    final vault = _vaults[store];
+    return vault != null && TomSecretsMetadata.read(vault.file).sshConfirm;
+  }
+
+  /// Sets the vault setting `tsm.ssh-confirm` of [store] (every ssh-agent
+  /// signature with a key of the vault is confirmed) and saves the vault.
+  Future<void> setVaultSshConfirm(String store, bool confirm) async {
+    final vault = _vaults[store];
+    if (vault == null) throw StateError('$store is not open');
+    TomSecretsMetadata.read(
+      vault.file,
+    ).copyWith(sshConfirm: confirm).writeTo(vault.file);
+    await save(store);
   }
 
   /// Takes the private key file [bytes] named [name] into the entry [ref]

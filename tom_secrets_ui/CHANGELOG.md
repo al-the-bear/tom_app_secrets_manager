@@ -2,6 +2,15 @@
 
 ## 0.1.0
 
+- The ssh-agent (protocol.md 7.6): the approval prompt of an SSH signature
+  (the key, the destination host by its `known_hosts` names, the purpose;
+  "Only for this host"; a confirmation answered for one signature), "Only
+  when started by …" (`withParent`) for any lasting answer; the allow list
+  and the audit log say agent grants and signatures in words; pre-approving
+  an agent grant with its keys, hosts and forwarding, and an executable
+  started by a parent; the entry editor says whether the agent serves a key
+  and switches KeeAgent's confirmation; a vault's menu sets
+  `tsm.ssh-confirm`. On `tom_secrets_core` ^0.2.6.
 - The typed SSH key: the entry editor's "SSH key" type with its section
   (type and bits, fingerprint, the public key with Copy; "Generate an
   Ed25519 key", "RSA 4096" for a tool that needs RSA, "Choose a key file…",

@@ -180,6 +180,8 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     String secret = 'ref',
     String? folder,
     String? pin,
+    bool sshHost = false,
+    bool withParent = false,
   }) async {
     final waiting = _approvals[approvalId];
     final token = decision == 'always' && (waiting?.wantClientToken ?? false)
@@ -192,6 +194,8 @@ class TomSecretsServiceConnection extends ChangeNotifier {
       'folder': ?folder,
       'pin': ?pin,
       'clientToken': ?token,
+      if (sshHost) 'sshHost': true,
+      if (withParent) 'withParent': true,
     });
     _approvals.remove(approvalId);
     notifyListeners();
@@ -451,6 +455,76 @@ class TomSecretsServiceConnection extends ChangeNotifier {
 
 const _base64 = Base64Codec();
 
+/// What an ssh-agent prompt is about (`approval_needed.ssh`, protocol.md
+/// 7.6).
+final class TomSecretsSshPromptInfo {
+  const TomSecretsSshPromptInfo._({
+    required this.keyFingerprint,
+    required this.keyType,
+    required this.title,
+    required this.hostKeyFingerprint,
+    required this.hostNames,
+    required this.forwarded,
+    required this.purpose,
+    required this.namespace,
+  });
+
+  /// The `ssh` member [json], or null when there is none.
+  static TomSecretsSshPromptInfo? fromJson(Object? json) {
+    if (json is! Map) return null;
+    return TomSecretsSshPromptInfo._(
+      keyFingerprint: json['key'] as String? ?? '',
+      keyType: json['keyType'] as String? ?? '',
+      title: json['title'] as String?,
+      hostKeyFingerprint: json['host'] as String?,
+      hostNames: (json['hostNames'] as List? ?? const []).cast<String>(),
+      forwarded: json['forwarded'] == true,
+      purpose: json['purpose'] as String? ?? 'other',
+      namespace: json['namespace'] as String?,
+    );
+  }
+
+  /// The key's fingerprint (`SHA256:…`).
+  final String keyFingerprint;
+
+  /// The key's type (`ssh-ed25519`, …).
+  final String keyType;
+
+  /// The key entry's title.
+  final String? title;
+
+  /// The destination's host key fingerprint, or null when the connection
+  /// is not bound to one.
+  final String? hostKeyFingerprint;
+
+  /// The destination's names in `known_hosts`.
+  final List<String> hostNames;
+
+  /// Whether the request came over a forwarded agent connection.
+  final bool forwarded;
+
+  /// `userauth`, `sshsig` or `other`.
+  final String purpose;
+
+  /// An `SSHSIG` signature's namespace (`git`, `file`, …).
+  final String? namespace;
+
+  /// What the signature is for, in words.
+  String get purposeText => switch (purpose) {
+    'userauth' => 'to log in',
+    'sshsig' =>
+      namespace == 'git'
+          ? 'to sign a git commit or tag'
+          : 'to sign${namespace == null ? '' : ' ($namespace)'}',
+    _ => 'to sign',
+  };
+
+  /// The destination in words: its names, else its host key, else unknown.
+  String get destinationText => hostNames.isNotEmpty
+      ? hostNames.join(', ')
+      : hostKeyFingerprint ?? 'not told (an older ssh or no login)';
+}
+
 /// A request waiting for an approval (`approval_needed`, protocol.md 6.5,
 /// 7.2): who asks, on which host, for which secrets.
 @immutable
@@ -464,6 +538,8 @@ final class TomSecretsApprovalPrompt {
     required this.approvalCode,
     required this.wantClientToken,
     required this.remote,
+    required this.ssh,
+    required this.confirmOnly,
   });
 
   /// The prompt of [event], or null when it names no approval.
@@ -486,6 +562,8 @@ final class TomSecretsApprovalPrompt {
       approvalCode: event['approvalCode'] as String?,
       wantClientToken: event['wantClientToken'] == true,
       remote: event['hostHint'] == 'remote',
+      ssh: TomSecretsSshPromptInfo.fromJson(event['ssh']),
+      confirmOnly: event['confirmOnly'] == true,
     );
   }
 
@@ -512,6 +590,14 @@ final class TomSecretsApprovalPrompt {
 
   /// Whether the client connected from another machine (`hostHint`).
   final bool remote;
+
+  /// For an ssh-agent signature: the key, the destination and the purpose
+  /// (protocol.md 7.6); null for a value request.
+  final TomSecretsSshPromptInfo? ssh;
+
+  /// A confirmation of one signature a grant allows: answered once or
+  /// never, nothing written.
+  final bool confirmOnly;
 
   /// The client's executable.
   String get exe => identity['exe'] as String? ?? '';

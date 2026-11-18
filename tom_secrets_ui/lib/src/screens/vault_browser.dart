@@ -289,6 +289,16 @@ class _VaultHeader extends StatelessWidget {
             await tomSecretsShowRewrittenQuestion(context, vault.store);
             return;
           }
+          if (v == 'ssh-confirm') {
+            await tomSecretsGuarded(
+              context,
+              () => session.setVaultSshConfirm(
+                vault.store,
+                !session.sshConfirmOf(vault.store),
+              ),
+            );
+            return;
+          }
           if (v != 'group') return;
           final name = await _ask(context, title: 'New group', label: 'Name');
           if (name == null || name.isEmpty || !context.mounted) return;
@@ -299,6 +309,13 @@ class _VaultHeader extends StatelessWidget {
         },
         itemBuilder: (_) => [
           const PopupMenuItem(value: 'group', child: Text('New group')),
+          CheckedPopupMenuItem(
+            key: Key('tsm-vault-ssh-confirm-${vault.store}'),
+            value: 'ssh-confirm',
+            checked: session.sshConfirmOf(vault.store),
+            enabled: session.readOnlyReason(vault.store) == null,
+            child: const Text('Confirm every SSH signature'),
+          ),
           if (rewritten)
             const PopupMenuItem(
               value: 'rewritten',

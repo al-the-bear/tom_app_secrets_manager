@@ -7,6 +7,11 @@
 /// service measured them), which secrets (by reference and resolved entry),
 /// and the choices once, always, always for this folder, or never, with the
 /// scope (this reference, the store, everything) and the pin (DP-17).
+///
+/// An ssh-agent signature (protocol.md 7.6) shows the key, the destination
+/// host and what the signature is for; a lasting answer may hold only for
+/// that host. A confirmation (a forwarded agent, or a key or vault that asks
+/// for it) is answered for this signature only.
 library;
 
 import 'package:flutter/material.dart';
@@ -51,6 +56,8 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
   String _secret = 'ref';
   String _pin = 'hash';
   TextEditingController? _folder;
+  bool _sshHost = true;
+  bool _withParent = false;
   bool _sending = false;
   String? _error;
   bool _closing = false;
@@ -66,13 +73,18 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
       _sending = true;
       _error = null;
     });
+    final prompt = c.prompt(widget.approvalId);
+    final ssh = prompt?.ssh;
+    final lasting = _decision != 'once' && !(prompt?.confirmOnly ?? false);
     try {
       await c.approve(
         widget.approvalId,
         decision: _decision,
         secret: _secret,
         folder: _decision == 'folder' ? _folder!.text.trim() : null,
-        pin: _decision == 'once' ? null : _pin,
+        pin: lasting ? _pin : null,
+        sshHost: lasting && _sshHost && ssh?.hostKeyFingerprint != null,
+        withParent: lasting && _withParent && _decision != 'folder',
       );
       if (mounted) Navigator.of(context).pop();
     } on TomSecretsAdminException catch (e) {
@@ -101,6 +113,13 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
       return const SizedBox.shrink();
     }
     _folder ??= TextEditingController(text: prompt.suggestedFolder);
+    final ssh = prompt.ssh;
+    final confirmOnly = prompt.confirmOnly;
+    if (confirmOnly && _decision != 'once' && _decision != 'never') {
+      _decision = 'once';
+    }
+    // `exe-from` names an executable with its parent (not a script).
+    final canWithParent = prompt.parentExe != null && prompt.script == null;
     final theme = Theme.of(context);
     final label = theme.textTheme.labelMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
@@ -134,7 +153,11 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'A program asks for secrets',
+              ssh == null
+                  ? 'A program asks for secrets'
+                  : confirmOnly
+                  ? 'Confirm an SSH signature'
+                  : 'A program wants to use an SSH key',
               style: theme.textTheme.titleMedium,
             ),
           ),
@@ -173,15 +196,39 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     ),
                 ],
               ),
-              TomSecretsSection(
-                title: 'Which secrets',
-                icon: Icons.key_rounded,
-                children: [
-                  for (final ref in prompt.refs) line('Reference', ref),
-                  for (final r in prompt.resolved)
-                    line('Entry', '${r.store}/${r.path} (${r.kind})'),
-                ],
-              ),
+              if (ssh == null)
+                TomSecretsSection(
+                  title: 'Which secrets',
+                  icon: Icons.key_rounded,
+                  children: [
+                    for (final ref in prompt.refs) line('Reference', ref),
+                    for (final r in prompt.resolved)
+                      line('Entry', '${r.store}/${r.path} (${r.kind})'),
+                  ],
+                )
+              else
+                TomSecretsSection(
+                  key: const Key('tsm-approval-ssh'),
+                  title: 'Which SSH key, for what',
+                  icon: Icons.vpn_key_rounded,
+                  children: [
+                    line('Key', ssh.title ?? ssh.keyFingerprint),
+                    for (final r in prompt.resolved)
+                      line('Entry', '${r.store}/${r.path}'),
+                    line('Fingerprint', '${ssh.keyType} ${ssh.keyFingerprint}'),
+                    line('For host', ssh.destinationText),
+                    if (ssh.hostNames.isNotEmpty)
+                      line('Host key', ssh.hostKeyFingerprint),
+                    line('Purpose', ssh.purposeText),
+                    if (ssh.forwarded)
+                      Text(
+                        'It comes over a forwarded agent: a program on '
+                        'another machine asks to sign with your key.',
+                        key: const Key('tsm-approval-ssh-forwarded'),
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                  ],
+                ),
               TomSecretsSection(
                 title: 'Your answer',
                 icon: Icons.rule_rounded,
@@ -190,12 +237,18 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     spacing: 6,
                     runSpacing: 4,
                     children: [
-                      for (final (value, text) in const [
-                        ('once', 'Once'),
-                        ('always', 'Always'),
-                        ('folder', 'Always for this folder'),
-                        ('never', 'Never'),
-                      ])
+                      for (final (value, text)
+                          in confirmOnly
+                              ? const [
+                                  ('once', 'Allow this signature'),
+                                  ('never', 'Refuse it'),
+                                ]
+                              : const [
+                                  ('once', 'Once'),
+                                  ('always', 'Always'),
+                                  ('folder', 'Always for this folder'),
+                                  ('never', 'Never'),
+                                ])
                         ChoiceChip(
                           key: Key('tsm-approval-decision-$value'),
                           label: Text(text),
@@ -213,7 +266,17 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                         isDense: true,
                       ),
                     ),
-                  if (_decision != 'once') ...[
+                  if (confirmOnly)
+                    Text(
+                      ssh?.forwarded ?? false
+                          ? 'A grant lets this key be used over a forwarded '
+                                'agent; every such signature is confirmed.'
+                          : 'This key (or its vault) asks to confirm every '
+                                'signature.',
+                      key: const Key('tsm-approval-confirm-only'),
+                      style: label,
+                    ),
+                  if (_decision != 'once' && !confirmOnly) ...[
                     const SizedBox(height: 6),
                     Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -225,20 +288,62 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                           style: const ButtonStyle(
                             visualDensity: VisualDensity.compact,
                           ),
-                          segments: const [
-                            ButtonSegment(
-                              value: 'ref',
-                              label: Text('This reference'),
-                            ),
-                            ButtonSegment(value: 'store', label: Text('Store')),
-                            ButtonSegment(value: 'all', label: Text('All')),
-                          ],
+                          segments: ssh == null
+                              ? const [
+                                  ButtonSegment(
+                                    value: 'ref',
+                                    label: Text('This reference'),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'store',
+                                    label: Text('Store'),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'all',
+                                    label: Text('All'),
+                                  ),
+                                ]
+                              : const [
+                                  ButtonSegment(
+                                    value: 'ref',
+                                    label: Text('This key'),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'store',
+                                    label: Text("Its vault's keys"),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'all',
+                                    label: Text('All keys'),
+                                  ),
+                                ],
                           selected: {_secret},
                           onSelectionChanged: (s) =>
                               setState(() => _secret = s.single),
                         ),
                       ],
                     ),
+                    if (ssh?.hostKeyFingerprint != null)
+                      CheckboxListTile(
+                        key: const Key('tsm-approval-ssh-host'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: _sshHost,
+                        onChanged: (v) => setState(() => _sshHost = v == true),
+                        title: Text(
+                          'Only for this host (${ssh!.destinationText})',
+                        ),
+                      ),
+                    if (canWithParent && _decision != 'folder')
+                      CheckboxListTile(
+                        key: const Key('tsm-approval-with-parent'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: _withParent,
+                        onChanged: (v) =>
+                            setState(() => _withParent = v == true),
+                        title: Text('Only when started by ${prompt.parentExe}'),
+                      ),
                     CheckboxListTile(
                       key: const Key('tsm-approval-pin'),
                       dense: true,

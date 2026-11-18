@@ -10,7 +10,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart'
-    show TomSecretsDeviceSettings;
+    show TomSecretsDeviceSettings, TomSecretsSshGrantSecret;
 
 import 'service_connection.dart';
 
@@ -37,8 +37,32 @@ final class TomSecretsGrant {
   /// `exe-token <path> <tokenId>`.
   String get subject => wire['subject'] as String? ?? '';
 
-  /// What it covers: a reference, `store <name>` or `all`.
+  /// What it covers: a reference, `store <name>` or `all`; for the
+  /// ssh-agent `ssh-key [host …] [forward] <target>` (protocol.md 7.6).
   String get secret => wire['secret'] as String? ?? '';
+
+  /// The agent grant's keys, hosts and forwarding, or null for a value
+  /// grant.
+  TomSecretsSshGrantSecret? get ssh => TomSecretsSshGrantSecret.parse(secret);
+
+  /// What it covers, in words: a value grant's secret as written; an agent
+  /// grant's keys, its hosts and whether it allows forwarding.
+  String get secretText {
+    final s = ssh;
+    if (s == null) return secret;
+    final keys = switch (s.target) {
+      'all' => 'every SSH key',
+      final t when t.startsWith('store ') =>
+        'the SSH keys of ${t.substring(6)}',
+      final t => 'the SSH key $t',
+    };
+    return [
+      keys,
+      if (s.hosts.isNotEmpty)
+        'for ${s.hosts.length == 1 ? 'host ${s.hosts.single}' : '${s.hosts.length} hosts'}',
+      if (s.forward) 'also over a forwarded agent',
+    ].join(' · ');
+  }
 
   /// `allow` or `never`.
   String get decision => wire['decision'] as String? ?? '';
@@ -69,6 +93,11 @@ final class TomSecretsGrant {
         : '';
     return switch (subjectKind) {
       'exe' => 'Executable $rest',
+      'exe-from' =>
+        rest.contains(' => ')
+            ? 'Executable ${rest.substring(rest.indexOf(' => ') + 4)} '
+                  'started by ${rest.substring(0, rest.indexOf(' => '))}'
+            : subject,
       'exe-token' =>
         'Executable ${rest.contains(' ') ? rest.substring(0, rest.lastIndexOf(' ')) : rest}',
       'script' => 'Script $rest',
@@ -121,6 +150,24 @@ final class TomSecretsAuditEntry {
 
   /// The device that approved it, or null.
   String? get approver => wire['approver'] as String?;
+
+  /// An ssh-agent signature's key, destination and purpose (protocol.md
+  /// 7.6), in words, or null for a value request.
+  String? get sshText {
+    final ssh = wire['ssh'];
+    if (ssh is! Map) return null;
+    final names = (ssh['hostNames'] as List? ?? const []).cast<String>();
+    return [
+      'SSH key ${ssh['title'] ?? ssh['key']}',
+      if (names.isNotEmpty)
+        'for ${names.join(', ')}'
+      else if (ssh['host'] != null)
+        'for ${ssh['host']}',
+      if (ssh['forwarded'] == true) 'forwarded',
+      if (ssh['purpose'] == 'sshsig')
+        'signing ${ssh['namespace'] ?? ''}'.trim(),
+    ].join(' · ');
+  }
 }
 
 /// A key the service knows a due date of (`keys`, protocol.md 6.3;

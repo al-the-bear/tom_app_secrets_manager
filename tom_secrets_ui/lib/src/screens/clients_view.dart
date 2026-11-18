@@ -16,6 +16,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_core/tom_secrets_core.dart'
+    show TomSecretsSshGrantSecret;
 
 import '../state/clients.dart';
 import '../state/service_connection.dart';
@@ -226,7 +228,7 @@ class _AllowListState extends State<_AllowListTab> {
                                     : theme.colorScheme.primary,
                               ),
                               title: Text(
-                                g.secret,
+                                g.secretText,
                                 style: const TextStyle(
                                   fontFamily: 'monospace',
                                   fontSize: 12,
@@ -266,6 +268,7 @@ class _AllowListState extends State<_AllowListTab> {
 /// The subject kinds a pre-approval or a code's grant may name.
 const _subjectKinds = [
   ('exe', 'Executable'),
+  ('exe-from', 'Executable started by a parent'),
   ('script', 'Script (interpreter and script)'),
   ('folder', 'Folder'),
   ('interpreter', 'Interpreter'),
@@ -279,15 +282,23 @@ class _GrantFields extends StatelessWidget {
     required this.onKind,
     required this.path,
     required this.interpreter,
+    required this.parent,
     required this.secret,
     required this.pin,
     required this.onPin,
+    this.secretLabel = 'Secret',
+    this.secretHelp =
+        'a reference (e.g. telegram.bot_token), store <name>, '
+        'or all',
   });
 
   final String kind;
   final ValueChanged<String> onKind;
   final TextEditingController path;
   final TextEditingController interpreter;
+  final TextEditingController parent;
+  final String secretLabel;
+  final String secretHelp;
   final TextEditingController secret;
   final bool pin;
   final ValueChanged<bool> onPin;
@@ -298,14 +309,28 @@ class _GrantFields extends StatelessWidget {
     children: [
       DropdownButtonFormField<String>(
         key: const Key('tsm-grant-kind'),
+        isExpanded: true,
         initialValue: kind,
         decoration: const InputDecoration(labelText: 'Who', isDense: true),
         items: [
           for (final (value, text) in _subjectKinds)
-            DropdownMenuItem(value: value, child: Text(text)),
+            DropdownMenuItem(
+              value: value,
+              child: Text(text, overflow: TextOverflow.ellipsis),
+            ),
         ],
         onChanged: (v) => onKind(v ?? kind),
       ),
+      if (kind == 'exe-from')
+        TextField(
+          key: const Key('tsm-grant-parent'),
+          controller: parent,
+          decoration: const InputDecoration(
+            labelText: 'Started by (the parent executable, path)',
+            helperText: 'e.g. /usr/bin/git for the ssh git starts',
+            isDense: true,
+          ),
+        ),
       if (kind == 'script')
         TextField(
           key: const Key('tsm-grant-interpreter'),
@@ -331,11 +356,9 @@ class _GrantFields extends StatelessWidget {
       TextField(
         key: const Key('tsm-grant-secret'),
         controller: secret,
-        decoration: const InputDecoration(
-          labelText: 'Secret',
-          helperText:
-              'a reference (e.g. telegram.bot_token), store <name>, '
-              'or all',
+        decoration: InputDecoration(
+          labelText: secretLabel,
+          helperText: secretHelp,
           isDense: true,
         ),
       ),
@@ -350,11 +373,20 @@ class _GrantFields extends StatelessWidget {
     ],
   );
 
-  /// The subject [kind] with [path] (and [interpreter]) as the grant names
-  /// it, or null when a path is missing.
-  static String? subjectOf(String kind, String path, String interpreter) {
+  /// The subject [kind] with [path] (and [interpreter], or the [parent]
+  /// executable) as the grant names it, or null when a path is missing.
+  static String? subjectOf(
+    String kind,
+    String path,
+    String interpreter, [
+    String parent = '',
+  ]) {
     final p = path.trim();
     if (p.isEmpty) return null;
+    if (kind == 'exe-from') {
+      final from = parent.trim();
+      return from.isEmpty ? null : 'exe-from $from => $p';
+    }
     if (kind == 'script') {
       final i = interpreter.trim();
       return i.isEmpty ? null : 'script $i $p';
@@ -374,18 +406,46 @@ class _PreApproveState extends State<_PreApproveTab> {
   final _host = TextEditingController();
   final _path = TextEditingController();
   final _interpreter = TextEditingController();
+  final _parent = TextEditingController();
   final _secret = TextEditingController();
+  final _sshHosts = TextEditingController();
   String _kind = 'exe';
   String _decision = 'allow';
   bool _pin = true;
+  bool _ssh = false;
+  bool _forward = false;
   String? _message;
 
   @override
   void dispose() {
-    for (final c in [_host, _path, _interpreter, _secret]) {
+    for (final c in [_host, _path, _interpreter, _parent, _secret, _sshHosts]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// The grant's secret: as typed, or for the ssh-agent the agent secret of
+  /// the keys typed with the hosts and forwarding (protocol.md 7.6); null
+  /// with [_message] set when it cannot be one.
+  String? _secretOf() {
+    final typed = _secret.text.trim();
+    if (!_ssh) return typed;
+    final ssh = TomSecretsSshGrantSecret(
+      typed,
+      hosts: [
+        for (final h in _sshHosts.text.split(RegExp(r'[,\s]+')))
+          if (h.trim().isNotEmpty) h.trim(),
+      ],
+      forward: _forward,
+    );
+    if (!ssh.valid) {
+      setState(
+        () => _message =
+            'Forwarding is only for one key and named hosts (DP-49).',
+      );
+      return null;
+    }
+    return ssh.text;
   }
 
   Future<void> _add() async {
@@ -393,6 +453,7 @@ class _PreApproveState extends State<_PreApproveTab> {
       _kind,
       _path.text,
       _interpreter.text,
+      _parent.text,
     );
     if (_host.text.trim().isEmpty ||
         subject == null ||
@@ -400,6 +461,8 @@ class _PreApproveState extends State<_PreApproveTab> {
       setState(() => _message = 'Host, who and secret are needed.');
       return;
     }
+    final secret = _secretOf();
+    if (secret == null) return;
     final api = TomSecretsClientsApi(
       context.read<TomSecretsServiceConnection>(),
     );
@@ -407,7 +470,7 @@ class _PreApproveState extends State<_PreApproveTab> {
       await api.addGrant(
         host: _host.text.trim(),
         subject: subject,
-        secret: _secret.text.trim(),
+        secret: secret,
         decision: _decision,
         pin: _pin ? 'hash' : 'off',
       );
@@ -438,15 +501,54 @@ class _PreApproveState extends State<_PreApproveTab> {
                 isDense: true,
               ),
             ),
+            CheckboxListTile(
+              key: const Key('tsm-grant-ssh'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              value: _ssh,
+              onChanged: (v) => setState(() => _ssh = v == true),
+              title: const Text('For the ssh-agent (SSH keys)'),
+            ),
             _GrantFields(
               kind: _kind,
               onKind: (k) => setState(() => _kind = k),
               path: _path,
               interpreter: _interpreter,
+              parent: _parent,
               secret: _secret,
               pin: _pin,
               onPin: (v) => setState(() => _pin = v),
+              secretLabel: _ssh ? 'Keys' : 'Secret',
+              secretHelp: _ssh
+                  ? "a key entry's reference (store/~uuid or store/path), "
+                        'store <name>, or all'
+                  : 'a reference (e.g. telegram.bot_token), store <name>, '
+                        'or all',
             ),
+            if (_ssh) ...[
+              TextField(
+                key: const Key('tsm-grant-ssh-hosts'),
+                controller: _sshHosts,
+                decoration: const InputDecoration(
+                  labelText: 'Only for these hosts',
+                  helperText:
+                      'host key fingerprints (SHA256:…, ssh-keygen -lf), '
+                      'comma separated; empty: any host',
+                  isDense: true,
+                ),
+              ),
+              CheckboxListTile(
+                key: const Key('tsm-grant-ssh-forward'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: _forward,
+                onChanged: (v) => setState(() => _forward = v == true),
+                title: const Text(
+                  'Also over a forwarded agent (ssh -A); each signature is '
+                  'confirmed',
+                ),
+              ),
+            ],
             SegmentedButton<String>(
               key: const Key('tsm-grant-decision'),
               segments: const [
@@ -490,6 +592,7 @@ class _ApprovalCodeState extends State<_ApprovalCodeTab> {
   final _code = TextEditingController();
   final _path = TextEditingController();
   final _interpreter = TextEditingController();
+  final _parent = TextEditingController();
   final _secret = TextEditingController();
   String _kind = 'exe';
   String _decision = 'once';
@@ -499,7 +602,7 @@ class _ApprovalCodeState extends State<_ApprovalCodeTab> {
 
   @override
   void dispose() {
-    for (final c in [_host, _code, _path, _interpreter, _secret]) {
+    for (final c in [_host, _code, _path, _interpreter, _parent, _secret]) {
       c.dispose();
     }
     super.dispose();
@@ -522,6 +625,7 @@ class _ApprovalCodeState extends State<_ApprovalCodeTab> {
             _decision == 'folder' ? 'folder' : _kind,
             _path.text,
             _interpreter.text,
+            _parent.text,
           )
         : null;
     if (_lasting && (subject == null || _secret.text.trim().isEmpty)) {
@@ -628,6 +732,7 @@ class _ApprovalCodeState extends State<_ApprovalCodeTab> {
                 onKind: (k) => setState(() => _kind = k),
                 path: _path,
                 interpreter: _interpreter,
+                parent: _parent,
                 secret: _secret,
                 pin: _pin,
                 onPin: (v) => setState(() => _pin = v),
@@ -857,7 +962,7 @@ class _AuditState extends State<_AuditTab> {
                       ),
                       title: Text(r.client),
                       subtitle: Text(
-                        '${r.refs.join(', ')} · ${r.outcome}'
+                        '${r.sshText ?? r.refs.join(', ')} · ${r.outcome}'
                         '${r.grantId == null ? '' : ' · grant ${r.grantId}'}',
                       ),
                       trailing: Column(

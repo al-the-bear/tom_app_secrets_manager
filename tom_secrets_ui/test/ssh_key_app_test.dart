@@ -200,6 +200,62 @@ void main() {
     expect(replaced.info.comment, 'demo');
   });
 
+  testWidgets("the editor says whether the agent serves the key; KeeAgent's "
+      'confirmation per key, and the vault setting for all its keys', (
+    tester,
+  ) async {
+    final session = await unlocked(tester);
+    final key = view(session, 'Old deploy key');
+    await tester.tap(find.text('List'));
+    await tester.pump();
+    await tester.tap(find.byKey(Key('tsm-entry-${key.ref}')));
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.byKey(const Key('tsm-ssh-agent-state'))).data,
+      'Served by the ssh-agent.',
+    );
+    final saved = service.saves.length;
+    await tester.ensureVisible(find.byKey(const Key('tsm-ssh-confirm')));
+    await tester.tap(find.byKey(const Key('tsm-ssh-confirm')));
+    await wait(tester);
+    expect(service.saves, hasLength(saved + 1));
+    expect(
+      tomSecretsKeeAgentSettingsOf(
+        view(session, 'Old deploy key').entry,
+      )!.useConfirmConstraintWhenAdding,
+      isTrue,
+    );
+    expect(
+      tomSecretsSshAgentStateOf(view(session, 'Old deploy key').entry).confirm,
+      isTrue,
+    );
+
+    // The vault's setting (the vault's menu in the tree): every key of it
+    // confirmed.
+    await tester.tap(find.text('Tree'));
+    await tester.pumpAndSettle();
+    final menu = find.descendant(
+      of: find.byKey(const Key('tsm-vault-primary')),
+      matching: find.byType(PopupMenuButton<String>),
+    );
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tsm-vault-ssh-confirm-primary')));
+    await wait(tester);
+    expect(service.saves, hasLength(saved + 2));
+    expect(session.sshConfirmOf('primary'), isTrue);
+    expect(
+      TomSecretsMetadata.read(session.vault('primary')!.file).sshConfirm,
+      isTrue,
+    );
+    await tester.tap(find.text('List'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('tsm-entry-${key.ref}')));
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('tsm-ssh-confirm')));
+    expect(find.text('Its vault confirms every signature.'), findsOneWidget);
+  });
+
   test('the session generates RSA for a tool that needs RSA', () async {
     final connection = TomSecretsServiceConnection(FakeHost(service));
     final session = TomSecretsSession(

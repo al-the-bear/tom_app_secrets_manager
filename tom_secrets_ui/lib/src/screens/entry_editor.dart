@@ -443,6 +443,58 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
     }
   }
 
+  /// Whether the ssh-agent serves the key (and why not), and the switch
+  /// that confirms each of its signatures (KeeAgent's "require
+  /// confirmation", which KeePassXC reads too).
+  List<Widget> _agentLines(
+    BuildContext context,
+    KdbxEntry entry,
+    bool readOnly,
+  ) {
+    final theme = Theme.of(context);
+    final agent = tomSecretsSshAgentStateOf(entry);
+    final served = agent.state == TomSecretsSshAgentServing.served;
+    final vaultConfirms = _session.sshConfirmOf(widget.ref.store);
+    return [
+      Text(
+        served
+            ? 'Served by the ssh-agent.'
+            : 'Not served by the ssh-agent: '
+                  '${tomSecretsSshAgentReason(agent.state)}.',
+        key: const Key('tsm-ssh-agent-state'),
+        style: served
+            ? theme.textTheme.bodySmall
+            : theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+      ),
+      CheckboxListTile(
+        key: const Key('tsm-ssh-confirm'),
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        value: agent.confirm || vaultConfirms,
+        onChanged: readOnly || vaultConfirms || _keyBusy
+            ? null
+            : (v) async {
+                setState(() => _keyBusy = true);
+                try {
+                  await _session.setSshKeyConfirm(widget.ref, v == true);
+                } on TomSecretsAdminException catch (e) {
+                  if (mounted) {
+                    setState(() => _sshError = tomSecretsDescribeAdminError(e));
+                  }
+                } finally {
+                  if (mounted) setState(() => _keyBusy = false);
+                }
+              },
+        title: const Text('Confirm every signature the agent makes with it'),
+        subtitle: vaultConfirms
+            ? const Text('Its vault confirms every signature.')
+            : null,
+      ),
+    ];
+  }
+
   Widget _sshSection(BuildContext context, KdbxEntry entry, bool readOnly) {
     final theme = Theme.of(context);
     final key = tomSecretsSshKeyOf(entry);
@@ -508,6 +560,7 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
             style: theme.textTheme.bodySmall,
           ),
       ],
+      if (key != null) ..._agentLines(context, entry, readOnly),
       if (!readOnly)
         Wrap(
           spacing: 8,
@@ -1097,3 +1150,21 @@ class _ReferenceRow extends StatelessWidget {
     ],
   );
 }
+
+/// Why the ssh-agent does not serve a key, in words.
+String tomSecretsSshAgentReason(TomSecretsSshAgentServing state) =>
+    switch (state) {
+      TomSecretsSshAgentServing.served => 'it is served',
+      TomSecretsSshAgentServing.notSshKey => 'the entry is not an SSH key',
+      TomSecretsSshAgentServing.noKey => 'the entry holds no key it reads',
+      TomSecretsSshAgentServing.notAllowed =>
+        'KeePassXC\'s agent settings do not allow it',
+      TomSecretsSshAgentServing.notAdded =>
+        'KeePassXC\'s agent settings do not add it when the vault opens',
+      TomSecretsSshAgentServing.keyFileOutside =>
+        'the key is a file outside the vault',
+      TomSecretsSshAgentServing.unsupported =>
+        'its key type is not supported (DSA, security keys)',
+      TomSecretsSshAgentServing.passphraseMissing =>
+        'the key is encrypted and the passphrase below is empty',
+    };
