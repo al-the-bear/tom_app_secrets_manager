@@ -8,7 +8,7 @@
 /// | Request | Host → service | Answer |
 /// | --- | --- | --- |
 /// | `status` | `hello`, then `match` of a reserved name without waiting | `state`: `running`, `locked` or `not_running` |
-/// | `match {url, frameUrl?}` | `match` | `candidates [{entryId, title, userName, matchedUrl, hasTotp}]`, no value |
+/// | `match {url, frameUrl?, wait?}` | `match` (`wait: false` answers `locked` at once; by default it waits for an unlock) | `candidates [{entryId, title, userName, matchedUrl, hasTotp}]`, no value |
 /// | `fill {entryId, url, frameUrl?, totp?}` | `match` (the entry must be a candidate of the page), then `getMany` of `UserName`, `Password` and `totp` | `userName`, `password`, `totp?` |
 /// | `propose {url, title?, userName, password}` | `propose` | `accepted`, `known` |
 /// | `openApp {entryId?}` | — | the desktop app started at the entry |
@@ -180,6 +180,7 @@ final class TomSecretsBrowserHost {
     final candidates = await service.match(
       _need(request, 'url'),
       frameUrl: _string(request, 'frameUrl'),
+      wait: request['wait'] != false,
     );
     return {
       'candidates': [

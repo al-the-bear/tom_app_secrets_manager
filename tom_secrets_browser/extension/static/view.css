@@ -1,0 +1,66 @@
+/* Copyright (c) 2026 Peter Nicolai Alexis Kyaw. SPDX-License-Identifier: BSD-3-Clause */
+/* The candidate list (in the page's iframe) and the popup. */
+:root {
+  color-scheme: light dark;
+  font: 13px/1.35 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+body {
+  margin: 0;
+}
+body.popup {
+  width: 320px;
+}
+main {
+  padding: 8px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 230px;
+  overflow: auto;
+}
+li.candidate {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button.fill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 6px;
+  border-radius: 6px;
+}
+button.fill:hover,
+button.fill:focus {
+  background: rgba(127, 127, 127, 0.18);
+}
+.title {
+  font-weight: 600;
+}
+.user {
+  opacity: 0.75;
+}
+.error {
+  color: #c62828;
+}
+input[type='search'] {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+}

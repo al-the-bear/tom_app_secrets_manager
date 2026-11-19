@@ -3,10 +3,15 @@
 > Part of the Tom Secrets Manager by Peter Nicolai Alexis Kyaw, BSD-3-Clause.
 
 The browser integration of the Tom Secrets Manager (part-browser). This
-package is the native-messaging host `tsm-browser-host`: the program the
-browsers start for the product's extension, which talks to the secrets
-service over the client protocol. The WebExtension itself joins this package
-next (Chromium and Firefox builds from one TypeScript source).
+package holds two parts:
+
+- the native-messaging host `tsm-browser-host`, the program the browsers
+  start for the product's extension, which talks to the secrets service over
+  the client protocol (this README);
+- the WebExtension in [`extension/`](extension/), Manifest V3 builds for
+  Chromium browsers and Firefox from one TypeScript source: the page's
+  logins, the list at the field, the fill
+  ([its README](extension/README.md)).
 
 ## Overview
 
@@ -37,8 +42,10 @@ service's error kind (`not_running` when no service answers).
 
 - `status`: `state` `running`, `locked` or `not_running` (a `match` of the
   reserved name `tom-secrets.invalid` without waiting tells locked).
-- `match {url, frameUrl?}`: `candidates` `[{entryId, title, userName,
-  matchedUrl, hasTotp}]`, never a value.
+- `match {url, frameUrl?, wait?}`: `candidates` `[{entryId, title,
+  userName, matchedUrl, hasTotp}]`, never a value. A locked service is
+  waited for (the extension's "Unlock in Tom Secrets Manager"); with `wait:
+  false` the answer is `locked` at once.
 - `fill {entryId, url, frameUrl?, totp?}`: the page is matched again and the
   entry must be one of its candidates (else `denied`, reason `not_matched`,
   before any value is read); then `userName`, `password` and, when asked and
@@ -74,8 +81,11 @@ testkit :test
 The tests check the framing, the caller check, every request against a fake
 service (a fill of an entry another site has refused before any value is
 read), the app launcher, and the compiled run over standard input and output
-with no service running. `match` and `propose` against the real service are
-the service's own tests (`tom_secrets_service`'s `lookup_test.dart`).
+with no service running, and that the extension's source names the host
+and the extension ids the host serves (`extension_ids_test.dart`). `match`
+and `propose` against the real service are the service's own tests
+(`tom_secrets_service`'s `lookup_test.dart`). The extension's own tests are
+`npm test` in `extension/`.
 
 ## Limits
 

@@ -739,8 +739,26 @@ the browser host `tsm-browser-host` that ships beside the service; off
 removes it. A Linux browser installed as a Flatpak or a Snap is named but
 not offered: its sandbox cannot start the host. At every start the app checks
 that each manifest still names its own host (after an update or a move it
-rewrites it and tells you). The extension's "Open in Tom Secrets Manager"
-brings the app to the front at the entry.
+rewrites it and tells you). The extension's "Open Tom Secrets Manager"
+brings the app to the front.
+
+**The browser extension.** With the extension installed and its browser
+switched on here, a login page's fields get the logins of the site: press
+Ctrl+Shift+L (Command+Shift+L on macOS) in the user name or password field,
+right-click it and choose "Fill from Tom Secrets Manager", or click the
+toolbar button. A list opens at the field with each login (its title, user
+name and the address it matched); "Fill" fills the user name and password,
+and the current code when the form asks for one; "Copy code" copies the
+code. Nothing is filled until you pick a login. When the service is locked,
+"Unlock in Tom Secrets Manager" waits until you unlock it in the app. A
+login form in a frame of another site (a payment or sign-in frame) first
+shows nothing, then "Show the logins of `<site>`" lists that site's logins.
+The extension asks the service through the browser host, which lists only
+the logins a grant of yours covers and does not ask for one. Approve it once
+under Clients › Pre-approve: "Who" the executable `tsm-browser-host` in the
+`tsm/bin` folder of the app's distribution, "Secret" `all` (or
+`store <name>` for one vault), "Allow". Until then the list says no login of
+the site is there. The browser is never given the logins of system vaults.
 
 **Shared by every device**: the configuration kept in the primary vault
 (`tsm.config`): the dimensions in priority order and the files per

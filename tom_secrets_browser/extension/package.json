@@ -1,0 +1,20 @@
+{
+  "name": "tom-secrets-browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Tom Secrets Manager browser extension (Manifest V3, Chromium browsers and Firefox): the site's logins from the vaults through the native-messaging host tsm-browser-host, the candidate list in the page, the fill on a click or the shortcut.",
+  "license": "BSD-3-Clause",
+  "homepage": "https://enterprise-flutter.dev",
+  "author": "Peter Nicolai Alexis Kyaw",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && node tool/build.mjs",
+    "test": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json && node tool/test.mjs"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.6.0"
+  }
+}

@@ -26,6 +26,7 @@ final class _Service implements TomSecretsBrowserService {
   final Map<String, Map<String, String>> stored = {};
   final List<List<String>> reads = [];
   final List<Map<String, String?>> proposals = [];
+  final List<bool> waits = [];
   bool closed = false;
 
   Never _notRunning() => throw TomSecretsClientException(
@@ -44,6 +45,7 @@ final class _Service implements TomSecretsBrowserService {
     String? frameUrl,
     bool wait = true,
   }) async {
+    waits.add(wait);
     if (!running) _notRunning();
     if (locked) {
       throw TomSecretsClientException(TomSecretsErrorKind.locked, 'locked');
@@ -234,6 +236,30 @@ void main() {
       });
       expect(jsonEncode(answer), isNot(contains('demo-mail-pw')));
     });
+
+    test(
+      'match waits for an unlock unless the extension says wait: false',
+      () async {
+        await host.handle({
+          'id': 1,
+          'op': 'match',
+          'url': 'https://a.example/',
+        });
+        await host.handle({
+          'id': 2,
+          'op': 'match',
+          'url': 'https://a.example/',
+          'wait': true,
+        });
+        await host.handle({
+          'id': 3,
+          'op': 'match',
+          'url': 'https://a.example/',
+          'wait': false,
+        });
+        expect(service.waits, [true, true, false]);
+      },
+    );
 
     test('fill reads the values of an entry the page matches, the TOTP when '
         'asked', () async {
