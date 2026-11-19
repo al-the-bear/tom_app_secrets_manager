@@ -122,6 +122,14 @@ void main() {
         'app_secrets_manager/tools/py_deps/pyproject.toml',
         'app_secrets_manager/tools/with_deps/go.mod',
       ]);
+      expect(workspace.goModuleDirs(), [
+        p.join(
+          workspace.workspaceRoot,
+          'app_secrets_manager',
+          'tools',
+          'stdlib_only',
+        ),
+      ]);
       expect(workspace.pythonPackageDirs(), [
         p.join(
           workspace.workspaceRoot,

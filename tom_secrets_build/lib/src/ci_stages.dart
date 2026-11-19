@@ -34,13 +34,15 @@ const Map<String, String> secretsCiStageDescriptions = {
   'analyze':
       'pub get + analyze (infos fatal) in every package of the three '
       'repositories; npm ci + npm run build in every npm package; '
-      'compileall in every Python package; on macOS '
+      'go vet in every Go module that requires nothing; compileall in every '
+      'Python package; on macOS '
       'the AutoFill provider\'s extension target compiled (unsigned)',
   'test':
       'every package suite, strictly serial, one full log per package '
       '(the licence-boundary check is :licences\', the integration suites '
-      ':integration\'); npm test in every npm package; unittest in every '
-      'Python package; on macOS swift test '
+      ':integration\'); npm test in every npm package; go test in every Go '
+      'module with tests; unittest in every Python package; on macOS swift '
+      'test '
       'of the AutoFill provider\'s core',
   'integration':
       'the integration suites against the real service (test tag '
@@ -143,6 +145,12 @@ class SecretsCiStages {
             _npm(['run', 'build'], dir),
           ]);
         }
+        for (final dir in workspace.goModuleDirs()) {
+          final name = workspace.relative(dir);
+          await run.step(stage, name, 'analyze.${_goLogName(name)}.log', [
+            CiCommand('go', const ['vet', './...'], workingDirectory: dir),
+          ]);
+        }
         for (final dir in workspace.pythonPackageDirs()) {
           final name = workspace.relative(dir);
           // Byte-compiling every module is the syntax check; the package
@@ -186,6 +194,25 @@ class SecretsCiStages {
           await run.step(stage, name, '${_npmLogName(name)}.log', [
             _npm(['ci'], dir),
             _npm(['test'], dir),
+          ]);
+        }
+        for (final dir in workspace.goModuleDirs()) {
+          final name = workspace.relative(dir);
+          // A module without _test.go files (a tool run with go run) has
+          // no suite; go test would only report that.
+          final hasTests = Directory(dir)
+              .listSync(recursive: true)
+              .any((e) => e is File && e.path.endsWith('_test.go'));
+          if (!hasTests) {
+            run.skip(stage, name, '${_goLogName(name)}.log', 'no _test.go');
+            continue;
+          }
+          await run.step(stage, name, '${_goLogName(name)}.log', [
+            CiCommand('go', const [
+              'test',
+              '-count=1',
+              './...',
+            ], workingDirectory: dir),
           ]);
         }
         for (final dir in workspace.pythonPackageDirs()) {
@@ -621,6 +648,8 @@ CiCommand _python(
   workingDirectory: dir,
   environment: environment,
 );
+
+String _goLogName(String name) => 'go.${name.replaceAll('/', '.')}';
 
 String _pythonLogName(String name) => 'python.${name.replaceAll('/', '.')}';
 

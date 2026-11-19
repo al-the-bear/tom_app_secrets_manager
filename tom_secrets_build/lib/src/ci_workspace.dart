@@ -372,6 +372,14 @@ class SecretsCiWorkspace {
         manifest,
   ];
 
+  /// The absolute directories of the Go modules that require nothing
+  /// ([isStandardLibraryGoModule]), sorted: the stages vet and test them.
+  List<String> goModuleDirs() => [
+    for (final manifest in foreignManifests())
+      if (isStandardLibraryGoModule(manifest))
+        p.normalize(p.join(workspaceRoot, p.dirname(manifest))),
+  ];
+
   /// The absolute directories of the Python projects that require nothing
   /// ([isStandardLibraryPythonProject]), sorted: the stages check and test
   /// them.
