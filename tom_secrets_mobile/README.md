@@ -52,8 +52,29 @@ A phone runs no secrets service and keeps no copy of a vault:
 - **A vault too heavy for the phone** (Argon2 asking more than a quarter of
   its memory) is refused at the unlock with a message, before the key
   derivation could exhaust the memory.
+- **Android's Autofill service** (part-os-integration, DP-175,
+  `TomSecretsAutofillService`): apps and browsers get the logins of the
+  personal and shared vaults (never a system vault's). A request is
+  answered at once with one locked response, "Unlock Tom Secrets Manager"
+  (an inline chip in keyboards that show them, Android 11+). Choosing it:
+  - while the app runs unlocked, BiometricPrompt (the fingerprint or the
+    screen lock), then the logins from the app's memory
+    (`AutofillAuthActivity` asks it over `tom_secrets_mobile/autofill`);
+  - otherwise the app's own unlock on an engine of its own
+    (`AutofillUnlockActivity`, Dart entry point `autofillMain`): the vaults
+    fetched from GitHub into memory, the logins handed back, everything
+    dropped when it closes; without network it says so.
+
+  Matching: a browser's page by the browser extension's rules, an app by
+  `androidapp://<package>` in the entry's URLs; a package match is verified
+  against the Digital Asset Links of the entry's web domain with the
+  requesting app's signing certificate, else marked "unverified app". A
+  login signed in with that the vaults do not hold is offered for saving
+  (`onSaveRequest`): the app opens with it under Proposals, saved into a
+  personal or shared vault once confirmed. Settings › "Autofill service"
+  turns it on.
 - **iOS has no autofill** from this app: logins are shown and copied from it
-  (TD-4). Android's Autofill service is its own package.
+  (TD-4).
 
 The app locks after 30 seconds in the background (settings: at once, 1 or
 5 minutes). A copied value is kept off other devices (iOS: local only, no
@@ -145,8 +166,19 @@ by the code (a fake discovery), a TOTP secret scanned; a file added as a
 vault, written back and merged with a change made there, unreachable on
 another device; an attachment added and shared; a too heavy vault refused;
 the token reminder; the unlock retried once the network is back; the fetch
-sizes (documents in memory). Demo data only. The
-camera itself is checked on a device.
+sizes (documents in memory); the Autofill service's matching, Digital Asset
+Links (a fake site), the running app answering it, a submitted login
+becoming a proposal, and the app as the service's own unlock. Demo data
+only. The camera itself is checked on a device.
+
+The Autofill service's native side runs on an emulator or a device
+(`android/app/src/androidTest`, UiAutomator against a login form in the test
+APK's package: the locked response, the app's own unlock, the save request
+opening the app with the login):
+
+```text
+cd android && ./gradlew app:connectedDebugAndroidTest
+```
 
 ## Limits
 
@@ -158,3 +190,6 @@ camera itself is checked on a device.
   trust material from the pairing.
 - The GitHub App sign-in (device flow) is a desktop feature; the phone uses
   the token the pairing gave it.
+- The Autofill service fills logins, not passkeys (Credential Manager is
+  phase C); an app the system's package visibility hides gives no
+  certificate, so its package matches stay "unverified app".

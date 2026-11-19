@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /// The mobile app's settings: the biometric unlock, the refresh interval,
-/// the lock and clipboard timeouts, this device's setup.
+/// the lock and clipboard timeouts, the Android Autofill service, this
+/// device's setup.
 library;
 
 import 'dart:async';
@@ -13,6 +14,7 @@ import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 
+import 'mobile_autofill.dart';
 import 'mobile_documents.dart';
 import 'mobile_engine.dart';
 
@@ -23,10 +25,15 @@ class TomSecretsMobileSettingsView extends StatefulWidget {
     super.key,
     required this.engine,
     this.onForget,
+    this.autofill,
   });
 
   /// The engine.
   final TomSecretsMobileEngine engine;
+
+  /// The Android Autofill service's platform side, or null where there is
+  /// none (iOS).
+  final TomSecretsAutofillPlatform? autofill;
 
   /// Forgets the setup (back to the setup screen), or null.
   final Future<void> Function()? onForget;
@@ -37,6 +44,21 @@ class TomSecretsMobileSettingsView extends StatefulWidget {
 
 class _SettingsState extends State<TomSecretsMobileSettingsView> {
   TomSecretsMobileSettings get _settings => widget.engine.settings;
+
+  /// Whether the Autofill service is the device's, as last asked (null:
+  /// the device has none).
+  bool? _autofillOn;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_readAutofill());
+  }
+
+  Future<void> _readAutofill() async {
+    final on = await widget.autofill?.serviceEnabled();
+    if (mounted) setState(() => _autofillOn = on);
+  }
 
   Future<void> _set(String key, int value) async {
     if (key == TomSecretsMobileKeys.refreshMinutes) {
@@ -170,6 +192,31 @@ class _SettingsState extends State<TomSecretsMobileSettingsView> {
           const [15, 30, 60, 120],
           _seconds,
         ),
+        if (widget.autofill != null && _autofillOn != null) ...[
+          const Divider(),
+          ListTile(
+            key: const Key('tsm-mobile-autofill'),
+            leading: const Icon(Icons.password_rounded),
+            title: const Text('Autofill service'),
+            subtitle: Text(
+              _autofillOn!
+                  ? 'Apps and browsers fill logins from your personal and '
+                        'shared vaults, after your fingerprint.'
+                  : 'Turn Tom Secrets on as the autofill service to fill '
+                        'logins in apps and browsers.',
+            ),
+            trailing: _autofillOn!
+                ? const Icon(Icons.check_circle_outline_rounded)
+                : TextButton(
+                    key: const Key('tsm-mobile-autofill-on'),
+                    onPressed: () async {
+                      await widget.autofill!.openSettings();
+                      await _readAutofill();
+                    },
+                    child: const Text('Turn on'),
+                  ),
+          ),
+        ],
         const Divider(),
         ListTile(
           title: Text('Vaults', style: Theme.of(context).textTheme.titleSmall),

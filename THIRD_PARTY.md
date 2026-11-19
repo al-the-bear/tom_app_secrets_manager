@@ -23,6 +23,8 @@ A package that adds a shipped dependency adds its row here.
 | [path_provider](https://pub.dev/packages/path_provider) | BSD-3-Clause | `tom_secrets_mobile`: the app's support directory (its preferences file) |
 | [http](https://pub.dev/packages/http) | BSD-3-Clause | `tom_secrets_mobile`: GitHub's REST API |
 | [mobile_scanner](https://pub.dev/packages/mobile_scanner) | BSD-3-Clause | `tom_secrets_mobile`: the camera's QR reader (the desktop's pairing code, TOTP secrets); on iOS over Apple's AVFoundation; on Android over Google's ML Kit barcode scanning model (`com.google.mlkit:barcode-scanning`), bundled into the APK: closed source under the [ML Kit terms](https://developers.google.com/ml-kit/terms), not copyleft |
+| [androidx.biometric](https://developer.android.com/jetpack/androidx/releases/biometric) | Apache-2.0 | `tom_secrets_mobile` (Android, Gradle): BiometricPrompt before the Autofill service answers from the running app |
+| [androidx.autofill](https://developer.android.com/jetpack/androidx/releases/autofill) | Apache-2.0 | `tom_secrets_mobile` (Android, Gradle): the Autofill service's inline suggestion in the keyboard |
 | [file_selector](https://pub.dev/packages/file_selector) | BSD-3-Clause | `tom_secrets_desktop`: key files and attachments |
 | [cryptography](https://pub.dev/packages/cryptography) | Apache-2.0 | `tom_secrets_ui`: AES-256-GCM of the macOS AutoFill snapshot (also in the closure through `tom_secrets_core`) |
 | [pdf](https://pub.dev/packages/pdf) | Apache-2.0 | `tom_secrets_ui`: the emergency sheet as a PDF (its QR codes through `barcode`, Apache-2.0, and `qr`, BSD-3-Clause) |

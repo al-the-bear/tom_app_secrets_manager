@@ -2,6 +2,14 @@
 
 ## 0.1.0
 
+- Android's Autofill service (part-os-integration, DP-175): the locked
+  response at once (inline in the keyboard on Android 11+); BiometricPrompt
+  and the running app's memory, or the app's own unlock on its own engine
+  (`autofillMain`) fetching the vaults; a browser page by the browser's
+  rules, an app by `androidapp://`, Digital Asset Links verifying a package
+  match ("unverified app" otherwise), never a system vault; a submitted
+  login handed to the app as a proposal (the Proposals screen); Settings ›
+  Autofill service; device tests in `android/app/src/androidTest`.
 - The mobile app on iOS, iPadOS and Android (part-mobile, DP-55–DP-59,
   DP-130): the vaults fetched from GitHub into memory at the unlock and
   dropped at the lock, synced while open (the refresh interval, 15 minutes by

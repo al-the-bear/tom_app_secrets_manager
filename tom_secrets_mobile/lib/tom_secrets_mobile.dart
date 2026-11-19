@@ -8,6 +8,8 @@
 library;
 
 export 'src/mobile_app.dart';
+export 'src/mobile_autofill.dart';
+export 'src/mobile_autofill_view.dart';
 export 'src/mobile_documents.dart';
 export 'src/mobile_engine.dart';
 export 'src/mobile_host.dart';

@@ -22,6 +22,7 @@ import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
+import 'mobile_autofill.dart';
 import 'mobile_engine.dart';
 import 'mobile_settings_view.dart';
 
@@ -45,7 +46,11 @@ class TomSecretsMobileShell extends StatefulWidget {
     this.onForget,
     this.profileExpiry,
     this.clock = DateTime.now,
+    this.autofill,
   });
+
+  /// The Android Autofill service's platform side (Settings), or null.
+  final TomSecretsAutofillPlatform? autofill;
 
   /// The engine (settings, refresh).
   final TomSecretsMobileEngine engine;
@@ -92,6 +97,7 @@ class _ShellState extends State<TomSecretsMobileShell> {
         _Tab.settings => TomSecretsMobileSettingsView(
           engine: widget.engine,
           onForget: widget.onForget,
+          autofill: widget.autofill,
         ),
       };
       final destinations = [
@@ -110,7 +116,36 @@ class _ShellState extends State<TomSecretsMobileShell> {
         context.watch<TomSecretsServiceConnection>(),
         context.read<TomSecretsHost>().preferences,
       );
+      final proposals = context
+          .watch<TomSecretsServiceConnection>()
+          .proposals
+          .length;
       final banners = <Widget>[
+        // Logins the Autofill service saw submitted (onSaveRequest).
+        if (proposals > 0)
+          MaterialBanner(
+            key: const Key('tsm-mobile-proposals'),
+            leading: const Icon(Icons.add_task_rounded),
+            content: Text(
+              proposals == 1 ? 'A login to save' : '$proposals logins to save',
+            ),
+            actions: [
+              TextButton(
+                key: const Key('tsm-mobile-proposals-open'),
+                onPressed: () => unawaited(
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('Proposals')),
+                        body: const TomSecretsProposalsView(),
+                      ),
+                    ),
+                  ),
+                ),
+                child: const Text('Review'),
+              ),
+            ],
+          ),
         if (reinstall)
           MaterialBanner(
             key: const Key('tsm-mobile-reinstall'),

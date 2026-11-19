@@ -19,6 +19,8 @@ import 'package:tom_secrets_core/tom_secrets_core.dart'
     show tomSecretsPairingAddresses;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
+import 'mobile_autofill.dart';
+import 'mobile_autofill_view.dart';
 import 'mobile_documents.dart';
 import 'mobile_engine.dart';
 import 'mobile_host.dart';
@@ -50,6 +52,9 @@ class TomSecretsMobileApp extends StatefulWidget {
     this.ownAddresses,
     this.documents,
     this.kdfMemoryLimit = TomSecretsMobileEngine.defaultKdfMemoryLimit,
+    this.autofill,
+    this.autofillUnlock,
+    this.assetLinks,
   });
 
   /// The device preferences.
@@ -98,6 +103,17 @@ class TomSecretsMobileApp extends StatefulWidget {
   /// The most memory a vault's key derivation may take on this device.
   final int kdfMemoryLimit;
 
+  /// The Android Autofill service's channel to the running app (answering
+  /// from its memory, the proposals of `onSaveRequest`), or null.
+  final TomSecretsAutofillPlatform? autofill;
+
+  /// Set when the app runs as the service's unlock (`autofillMain`): it
+  /// unlocks on an engine of its own, answers the request and ends.
+  final TomSecretsAutofillUnlockPlatform? autofillUnlock;
+
+  /// The Digital Asset Links checker of package matches.
+  final TomSecretsAssetLinks? assetLinks;
+
   @override
   State<TomSecretsMobileApp> createState() => _MobileAppState();
 }
@@ -109,6 +125,8 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
   );
   TomSecretsMobileEngine? _engine;
   DateTime? _expiry;
+  late final TomSecretsAssetLinks _links =
+      widget.assetLinks ?? TomSecretsAssetLinks(client: widget.httpClient);
 
   @override
   void initState() {
@@ -132,6 +150,57 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
       githubBaseUrl: widget.githubBaseUrl ?? 'https://api.github.com',
       documents: widget.documents,
       kdfMemoryLimit: widget.kdfMemoryLimit,
+    );
+    if (widget.autofillUnlock == null) _attachAutofill(_engine!);
+  }
+
+  /// The service asks the running app (DP-175): its state, the logins from
+  /// the vaults it holds, a login seen submitted (`proposal`).
+  void _attachAutofill(TomSecretsMobileEngine engine) {
+    final platform = widget.autofill;
+    if (platform == null) return;
+    final responder = TomSecretsAutofillResponder(
+      stores: () => engine.autofillStores,
+      links: _links,
+    );
+    platform.setHandler((method, arguments) async {
+      if (method == 'proposal') {
+        _deliverProposal(
+          engine,
+          (arguments as Map<Object?, Object?>).cast<String, Object?>(),
+        );
+        return null;
+      }
+      return responder.handle(method, arguments);
+    });
+    unawaited(
+      platform.takeProposal().then((p) {
+        if (p != null) _deliverProposal(engine, p);
+      }),
+    );
+  }
+
+  /// A login the service saw submitted, handed to the Proposals screen once
+  /// the app is unlocked (the lock forgets proposals).
+  void _deliverProposal(TomSecretsMobileEngine engine, Map<String, Object?> p) {
+    final url = p['url'];
+    final userName = p['userName'];
+    final password = p['password'];
+    if (url is! String || userName is! String || password is! String) return;
+    void deliver() => engine.propose(
+      url: url,
+      userName: userName,
+      password: password,
+      title: p['title'] as String?,
+    );
+    if (!engine.isLocked) {
+      scheduleMicrotask(deliver);
+      return;
+    }
+    unawaited(
+      engine.events
+          .firstWhere((e) => e['op'] == 'unlocked')
+          .then((_) => scheduleMicrotask(deliver), onError: (_) {}),
     );
   }
 
@@ -171,6 +240,7 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
 
   @override
   void dispose() {
+    widget.autofill?.setHandler(null);
     unawaited(_engine?.close());
     super.dispose();
   }
@@ -178,6 +248,18 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
   @override
   Widget build(BuildContext context) {
     final engine = _engine;
+    final autofillUnlock = widget.autofillUnlock;
+    if (engine == null && autofillUnlock != null) {
+      return MaterialApp(
+        title: 'Tom Secrets',
+        theme: tomSecretsTheme(Brightness.light),
+        darkTheme: tomSecretsTheme(Brightness.dark),
+        home: TomSecretsAutofillMessage(
+          message: 'Set Tom Secrets Manager up first: open the app.',
+          onClose: autofillUnlock.cancel,
+        ),
+      );
+    }
     if (engine == null) {
       return MaterialApp(
         title: 'Tom Secrets',
@@ -213,15 +295,24 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
               ? null
               : TomSecretsMobileFiles(widget.documents!),
           attachmentsShare: true,
-          unlockFooter: (context) => Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const Key('tsm-mobile-unlock-setup-again'),
-              icon: const Icon(Icons.restart_alt_rounded),
-              label: const Text('Set this device up again'),
-              onPressed: () => unawaited(_forgetAsked(context)),
-            ),
-          ),
+          unlockFooter: (context) => autofillUnlock != null
+              ? Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    key: const Key('tsm-autofill-unlock-cancel'),
+                    onPressed: () => unawaited(autofillUnlock.cancel()),
+                    child: const Text('Cancel'),
+                  ),
+                )
+              : Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const Key('tsm-mobile-unlock-setup-again'),
+                    icon: const Icon(Icons.restart_alt_rounded),
+                    label: const Text('Set this device up again'),
+                    onPressed: () => unawaited(_forgetAsked(context)),
+                  ),
+                ),
           osUnlock: gated == null
               ? null
               : TomSecretsOsUnlockHost(
@@ -229,12 +320,19 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
                   label: widget.biometricLabel,
                   keepSaved: () => settings.biometric,
                 ),
-          shell: (context, clipboard) => TomSecretsMobileShell(
-            engine: engine,
-            clipboard: clipboard,
-            onForget: _forget,
-            profileExpiry: _expiry,
-          ),
+          shell: (context, clipboard) => autofillUnlock != null
+              ? TomSecretsAutofillAnswer(
+                  engine: engine,
+                  platform: autofillUnlock,
+                  links: _links,
+                )
+              : TomSecretsMobileShell(
+                  engine: engine,
+                  clipboard: clipboard,
+                  onForget: _forget,
+                  profileExpiry: _expiry,
+                  autofill: widget.autofill,
+                ),
         ),
       ),
     );

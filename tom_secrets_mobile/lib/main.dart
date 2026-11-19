@@ -13,7 +13,18 @@ import 'package:tom_secrets_mobile/tom_secrets_mobile.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart'
     show TomSecretsBonsoirPairingDiscovery;
 
-Future<void> main() async {
+Future<void> main() => _run();
+
+/// The Android Autofill service's unlock (part-os-integration, DP-175): the
+/// service's native activity starts this entry point on an engine of its own
+/// when the app's process holds no unlocked vault. The app's own unlock,
+/// then the request's logins handed back as datasets; the vaults are dropped
+/// when the activity ends.
+@pragma('vm:entry-point')
+Future<void> autofillMain() =>
+    _run(autofillUnlock: const TomSecretsChannelAutofillUnlock());
+
+Future<void> _run({TomSecretsAutofillUnlockPlatform? autofillUnlock}) async {
   WidgetsFlutterBinding.ensureInitialized();
   final support = await getApplicationSupportDirectory();
   final preferences = await TomSecretsMobilePreferences.open(
@@ -32,6 +43,11 @@ Future<void> main() async {
       documents: const TomSecretsChannelDocuments(),
       kdfMemoryLimit: await tomSecretsMobileKdfMemoryLimit(),
       discovery: const TomSecretsBonsoirPairingDiscovery(),
+      // The Autofill service is Android's; iOS has none (TD-4).
+      autofill: Platform.isAndroid && autofillUnlock == null
+          ? const TomSecretsChannelAutofill()
+          : null,
+      autofillUnlock: autofillUnlock,
     ),
   );
 }

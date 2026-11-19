@@ -16,6 +16,7 @@ shows.
 - [Editing](#editing)
 - [Vaults in Files](#vaults-in-files)
 - [Staying current](#staying-current)
+- [Autofill on Android](#autofill-on-android)
 - [Settings](#settings)
 - [Troubleshooting](#troubleshooting)
 
@@ -168,6 +169,27 @@ minutes (15 by default), when you come back to it, and when you pull a list
 down or tap the sync button at the top. Nothing happens while the app is
 closed.
 
+## Autofill on Android
+
+Turn it on under Settings › "Autofill service" › "Turn on" (the system's
+choice of the autofill service opens; pick "Tom Secrets"). Then a login
+field in an app or a browser offers "Unlock Tom Secrets Manager" (in the
+keyboard's strip where the keyboard shows suggestions):
+
+- with the app open and unlocked, your fingerprint (or the screen lock)
+  confirms, and the logins of that app or site are offered;
+- otherwise the app's unlock opens, fetches your vaults from GitHub, and
+  offers the logins; nothing is kept once it closes. Without a connection
+  it says so and fills nothing.
+
+Only logins of your personal and shared vaults are offered, never a system
+vault's. A login found by the app's name alone is marked "unverified app"
+unless the site the login belongs to names that app (its Digital Asset
+Links): check that it is the app you think. When you sign in with a login
+the vaults do not hold, Android asks whether to save it in Tom Secrets: the
+app opens and "A login to save" › "Review" shows it, to save as a new login,
+update the existing one, or drop.
+
 ## Settings
 
 - **"Unlock with Face ID"** (or Touch ID, your fingerprint): on by default.
@@ -178,6 +200,8 @@ closed.
 - **"Clear the clipboard after"**: 15, 30, 60 or 120 seconds.
 - **"Vaults"**: every vault with where it is (`github:…` or a file), and
   "Add a vault from a file".
+- **"Autofill service"** (Android): whether Tom Secrets fills logins in
+  apps and browsers, and "Turn on".
 - **"This device"**: its name and the primary vault.
 - **"Set this device up again"**: locks and goes back to the setup screen (to
   pair again, e.g. after the keys were rotated on the desktop).

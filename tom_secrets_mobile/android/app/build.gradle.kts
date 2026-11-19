@@ -27,6 +27,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // The release key: TSM_ANDROID_SIGNING names a properties file outside
@@ -65,4 +66,16 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // The Autofill service (DP-175): BiometricPrompt before answering from
+    // the running app's memory; the keyboard's inline chip (Android 11+).
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.autofill:autofill:1.1.0")
+
+    // The Autofill service's device tests (src/androidTest).
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }

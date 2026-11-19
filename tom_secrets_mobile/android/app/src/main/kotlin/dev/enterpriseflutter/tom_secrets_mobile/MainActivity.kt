@@ -14,11 +14,14 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PersistableBundle
 import android.provider.OpenableColumns
+import android.provider.Settings
+import android.view.autofill.AutofillManager
 import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
@@ -36,9 +39,20 @@ import java.io.File
  *   attach; an attachment handed to the share sheet through a FileProvider
  *   (the copy in the cache is removed at the next share and the next start);
  * - `app`: the device's physical memory (the limit a vault's Argon2 may
- *   take).
+ *   take);
+ * - `autofill` (part-os-integration, DP-175): its engine is kept in
+ *   [FlutterEngineCache] while it runs, so the Autofill service's
+ *   [AutofillAuthActivity] can ask the unlocked app for logins; a login the
+ *   service saw submitted ([ACTION_PROPOSE]) is handed to Dart as a
+ *   proposal (`takeProposal`, or pushed as `proposal`); whether the service
+ *   is on, and the system's choice of the service opened.
  */
-class MainActivity : FlutterFragmentActivity() {
+open class MainActivity : FlutterFragmentActivity() {
+    /** The Autofill service's unlock: its own engine, no cache, no proposals. */
+    protected open val isAutofillUnlock: Boolean get() = false
+
+    private var proposal: Map<String, String>? = null
+    private var autofillChannel: MethodChannel? = null
     private var pendingVault: MethodChannel.Result? = null
     private var pendingFile: MethodChannel.Result? = null
 
@@ -83,12 +97,75 @@ class MainActivity : FlutterFragmentActivity() {
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE,
         )
-        sharedFolder().deleteRecursively()
+        if (!isAutofillUnlock) {
+            sharedFolder().deleteRecursively()
+            proposal = proposalOf(intent)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val p = proposalOf(intent) ?: return
+        val channel = autofillChannel
+        if (channel == null) {
+            proposal = p
+        } else {
+            channel.invokeMethod("proposal", p)
+        }
+    }
+
+    /** The login of an [ACTION_PROPOSE] intent (the service's onSaveRequest). */
+    private fun proposalOf(intent: Intent?): Map<String, String>? {
+        if (intent?.action != ACTION_PROPOSE) return null
+        val password = intent.getStringExtra("password") ?: return null
+        return mapOf(
+            "url" to (intent.getStringExtra("url") ?: return null),
+            "title" to (intent.getStringExtra("title") ?: ""),
+            "userName" to (intent.getStringExtra("userName") ?: ""),
+            "password" to password,
+        )
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        if (!isAutofillUnlock) FlutterEngineCache.getInstance().remove(ENGINE)
+        autofillChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
+        if (!isAutofillUnlock) {
+            FlutterEngineCache.getInstance().put(ENGINE, flutterEngine)
+            autofillChannel = MethodChannel(messenger, AutofillAuthActivity.CHANNEL).also {
+                it.setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "takeProposal" -> {
+                            result.success(proposal)
+                            proposal = null
+                        }
+                        "serviceEnabled" -> result.success(
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                getSystemService(AutofillManager::class.java)
+                                    ?.hasEnabledAutofillServices() == true
+                            } else {
+                                null
+                            },
+                        )
+                        "openSettings" -> {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startActivity(
+                                    Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE)
+                                        .setData(Uri.parse("package:$packageName")),
+                                )
+                            }
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                }
+            }
+        }
         MethodChannel(messenger, "tom_secrets_mobile/clipboard")
             .setMethodCallHandler { call, result ->
                 val clipboard =
@@ -190,6 +267,14 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    companion object {
+        /** The cache id of the running app's engine. */
+        const val ENGINE = "tom_secrets_main"
+
+        /** The service's onSaveRequest: the app opens with the login. */
+        const val ACTION_PROPOSE = "dev.enterpriseflutter.tom_secrets_mobile.PROPOSE"
     }
 
     /** Where an attachment waits for the app it is shared with. */

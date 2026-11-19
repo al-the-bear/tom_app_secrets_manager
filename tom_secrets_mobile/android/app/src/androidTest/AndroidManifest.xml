@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- The app the service fills: the test APK, a package other than
+             the service's own (its screens are never filled). -->
+        <activity
+            android:name="dev.enterpriseflutter.tom_secrets_mobile.LoginActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.Light" />
+    </application>
+</manifest>

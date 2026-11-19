@@ -265,6 +265,28 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   /// Whether the vaults are closed.
   bool get isLocked => !_vaults.isUnlocked;
 
+  /// The open stores the Android Autofill service answers from (DP-175),
+  /// or null while locked.
+  Iterable<TomSecretsStore>? get autofillStores =>
+      isLocked ? null : _vaults.resolver?.stores;
+
+  /// A login the Android Autofill service saw submitted (`onSaveRequest`):
+  /// raised as the `proposal` event, as the desktop's service passes the
+  /// browser's and git's (protocol.md 5.5); the Proposals screen saves it
+  /// into a personal or shared vault once the user confirms (BP-28).
+  void propose({
+    required String url,
+    required String userName,
+    required String password,
+    String? title,
+  }) => _emit({
+    'op': 'proposal',
+    'url': url,
+    'title': ?title,
+    'userName': userName,
+    'password': password,
+  });
+
   Future<T> _serial<T>(Future<T> Function() body) {
     final result = _queue.then((_) => body());
     _queue = result.then((_) {}, onError: (_) {});

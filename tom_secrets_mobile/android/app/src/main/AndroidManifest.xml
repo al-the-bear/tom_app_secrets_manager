@@ -35,6 +35,44 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- The Autofill service (part-os-integration, DP-175): a locked
+             answer at once; AutofillAuthActivity answers from the running
+             app's memory after BiometricPrompt, or AutofillUnlockActivity
+             (the app's own unlock on the Dart entry point autofillMain)
+             fetches and opens the vaults itself. -->
+        <service
+            android:name=".TomSecretsAutofillService"
+            android:exported="true"
+            android:label="Tom Secrets"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.autofill"
+                android:resource="@xml/autofill_service" />
+        </service>
+        <activity
+            android:name=".AutofillAuthActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
+            android:name=".AutofillUnlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+        </activity>
         <!-- An attachment handed to the share sheet (MainActivity). -->
         <provider
             android:name="androidx.core.content.FileProvider"
