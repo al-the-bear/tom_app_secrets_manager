@@ -6,8 +6,9 @@
 // is all it knows, and the background answers it only for that token.
 
 import { extensionApi } from './api';
+import { suggestPassword } from './generator';
 import type { ListAnswer } from './messages';
-import { renderList } from './view';
+import { renderList, renderSuggestion } from './view';
 
 const api = extensionApi();
 const token = location.hash.slice(1);
@@ -15,12 +16,25 @@ const root = document.getElementById('tsm-root') as HTMLElement;
 
 async function load(extra: { frameSite?: boolean; unlock?: boolean } = {}): Promise<void> {
   const answer = (await api.runtime.sendMessage({ op: 'tsm.list', token, ...extra })) as ListAnswer;
+  if (answer.newPassword) {
+    suggest(answer.site);
+    return;
+  }
   renderList(root, answer, {
     fill: (entryId) => void api.runtime.sendMessage({ op: 'tsm.fill', token, entryId }),
     copyCode: (entryId) => void copyCode(entryId),
     unlock: () => void load({ unlock: true }),
     openApp: (entryId) => void api.runtime.sendMessage({ op: 'tsm.openApp', entryId }),
     frameSite: () => void load({ frameSite: true }),
+    close: () => void api.runtime.sendMessage({ op: 'tsm.close', token }),
+  });
+}
+
+/** A new-password field: a suggestion, filled on "Use this password". */
+function suggest(site: string): void {
+  renderSuggestion(root, site, suggestPassword(), {
+    use: (password) => void api.runtime.sendMessage({ op: 'tsm.fillNew', token, password }),
+    another: () => suggest(site),
     close: () => void api.runtime.sendMessage({ op: 'tsm.close', token }),
   });
 }

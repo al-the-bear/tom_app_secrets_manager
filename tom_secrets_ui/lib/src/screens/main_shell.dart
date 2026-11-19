@@ -31,6 +31,7 @@ import 'conflicts_view.dart';
 import 'import_view.dart';
 import 'keys_view.dart';
 import 'pairing_view.dart';
+import 'proposals_view.dart';
 import 'environments_view.dart';
 import 'settings_view.dart';
 import 'status_view.dart';
@@ -49,6 +50,9 @@ enum TomSecretsDestination {
 
   /// The approvals, the allow list, approval codes and the audit log.
   clients,
+
+  /// The logins the browser extension and git's helper proposed.
+  proposals,
 
   /// The keys with their dates, the rotation ages.
   keys,
@@ -291,6 +295,16 @@ class _MainShellState extends State<TomSecretsMainShell> {
                   ),
                   NavigationRailDestination(
                     icon: Badge.count(
+                      key: const Key('tsm-proposals-badge'),
+                      count: c.proposals.length,
+                      isLabelVisible: c.proposals.isNotEmpty,
+                      child: const Icon(Icons.add_task_outlined),
+                    ),
+                    selectedIcon: const Icon(Icons.add_task_rounded),
+                    label: const Text('Proposals'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Badge.count(
                       key: const Key('tsm-keys-rail-badge'),
                       count: reminders.shown.length,
                       isLabelVisible: reminders.shown.isNotEmpty,
@@ -469,6 +483,8 @@ class _MainShellState extends State<TomSecretsMainShell> {
                           const TomSecretsConflictsView(),
                         TomSecretsDestination.clients =>
                           const TomSecretsClientsView(),
+                        TomSecretsDestination.proposals =>
+                          const TomSecretsProposalsView(),
                         TomSecretsDestination.keys =>
                           const TomSecretsKeysView(),
                         TomSecretsDestination.pairing =>

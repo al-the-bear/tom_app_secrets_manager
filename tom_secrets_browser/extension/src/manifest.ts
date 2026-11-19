@@ -26,8 +26,19 @@ export const firefoxExtensionId = 'tom-secrets@enterprise-flutter.dev';
 /** The pages a content script may show in its frame. */
 const pages = ['http://*/*', 'https://*/*'];
 
-/** The manifest of [family] at [version]. */
-export function manifest(family: Family, version: string): Record<string, unknown> {
+/** The icon files by size (written by the build, tool/icon.ts). */
+export const icons: Record<string, string> = Object.fromEntries(
+  [16, 32, 48, 128].map((size) => [String(size), `icons/icon-${size}.png`]),
+);
+
+/** The manifest of [family] at [version]. [store]: the package uploaded to
+ *  the store, without the development build's `key` (the store gives the
+ *  id; the Chrome Web Store refuses a `key`). */
+export function manifest(
+  family: Family,
+  version: string,
+  { store = false }: { store?: boolean } = {},
+): Record<string, unknown> {
   return {
     manifest_version: 3,
     name: 'Tom Secrets Manager',
@@ -37,7 +48,8 @@ export function manifest(family: Family, version: string): Record<string, unknow
       'Fills logins from your Tom Secrets Manager vaults: the logins of the ' +
       'site from the desktop app, never filled without your click.',
     homepage_url: 'https://enterprise-flutter.dev',
-    ...(family === 'chromium' ? { key: chromiumDevelopmentKey } : {}),
+    ...(family === 'chromium' && !store ? { key: chromiumDevelopmentKey } : {}),
+    icons,
     // DP-45: host access to all sites, for the list at the fields.
     permissions: ['nativeMessaging', 'activeTab', 'scripting', 'storage', 'contextMenus'],
     host_permissions: ['<all_urls>'],
@@ -46,14 +58,16 @@ export function manifest(family: Family, version: string): Record<string, unknow
     content_scripts: [
       { matches: pages, js: ['content.js'], all_frames: true, run_at: 'document_idle' },
     ],
-    action: { default_popup: 'popup.html', default_title: 'Tom Secrets Manager' },
+    action: { default_popup: 'popup.html', default_title: 'Tom Secrets Manager', default_icon: icons },
     commands: {
       'open-list': {
         suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' },
         description: 'Show the logins for the field',
       },
     },
-    web_accessible_resources: [{ resources: ['list.html', 'list.js', 'view.css'], matches: pages }],
+    web_accessible_resources: [
+      { resources: ['list.html', 'list.js', 'bar.html', 'bar.js', 'view.css'], matches: pages },
+    ],
     ...(family === 'firefox'
       ? {
           browser_specific_settings: {

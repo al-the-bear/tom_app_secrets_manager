@@ -49,13 +49,25 @@ export function fakeApi(
 ): ExtensionApi & {
   sentToTabs: Array<{ tabId: number; message: unknown; frameId?: number }>;
   messageListeners: Array<(m: unknown, s: Sender, r: (x: unknown) => void) => boolean | void>;
+  stored: Record<string, unknown>;
+  closeTab(tabId: number): void;
 } {
+  const stored: Record<string, unknown> = {};
+  const removedListeners: Array<(tabId: number) => void> = [];
   const sentToTabs: Array<{ tabId: number; message: unknown; frameId?: number }> = [];
   const messageListeners: Array<(m: unknown, s: Sender, r: (x: unknown) => void) => boolean | void> =
     [];
   return {
     sentToTabs,
     messageListeners,
+    stored,
+    closeTab: (tabId) => removedListeners.forEach((l) => l(tabId)),
+    storage: {
+      local: {
+        get: async (key: string) => (key in stored ? { [key]: stored[key] } : {}),
+        set: async (items: Record<string, unknown>) => void Object.assign(stored, items),
+      },
+    },
     runtime: {
       id: extensionId,
       getURL: (path: string) => `${extensionBase}${path}`,
@@ -71,6 +83,7 @@ export function fakeApi(
         return { filled: true };
       },
       query: async () => (options.activeTab ? [options.activeTab] : []),
+      onRemoved: { addListener: (l) => void removedListeners.push(l) },
     },
   };
 }

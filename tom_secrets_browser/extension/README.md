@@ -5,9 +5,11 @@
 The browser extension of the Tom Secrets Manager (part-browser): a Manifest
 V3 WebExtension for Chromium browsers (Chrome, Chromium, Edge, Brave) and
 Firefox, built from one TypeScript source. It shows the logins the vaults
-hold for the page, fills the one you pick, and never fills by itself. It
-talks only to the native-messaging host `tsm-browser-host` (the package
-around this folder), which asks the secrets service.
+hold for the page, fills the one you pick, and never fills by itself; it
+offers to save a login you signed in with that the vaults do not hold, and
+suggests a password in new-password fields. It talks only to the
+native-messaging host `tsm-browser-host` (the package around this folder),
+which asks the secrets service.
 
 ## What it does
 
@@ -18,9 +20,15 @@ around this folder), which asks the secrets service.
   position. Hidden, disabled and read-only fields are left out, and a change
   form's new password is never filled. A split login (the user name alone
   first) counts as a login form.
-- **Opening the list.** You open it in the field's frame with the shortcut
-  Ctrl+Shift+L (Command+Shift+L on macOS), from the context menu "Fill from
-  Tom Secrets Manager" on a field, or from the toolbar button's popup.
+- **The icons.** A small shield sits at the right edge of the user-name and
+  password fields, and of the first new-password field; a click opens the
+  list there (at a new-password field: a suggested password). Each icon is
+  a button in a closed shadow root laid over the field; it follows the
+  field when the page scrolls or resizes, hides for fields too small, and
+  goes with its field.
+- **Opening the list.** You open it in the field's frame with an icon, the
+  shortcut Ctrl+Shift+L (Command+Shift+L on macOS), the context menu "Fill
+  from Tom Secrets Manager" on a field, or the toolbar button's popup.
 - **The list** is the extension's own page in an iframe, in a closed shadow
   root at the field, so the page can neither read nor restyle it. It shows
   each login of the site (title, user name, the address it matched) with
@@ -42,6 +50,27 @@ around this folder), which asks the secrets service.
   within 300 ms, it types it once more with key events. The TOTP is filled
   when the form has a one-time-code field. A list's token is spent by its
   fill, and a list lives 10 minutes at most.
+- **A suggested password** (a sign-up or password-change form, its
+  `new-password` fields, or the two after a current one): the list shows a
+  password from the product generator's default policy (20 characters,
+  lower and upper case, digits and symbols, from the browser's CSPRNG);
+  "Use this password" fills it into the form's new-password fields, in that
+  frame only; "Another" makes a new one. Saving it is the proposal below.
+- **Proposing a login** (DP-43). When a form with a password is submitted
+  (its submit, Enter in a password field, or a sign-in button of a page
+  without a form), the content script reports the user name and the
+  password (the new one of a change form) once. The background asks the
+  host's `check` whether the vaults hold it, which compares inside the host
+  and answers no value: a login they hold brings nothing; a new login or a
+  changed password brings the bar "Save in Tom Secrets Manager?" at the top
+  of the tab, also on the page the form led to. It names the site and the
+  user, never the password. "Save" sends `propose`: the app shows it under
+  Proposals, where it is saved as a new login, updates the existing one, or
+  is dropped. "Not now" drops it; "Never for this site" keeps the site off
+  (the popup's "Offer to save logins on this site" turns it on again). The
+  password is held in the background only until the bar is answered, the
+  tab closes, or two minutes pass. Saving needs "Always in this browser":
+  the service refuses a proposal from a browser without a lasting grant.
 - **Its approval.** The service lists the logins a grant of the browser
   host covers. The first lookup that nothing covers asks the user in the
   app (the browser prompt, DP-44): "This time" (the logins listed and each
@@ -51,9 +80,12 @@ around this folder), which asks the secrets service.
   closed nothing is asked and no login is listed. System vaults are never
   served to the browser, neither their logins nor their values.
 - **Who may ask.** Only the extension's own list and popup pages may ask for
-  a list, a fill or a code, and only for the token of their own list. Every
-  other sender is answered `denied`. No value ever reaches the list page; it
-  gets the candidates only.
+  a list, a fill or a code, and only the bar page for its bar, each only for
+  the token of its own. Every other sender is answered `denied`. No stored
+  value ever reaches the list page; it gets the candidates only.
+- **What it keeps.** The extension's storage holds the never-list (sites
+  only). No password, code or entry is written to `storage`,
+  `localStorage` or IndexedDB.
 
 The permissions are `nativeMessaging`, `activeTab`, `scripting`, `storage`
 and `contextMenus`, with host permission `<all_urls>` for the content
@@ -78,8 +110,15 @@ npm run build
 This type-checks the source and bundles it with esbuild into
 `dist/chromium/` and `dist/firefox/`, each with its own `manifest.json`
 (Chromium's background is a service worker, Firefox's a background script;
-Firefox 115 or later, Chromium 110 or later). The extension has no runtime
-dependency: the small `browser ?? chrome` shim in `src/api.ts` takes the
+Firefox 115 or later, Chromium 110 or later) and its icons (16, 32, 48 and
+128 pixels, drawn by `tool/icon.ts`: the repository holds no image). It
+then writes the store packages into `dist/packages/`:
+`tom-secrets-browser-extension-<version>-chromium.zip` and `-firefox.zip`,
+whose manifest has no development `key` (the store gives the id). The ZIPs
+are deterministic (`tool/zip.ts`). `tom_secrets_build`'s `ci.sh :release`
+copies them beside the release archives, listed in `SHA256SUMS`.
+
+The extension has no runtime dependency: the small `browser ?? chrome` shim in `src/api.ts` takes the
 place of `webextension-polyfill`, which is MPL-2.0.
 
 To try a build, load it unpacked:
@@ -100,14 +139,19 @@ npm test
 
 The tests (node:test, with jsdom for the page) cover:
 
-- the form detection;
+- the form detection, new-password fields and what a submit carries;
 - the fill with its events and its retry;
-- the content script's list and its fill for its own token only;
-- the list view in each state;
+- the content script's list and its fill for its own token only, its icons,
+  the capture at submit, the bar and the suggestion filled;
+- the list view in each state, the bar and the suggestion;
 - the background's sender checks, its list contexts, the fill sent to one
   frame, the service's states, an unreachable host, a form in a frame of
   another site and the popup;
-- both manifests.
+- proposals: known, new and changed logins, the bar after a navigation,
+  Save, Not now, Never for this site and the popup's switch, a closed tab
+  and the lifetime, a refused Save;
+- the generator, both manifests, the icons and the store packages read
+  back.
 
 `tom_secrets_build`'s `ci.sh` runs `npm ci`, `npm run build` (`:analyze`)
 and `npm test` (`:test`), and checks the dependency closure from
@@ -115,8 +159,12 @@ and `npm test` (`:test`), and checks the dependency closure from
 
 ## Limits
 
-- No in-field icons, saving a typed login (proposals) or store packages
-  yet: they are the next step.
+- The store entries are unlisted (DP-46) and made by the user, who also
+  has Mozilla sign the Firefox package (AMO signs every build, listed or
+  not). Chrome on Windows and macOS installs only from its store or in
+  developer mode, so the Chromium ZIP is for the store upload.
+- A login whose user name and password are typed on two pages is proposed
+  with the password page's user name only when that page still shows it.
 - The popup fills the tab's top frame only; a login in a frame is filled
   from the list at the field.
 - A page whose permissions policy forbids `clipboard-write` to its frames

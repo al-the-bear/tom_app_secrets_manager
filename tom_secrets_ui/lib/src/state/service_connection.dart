@@ -20,6 +20,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart'
     show TomSecretsOfflineCache;
 
 import '../ports/service_host.dart';
+import 'proposals.dart';
 
 /// Where the connection stands.
 enum TomSecretsConnectionPhase {
@@ -145,6 +146,8 @@ class TomSecretsServiceConnection extends ChangeNotifier {
   final Map<String, TomSecretsStoreState> _stores = {};
   final Map<String, TomSecretsApprovalPrompt> _approvals = {};
   final Map<String, Map<String, Object?>> _expiring = {};
+  final List<TomSecretsProposal> _proposals = [];
+  int _nextProposal = 1;
   Map<String, Object?> _report = const {};
   bool _unlockNeeded = false;
   bool _disposed = false;
@@ -209,6 +212,16 @@ class TomSecretsServiceConnection extends ChangeNotifier {
       'pick': ?pick,
     });
     _approvals.remove(approvalId);
+    notifyListeners();
+  }
+
+  /// The logins proposed while the app ran (the `proposal` event, protocol.md
+  /// 5.5), oldest first; held in memory only and forgotten at the lock.
+  List<TomSecretsProposal> get proposals => List.unmodifiable(_proposals);
+
+  /// Forgets the proposal [id] (dropped, or saved).
+  void dropProposal(int id) {
+    _proposals.removeWhere((p) => p.id == id);
     notifyListeners();
   }
 
@@ -456,6 +469,18 @@ class TomSecretsServiceConnection extends ChangeNotifier {
         final key = event['key'];
         if (key is String) _expiring[key] = event;
         notifyListeners();
+      case 'proposal':
+        final proposal = TomSecretsProposal.fromEvent(event, _nextProposal++);
+        if (proposal != null) {
+          // A login proposed again (the same page and user) replaces the
+          // earlier one: the newest password is the one that worked.
+          _proposals
+            ..removeWhere(
+              (p) => p.site == proposal.site && p.userName == proposal.userName,
+            )
+            ..add(proposal);
+        }
+        notifyListeners();
     }
     if (!_events.isClosed) _events.add(event);
   }
@@ -464,13 +489,18 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     if (_disposed) return;
     _channel = null;
     _approvals.clear();
+    _proposals.clear();
     _setLocked(true, notify: false);
     _set(TomSecretsConnectionPhase.dropped);
   }
 
   void _setLocked(bool locked, {bool notify = true}) {
     _locked = locked;
-    if (locked) _unlockNeeded = false;
+    if (locked) {
+      _unlockNeeded = false;
+      // A proposal holds a password: it does not outlive the unlock.
+      _proposals.clear();
+    }
     if (notify) notifyListeners();
   }
 

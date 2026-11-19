@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 // The toolbar popup: the active tab's logins (its top frame) with a filter,
-// the service's state and what to do about it.
+// the service's state and what to do about it, and whether the extension
+// offers to save logins on this site ("Never for this site" undone here).
 
 import { extensionApi } from './api';
 import type { ListAnswer } from './messages';
@@ -23,6 +24,21 @@ async function load(unlock = false): Promise<void> {
     openApp: (entryId) => void api.runtime.sendMessage({ op: 'tsm.openApp', entryId }),
     frameSite: () => undefined,
   });
+  if (answer.site) root.append(neverToggle(answer.never === true));
+}
+
+/** "Offer to save logins on this site": off after "Never for this site". */
+function neverToggle(never: boolean): HTMLElement {
+  const label = document.createElement('label');
+  label.id = 'tsm-never-toggle';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = !never;
+  box.addEventListener('change', () => {
+    void api.runtime.sendMessage({ op: 'tsm.never', never: !box.checked });
+  });
+  label.append(box, ' Offer to save logins on this site');
+  return label;
 }
 
 async function fill(token: string | undefined, entryId: string): Promise<void> {

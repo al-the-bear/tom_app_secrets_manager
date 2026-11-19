@@ -38,6 +38,60 @@ export interface OpenListRequest {
   op: 'tsm.openList';
   /** Whether the frame has a one-time-code field (the TOTP is read then). */
   otpField?: boolean;
+  /** The field is a new password: the list suggests one instead. */
+  newPassword?: boolean;
+}
+
+/** Content script → background: a form with a password was submitted
+ *  (part-browser, Proposing a login). */
+export interface CapturedRequest {
+  op: 'tsm.captured';
+  userName?: string;
+  password: string;
+  /** A sign-up or password-change form's new password. */
+  change: boolean;
+  /** The page's title, the new login's title. */
+  title?: string;
+}
+
+/** Content script (top frame) → background: a bar waiting for this tab. */
+export interface BarPendingRequest {
+  op: 'tsm.barPending';
+}
+
+/** Bar → background: what it asks about (never the password). */
+export interface BarRequest {
+  op: 'tsm.bar';
+  token: string;
+}
+
+/** Bar → background: the user's answer. */
+export interface BarAnswerRequest {
+  op: 'tsm.barAnswer';
+  token: string;
+  answer: 'save' | 'notNow' | 'never' | 'close';
+}
+
+/** List → background: fill the suggested password into the new-password
+ *  fields of the list's frame. */
+export interface FillNewRequest {
+  op: 'tsm.fillNew';
+  token: string;
+  password: string;
+}
+
+/** Popup → background: proposals for the active tab's site on or off. */
+export interface NeverRequest {
+  op: 'tsm.never';
+  never: boolean;
+}
+
+/** What the background answers the bar. */
+export interface BarAnswer {
+  site: string;
+  userName?: string;
+  /** `changed`: the vaults hold another password for this login. */
+  state: 'new' | 'changed' | 'unknown';
 }
 
 /** List → background: what the list it shows holds. */
@@ -88,7 +142,10 @@ export type ToContent =
   | { op: 'tsm.showList'; token: string; listUrl: string }
   | { op: 'tsm.doFill'; token: string; values: FillValues }
   | { op: 'tsm.closeList'; token: string }
-  | { op: 'tsm.openListHere' };
+  | { op: 'tsm.openListHere' }
+  | { op: 'tsm.doFillNew'; token: string; password: string }
+  | { op: 'tsm.showBar'; token: string; barUrl: string }
+  | { op: 'tsm.closeBar'; token: string };
 
 /** What the background answers the list. */
 export interface ListAnswer {
@@ -98,6 +155,10 @@ export interface ListAnswer {
   site: string;
   /** The frame's host when the field is in a frame of another site. */
   crossSite?: string;
+  /** A new-password field: the list suggests a password. */
+  newPassword?: boolean;
+  /** The popup: proposals for this site are off ("Never for this site"). */
+  never?: boolean;
   error?: HostError;
 }
 
@@ -108,4 +169,10 @@ export type ToBackground =
   | TotpRequest
   | CloseRequest
   | PopupRequest
-  | OpenAppRequest;
+  | OpenAppRequest
+  | CapturedRequest
+  | BarPendingRequest
+  | BarRequest
+  | BarAnswerRequest
+  | FillNewRequest
+  | NeverRequest;

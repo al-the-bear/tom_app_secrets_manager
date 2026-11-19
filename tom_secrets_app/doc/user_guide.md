@@ -19,6 +19,7 @@ It goes task by task; the labels in quotes are the ones the app shows.
 - [Keys](#keys)
 - [Pairing another device](#pairing-another-device)
 - [Conflicts](#conflicts)
+- [Proposals](#proposals)
 - [Settings](#settings)
 - [Status](#status)
 - [Troubleshooting](#troubleshooting)
@@ -393,8 +394,8 @@ vaults for the password or token of the host it talks to: the login whose
 URL has that host. The first time, **"A tool asks for a login"** lists the
 logins of the host: pick one, then "This time", "Always this login" (git
 gets it from then on without asking) or "None". When git saw a new
-password work, it is offered to the app as a proposal; a password the
-vaults hold already is not.
+password work, it is offered to the app as a proposal (see
+[Proposals](#proposals)); a password the vaults hold already is not.
 
 ## System secrets
 
@@ -698,6 +699,28 @@ entry's history. **Conflicts** lists the entries with fields to settle.
 one side or write the value, and confirm. The last settled field clears the
 conflict.
 
+## Proposals
+
+**Proposals** in the rail (its badge counts them) lists the logins the
+browser extension offered to save ("Save" in its bar) and the credentials
+git saw work, which the vaults do not hold yet or hold with another
+password. Each shows the site, the user name, the page and when it came;
+the password stays masked. For each:
+
+- **"Update the password"** of a login of that site and user name: the new
+  password is written, the old one goes to the entry's history (Restore in
+  the editor brings it back). A login that holds this password already is
+  named, with nothing to update.
+- **"Save as a new login"**: a login with the title (the page's title or
+  the site, editable), the user name, the password and the site's address,
+  in the vault chosen (a personal or shared vault this device may write;
+  the vault of a login of that site is preset).
+- **"Drop"**: forgotten.
+
+Nothing is written until you choose. Proposals live only in the app's
+memory: locking forgets them. While the window is closed, a notification
+"Save a login?" names the site and the user, never the password.
+
 ## Settings
 
 Each setting says whose it is.
@@ -764,6 +787,14 @@ code. Nothing is filled until you pick a login. When the service is locked,
 "Unlock in Tom Secrets Manager" waits until you unlock it in the app. A
 login form in a frame of another site (a payment or sign-in frame) first
 shows nothing, then "Show the logins of `<site>`" lists that site's logins.
+A small shield in the user-name and password fields opens the same list.
+In a sign-up or password-change form, the shield in the new-password field
+suggests a password ("Use this password" fills it in, "Another" makes a new
+one). When you sign in with a login the vaults do not hold, or with a new
+password, the bar "Save in Tom Secrets Manager?" offers "Save" (the login
+waits under [Proposals](#proposals)), "Not now" and "Never for this site"
+(the toolbar button's "Offer to save logins on this site" turns it on
+again). Saving needs "Always in this browser".
 The first time a browser's extension looks up a site, the app asks you to
 approve that browser ("The browser extension asks for logins", see
 [Approvals](#approvals)); while you answer, the list says it is asking.

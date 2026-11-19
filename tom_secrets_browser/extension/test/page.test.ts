@@ -107,7 +107,10 @@ test('the content script opens a list at its field and fills only for its own to
   const script = new ContentScript(d, api);
   script.install();
   assert.equal(await script.openList(), true);
-  assert.deepEqual(sent, [{ op: 'tsm.openList', otpField: true }]);
+  assert.deepEqual(sent, [
+    { op: 'tsm.barPending' },
+    { op: 'tsm.openList', otpField: true, newPassword: false },
+  ]);
   assert.equal(d.querySelectorAll('tom-secrets-list').length, 1);
 
   const listener = api.messageListeners[0];

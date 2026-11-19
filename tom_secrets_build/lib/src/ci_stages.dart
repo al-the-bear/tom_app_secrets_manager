@@ -59,7 +59,8 @@ const Map<String, String> secretsCiStageDescriptions = {
   'release':
       'the release for this platform (not part of :all): the service bundle, '
       'tsm, the browser host, the app built with them in its tsm folder, the app and tools-only '
-      'archives with SHA256SUMS in tom_secrets_build/release/<version>/, and '
+      'archives and the browser extension\'s store packages with SHA256SUMS in '
+      'tom_secrets_build/release/<version>/, and '
       'a smoke run of the assembled tsm and service on a demo installation',
   'mobile':
       'the mobile app\'s Android release (not part of :all): the APK signed '
@@ -388,6 +389,32 @@ extension on SecretsCiStages {
       ]),
     ], produces: browserHost);
 
+    // The browser extension's store packages (the same on every platform):
+    // the Chromium ZIP and the Firefox ZIP Mozilla signs (part-browser,
+    // DP-204), beside the archives.
+    final extension = p.join(
+      workspace.repoRoot,
+      'tom_secrets_browser',
+      'extension',
+    );
+    final extensionPackages = p.join(extension, 'dist', 'packages');
+    await run.step(
+      stage,
+      'browser extension',
+      'release.browser_extension.log',
+      [
+        _npm(['ci'], extension),
+        _npm(['run', 'build'], extension),
+      ],
+      produces: p.join(
+        extensionPackages,
+        secretsExtensionPackageName(
+          secretsExtensionVersion(extension),
+          'chromium',
+        ),
+      ),
+    );
+
     final app = package(appPackage, flutter: true);
     final built = secretsBuiltApp(appPackage, platform);
     await run.step(
@@ -425,6 +452,9 @@ extension on SecretsCiStages {
         inputsFile.path,
       ]),
     ], produces: p.join(outDir, secretsAppArchiveName(version, platform)));
+    if (Directory(extensionPackages).existsSync()) {
+      secretsCopyExtensionPackages(extensionPackages, outDir);
+    }
 
     // The smoke run's installation is in the system's temporary folder: a
     // Unix socket path is limited to 104 bytes on macOS, which a path in the

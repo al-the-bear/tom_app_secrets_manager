@@ -14,6 +14,12 @@
 - The browser is approved at its first lookup (the service's browser
   prompt): the list says it is asking meanwhile, and its empty text points
   to the approval.
+- Proposals (DP-43): a submitted login the vaults do not hold, or a changed
+  password, brings the bar "Save in Tom Secrets Manager?" (Save, Not now,
+  Never for this site; also on the page the form led to); the host's new
+  `check` tells new, changed and known without answering a value. The
+  in-field icons, a suggested password in new-password fields, the
+  extension's icons, and the store packages in `dist/packages/`.
 
 - `tsm-browser-host`, the native-messaging host of the Tom Secrets Manager
   browser extension (part-browser): native messaging's framing (32-bit

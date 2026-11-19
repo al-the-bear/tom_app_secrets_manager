@@ -77,7 +77,9 @@ offering the import and the pairing.
   screen the connection's phase calls for, the compact theme.
 - `TomSecretsServiceConnection`: The admin connection: attaching, starting and
   claiming the service, unlock and lock, `status`, the event stream (`locked`,
-  `unlocked`, `store_state`, `unlock_needed`, `approval_needed`, `key_expiry`),
+  `unlocked`, `store_state`, `unlock_needed`, `approval_needed`, `key_expiry`,
+  `proposal`), the proposed logins (`proposals`, `TomSecretsProposal`, in
+  memory only, forgotten at the lock; `dropProposal`),
   a dropped connection; the waiting prompts (`prompts`,
   `TomSecretsApprovalPrompt`) and `approve` (a client token made by the app for
   an `always` that asked for one, protocol 7.4).
@@ -93,7 +95,14 @@ offering the import and the pairing.
   from elsewhere read again; key rotation by hand (`rotateKeys`: the new keys
   into the primary, each affected vault saved re-keyed, the GitHub history cut
   with `compact` retention 0; `pendingRotations` / `finishRotations` for a
-  re-keyed save that failed); everything dropped on `locked`.
+  re-keyed save that failed); a proposed login saved as a new login
+  (`saveProposalAsNew` into one of `proposalVaults`) or written into the
+  login of that site and user (`proposalMatches`, `applyProposal`: the old
+  password to the history); everything dropped on `locked`.
+- `TomSecretsProposalsView`: The Proposals screen (BP-28, DP-43, DP-52): the
+  logins the browser extension and git's credential helper proposed, each
+  updating a login of that site and user, saved as a new login in a vault
+  chosen, or dropped; a known password said so.
 - `TomSecretsFirstRunWizard`: Opened when the machine is not set up (no service
   runs and the data directory holds no `bootstrap.yaml`). Step 1: create a
   primary vault or open one, on this computer or in a GitHub repository (the
@@ -125,8 +134,9 @@ offering the import and the pairing.
   browser (BP-8); the warning before a claim sends the master password (DP-16);
   starting a service that is not running.
 - `TomSecretsMainShell`: The rail (Vaults, Environments, Conflicts with the
-  count of conflicted entries, Clients with the count of waiting approvals, Keys
-  with the count of keys due, Pairing, Import, Settings, Status); a banner while
+  count of conflicted entries, Clients with the count of waiting approvals,
+  Proposals with the count of proposed logins, Keys with the count of keys
+  due, Pairing, Import, Settings, Status); a banner while
   a key is due (Snooze until its next reminder step, Open Keys); a new approval
   prompt shown on top at once, one at a time; the top bar (search over every
   vault, tree/list, vault-aware/uniform, the sync status of the GitHub vaults,
@@ -397,9 +407,9 @@ states), `pdf` (the emergency sheet), `provider`; all from pub.dev.
 
 Version 0.1.0 (phase A of the product). The suite covers the First run wizard
 (set up here and by pairing), the shell, the vault browser and entry editor,
-overlays and their resolution, conflicts, clients and approvals, keys,
-rotation, token renewal, the import, pairing and the force-push question; it
-runs with `flutter test` and needs no service, network or GitHub.
+overlays and their resolution, conflicts, clients and approvals, proposals,
+keys, rotation, token renewal, the import, pairing and the force-push
+question; it runs with `flutter test` and needs no service, network or GitHub.
 
 ## Licence
 

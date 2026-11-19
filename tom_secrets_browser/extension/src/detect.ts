@@ -96,3 +96,38 @@ export function loginFields(root: Document | ShadowRoot | Element): LoginFields 
 export function hasLogin(fields: LoginFields): boolean {
   return Boolean(fields.password ?? fields.userName ?? fields.otp);
 }
+
+/** The new-password fields of [root] (a sign-up or password-change form):
+ *  `autocomplete="new-password"`, or a second and third password field
+ *  after a current one. */
+export function newPasswordFields(root: Document | ShadowRoot | Element): HTMLInputElement[] {
+  const passwords = allInputs(root).filter((i) => fillable(i) && i.type === 'password');
+  const marked = passwords.filter((p) => autocompleteOf(p).includes('new-password'));
+  if (marked.length > 0) return marked;
+  // An unmarked change form: current, new, repeated.
+  return passwords.length === 3 ? passwords.slice(1) : [];
+}
+
+/** What a submitted form carries: the user name and the password typed, or
+ *  the new password of a change or sign-up form (`change`). */
+export interface Submitted {
+  userName?: string;
+  password: string;
+  change: boolean;
+}
+
+/** The login [root] holds now, as it is submitted, or undefined when no
+ *  password was typed. */
+export function submittedLogin(root: Document | ShadowRoot | Element): Submitted | undefined {
+  const fresh = newPasswordFields(root).filter((f) => f.value);
+  const login = loginFields(root);
+  const userName = login.userName?.value.trim() || undefined;
+  if (fresh.length > 0) {
+    // Two new-password fields that differ: the page will refuse it.
+    if (fresh.length > 1 && fresh.some((f) => f.value !== fresh[0].value)) return undefined;
+    return { userName, password: fresh[0].value, change: true };
+  }
+  const password = login.password?.value;
+  if (!password) return undefined;
+  return { userName, password, change: false };
+}

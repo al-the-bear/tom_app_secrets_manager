@@ -10,6 +10,7 @@
 /// | `status` | `hello`, then `match` of a reserved name without waiting | `state`: `running`, `locked` or `not_running` |
 /// | `match {url, frameUrl?, wait?}` | `match` (`wait: false` answers `locked` at once; by default it waits for an unlock) | `candidates [{entryId, title, userName, matchedUrl, hasTotp}]`, no value |
 /// | `fill {entryId, url, frameUrl?, totp?}` | `match` (the entry must be a candidate of the page), then `getMany` of `UserName`, `Password` and `totp` | `userName`, `password`, `totp?` |
+/// | `check {url, frameUrl?, userName?, password}` | `match` without waiting, then `getMany` of the `Password` of the page's logins of that user | `state`: `new`, `changed` (with `entryId`, `userName`), `known` or `unknown`; never a value |
 /// | `propose {url, title?, userName, password}` | `propose` | `accepted`, `known` |
 /// | `openApp {entryId?}` | — | the desktop app started at the entry |
 ///
@@ -136,6 +137,7 @@ final class TomSecretsBrowserHost {
         'status' => await _status(),
         'match' => await _match(request),
         'fill' => await _fill(request),
+        'check' => await _check(request),
         'propose' => await _propose(request),
         'openApp' => await _openApp(request),
         _ => null,
@@ -223,6 +225,59 @@ final class TomSecretsBrowserHost {
       'userName': values[0],
       'password': values[1],
       if (totp) 'totp': values[2],
+    };
+  }
+
+  /// Whether a login the extension saw submitted is worth proposing
+  /// (part-browser, Proposing a login): `new` when the page has no login of
+  /// that user, `changed` when its password differs, `known` when a login
+  /// of the page holds it, `unknown` when that cannot be told (locked, no
+  /// value granted, a change form without a user name and several logins).
+  /// The stored passwords are compared here and never answered. Without
+  /// [userName] (a password-change form) the page's one login is taken.
+  Future<Map<String, Object?>> _check(Map<String, Object?> request) async {
+    final password = request['password'];
+    if (password is! String || password.isEmpty) {
+      throw const _Malformed('password is needed', 'password');
+    }
+    final userName = _string(request, 'userName');
+    final List<TomSecretsLoginCandidate> candidates;
+    try {
+      candidates = await service.match(
+        _need(request, 'url'),
+        frameUrl: _string(request, 'frameUrl'),
+        wait: false,
+      );
+    } on TomSecretsClientException catch (e) {
+      if (e.kind == TomSecretsErrorKind.locked) return {'state': 'unknown'};
+      rethrow;
+    }
+    final mine = userName == null
+        ? (candidates.length == 1
+              ? candidates
+              : const <TomSecretsLoginCandidate>[])
+        : [
+            for (final c in candidates)
+              if (c.userName == userName) c,
+          ];
+    if (mine.isEmpty) {
+      return {
+        'state': userName == null && candidates.isNotEmpty ? 'unknown' : 'new',
+      };
+    }
+    for (final c in mine) {
+      final String stored;
+      try {
+        stored = (await service.values(c.entryId, ['Password'])).single;
+      } on TomSecretsClientException {
+        return {'state': 'unknown'};
+      }
+      if (stored == password) return {'state': 'known', 'entryId': c.entryId};
+    }
+    return {
+      'state': 'changed',
+      'entryId': mine.first.entryId,
+      'userName': mine.first.userName,
     };
   }
 

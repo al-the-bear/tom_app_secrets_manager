@@ -284,12 +284,49 @@ Future<void> _archive(String dir, String name, String archive) async {
   }
 }
 
-/// Writes `SHA256SUMS` over the archives in [outDir] (`sha256sum` format).
 /// The Android app's file in a release (DP-204: installed directly).
 String secretsMobileApkName(String version) =>
     'tom_secrets_mobile-$version-android.apk';
 
-/// Writes `SHA256SUMS` over every archive and APK in [outDir].
+/// The browser extension's version, from its `package.json` in
+/// [extensionDir].
+String secretsExtensionVersion(String extensionDir) {
+  final json = jsonDecode(
+    File(p.join(extensionDir, 'package.json')).readAsStringSync(),
+  );
+  final version = json is Map ? json['version'] : null;
+  if (version is! String) {
+    throw FormatException('no version in $extensionDir/package.json');
+  }
+  return version;
+}
+
+/// The store package of the browser extension at [version] for [family]
+/// (`chromium`, `firefox`), as `npm run build` names it.
+String secretsExtensionPackageName(String version, String family) =>
+    'tom-secrets-browser-extension-$version-$family.zip';
+
+/// The browser extension's store packages: one ZIP per browser family
+/// (`npm run build` in `tom_secrets_browser/extension`).
+bool secretsIsExtensionPackage(String name) =>
+    name.startsWith('tom-secrets-browser-extension-') && name.endsWith('.zip');
+
+/// Copies the extension's store packages of [packagesDir] into [outDir] and
+/// writes its `SHA256SUMS` again; answers the names copied.
+List<String> secretsCopyExtensionPackages(String packagesDir, String outDir) {
+  final names = <String>[];
+  for (final f in Directory(packagesDir).listSync().whereType<File>()) {
+    final name = p.basename(f.path);
+    if (!secretsIsExtensionPackage(name)) continue;
+    f.copySync(p.join(outDir, name));
+    names.add(name);
+  }
+  secretsWriteSums(outDir);
+  return names..sort();
+}
+
+/// Writes `SHA256SUMS` over every archive, APK and signed Firefox package
+/// (`.xpi`) in [outDir].
 void secretsWriteSums(String outDir) => _writeSums(outDir);
 
 void _writeSums(String outDir) {
@@ -302,7 +339,8 @@ void _writeSums(String outDir) {
             (f) =>
                 f.path.endsWith('.zip') ||
                 f.path.endsWith('.tar.gz') ||
-                f.path.endsWith('.apk'),
+                f.path.endsWith('.apk') ||
+                f.path.endsWith('.xpi'),
           )
           .toList()
         ..sort((a, b) => a.path.compareTo(b.path));

@@ -13,6 +13,7 @@ import 'dart:async';
 
 import 'ports/desktop_ports.dart';
 import 'state/os_unlock.dart';
+import 'state/proposals.dart';
 import 'state/reminders.dart';
 import 'state/service_connection.dart';
 
@@ -258,7 +259,9 @@ final class TomSecretsHostBridge {
       await remind();
       return;
     }
-    if (op != 'unlock_needed' && op != 'approval_needed') return;
+    if (op != 'unlock_needed' && op != 'approval_needed' && op != 'proposal') {
+      return;
+    }
     final notifier = host.notifier;
     final window = host.window;
     if (notifier == null) return;
@@ -276,6 +279,19 @@ final class TomSecretsHostBridge {
                   'of ${prompt.site}.'
             : '${prompt.who} on ${prompt.host} asks for '
                   '${prompt.refs.length == 1 ? 'a secret' : '${prompt.refs.length} secrets'}.',
+        onClick: window == null ? null : () => unawaited(window.show()),
+      );
+      return;
+    }
+    if (op == 'proposal') {
+      // Never the password: the site and the user only.
+      final proposal = TomSecretsProposal.fromEvent(event, 0);
+      if (proposal == null) return;
+      await notifier.notify(
+        title: 'Save a login?',
+        body:
+            'A login for ${proposal.site} (${proposal.userName}) waits under '
+            'Proposals.',
         onClick: window == null ? null : () => unawaited(window.show()),
       );
       return;

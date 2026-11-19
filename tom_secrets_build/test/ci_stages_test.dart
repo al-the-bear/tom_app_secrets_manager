@@ -96,6 +96,39 @@ void main() {
       expect(secretsAndroidSigningProblem(full.path), isNull);
     });
 
+    test('the browser extension\'s store packages are copied beside the '
+        'archives and listed in SHA256SUMS; its version from package.json', () {
+      final packages = secretsScratchDir('extension_packages');
+      final out = secretsScratchDir('extension_out');
+      for (final family in ['chromium', 'firefox']) {
+        File(
+          p.join(packages.path, secretsExtensionPackageName('0.1.0', family)),
+        ).writeAsStringSync(family);
+      }
+      File(p.join(packages.path, 'notes.txt')).writeAsStringSync('no');
+      File(p.join(out.path, 'app.zip')).writeAsStringSync('app');
+      // The Mozilla-signed package, put there by hand (tsm_finalize_agent10).
+      File(
+        p.join(out.path, 'tom-secrets-browser-extension-0.1.0-firefox.xpi'),
+      ).writeAsStringSync('signed');
+      expect(secretsCopyExtensionPackages(packages.path, out.path), [
+        'tom-secrets-browser-extension-0.1.0-chromium.zip',
+        'tom-secrets-browser-extension-0.1.0-firefox.zip',
+      ]);
+      final sums = File(p.join(out.path, 'SHA256SUMS')).readAsLinesSync();
+      expect(sums.map((l) => l.split('  ').last), [
+        'app.zip',
+        'tom-secrets-browser-extension-0.1.0-chromium.zip',
+        'tom-secrets-browser-extension-0.1.0-firefox.xpi',
+        'tom-secrets-browser-extension-0.1.0-firefox.zip',
+      ]);
+      expect(File(p.join(out.path, 'notes.txt')).existsSync(), isFalse);
+      File(
+        p.join(packages.path, 'package.json'),
+      ).writeAsStringSync('{"name": "x", "version": "1.2.3"}');
+      expect(secretsExtensionVersion(packages.path), '1.2.3');
+    });
+
     test('the APK is named by version and listed in SHA256SUMS', () {
       final dir = secretsScratchDir('mobile_sums');
       File(

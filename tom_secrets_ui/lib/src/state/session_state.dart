@@ -19,6 +19,7 @@ import 'emergency_sheet.dart';
 import 'import_model.dart';
 import 'new_vault.dart';
 import 'overlays.dart';
+import 'proposals.dart';
 import 'rotation.dart';
 import 'service_connection.dart';
 
@@ -1518,6 +1519,55 @@ class TomSecretsSession extends ChangeNotifier {
     if (select) _selectedEntry = ref;
     notifyListeners();
     return ref;
+  }
+
+  /// The logins [proposal] would update: same user name, URL matching the
+  /// page (5.7), in the vaults this device may write.
+  List<TomSecretsProposalMatch> proposalMatches(TomSecretsProposal proposal) =>
+      tomSecretsProposalMatches(proposal, [
+        for (final s in resolution.stores)
+          if (readOnlyReason(s.name) == null) ...s.entries,
+      ]);
+
+  /// The vaults a proposal may be saved into as a new login: the open,
+  /// writable personal and shared vaults (a system vault holds no logins
+  /// for the browser).
+  List<String> get proposalVaults => [
+    for (final v in _vaults.values)
+      if (readOnlyReason(v.store) == null &&
+          kindOf(v.store) != TomSecretsVaultKind.system)
+        v.store,
+  ];
+
+  /// Saves [proposal] as a new login titled [title] in [store] and forgets
+  /// it; answers the new entry (opened in the editor).
+  Future<TomSecretsEntryRef> saveProposalAsNew(
+    TomSecretsProposal proposal,
+    String store, {
+    String? title,
+  }) async {
+    final file = _vaultOf(store)?.file;
+    if (file == null) throw StateError('$store is not open');
+    final root = file.body.rootGroup;
+    final entry = KdbxEntry.create(file, root);
+    tomSecretsFillFromProposal(entry, proposal, title: title);
+    root.addEntry(entry);
+    final ref = TomSecretsEntryRef(store, entry.uuid);
+    await save(store);
+    connection.dropProposal(proposal.id);
+    _selectedEntry = ref;
+    notifyListeners();
+    return ref;
+  }
+
+  /// Updates the login [ref] with [proposal]'s password (the old one stays
+  /// in its history) and forgets the proposal.
+  Future<void> applyProposal(
+    TomSecretsProposal proposal,
+    TomSecretsEntryRef ref,
+  ) async {
+    await updateEntry(ref, (e) => tomSecretsApplyProposal(e, proposal));
+    connection.dropProposal(proposal.id);
   }
 
   /// Moves [refs] to the recycle bin of their vaults and saves them.

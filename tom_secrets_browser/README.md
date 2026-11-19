@@ -52,6 +52,13 @@ service's error kind (`not_running` when no service answers).
   entry must be one of its candidates (else `denied`, reason `not_matched`,
   before any value is read); then `userName`, `password` and, when asked and
   the entry has one, the current `totp`, read in one `getMany`.
+- `check {url, frameUrl?, userName?, password}`: whether a login the
+  extension saw submitted is worth proposing: `state` `new` (no login of the
+  page with that user name), `changed` (with `entryId` and `userName`: its
+  password differs), `known` (a login holds this password) or `unknown`
+  (locked, no value granted, or a change form without a user name on a page
+  with several logins). The stored password is read and compared here, and
+  never answered; the `match` does not wait for an unlock.
 - `propose {url, title?, userName, password}`: passed to the attached app
   (the service's `propose`): `accepted`, `known`.
 - `openApp {entryId?}`: starts the desktop app of the distribution the host

@@ -50,6 +50,13 @@ export interface ExtensionApi {
     query(query: { active: boolean; currentWindow: boolean }): Promise<
       Array<{ id?: number; url?: string }>
     >;
+    onRemoved?: { addListener(listener: (tabId: number) => void): void };
+  };
+  storage?: {
+    local: {
+      get(key: string): Promise<Record<string, unknown>>;
+      set(items: Record<string, unknown>): Promise<void>;
+    };
   };
   commands?: {
     onCommand: {

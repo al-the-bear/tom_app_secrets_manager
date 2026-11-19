@@ -152,7 +152,11 @@ turns red when one is no longer needed.
    native library in `lib/`);
 2. `tsm`, and the browser host `tsm-browser-host` (`tom_secrets_browser`),
    `dart compile exe`;
-3. the app, `flutter build <platform> --release`;
+3. the browser extension's store packages, `npm ci` and `npm run build` in
+   `tom_secrets_browser/extension`
+   (`tom-secrets-browser-extension-<version>-chromium.zip` and
+   `-firefox.zip`, the extension's own version, the same on every platform);
+   the app, `flutter build <platform> --release`;
 4. the release (`bin/assemble_release.dart`): the app with `tsm`, the
    browser host and the service in its `tsm` folder (the layout of
    `tom_secrets_client`'s `distribution.dart`: `Tom Secrets Manager.app/Contents/Resources/tsm` on
@@ -160,7 +164,8 @@ turns red when one is no longer needed.
    ad-hoc), `LICENSE` and `THIRD_PARTY.md` with it, and the tools alone for a
    server; archived as `tom_secrets_manager-<version>-<platform>.zip`
    (`.tar.gz` on Linux) and `tom_secrets_tsm-<version>-<platform>…`, with
-   `SHA256SUMS`, in `release/<version>/` (ignored by git);
+   `SHA256SUMS`, in `release/<version>/` (ignored by git), the extension's
+   packages beside them and in `SHA256SUMS` too;
 5. a smoke run: a demo installation (`tom_secrets_desktop`'s
    `tool/demo_installation.dart`), the assembled `tsm` starting and unlocking
    the service beside it, its status read, the service stopped.

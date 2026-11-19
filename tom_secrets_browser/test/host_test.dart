@@ -261,6 +261,69 @@ void main() {
       },
     );
 
+    test('check tells new, changed, known and unknown and never answers a '
+        'value', () async {
+      Future<Map<String, Object?>> check(Map<String, Object?> args) =>
+          host.handle({'id': 9, 'op': 'check', ...args});
+      const url = 'https://mail.example.com/login';
+      expect(
+        (await check({
+          'url': url,
+          'userName': 'someone-else',
+          'password': 'x',
+        }))['state'],
+        'new',
+      );
+      expect(
+        (await check({
+          'url': 'https://shop.example.org/',
+          'userName': 'demo-user',
+          'password': 'x',
+        }))['state'],
+        'new',
+      );
+      final known = await check({
+        'url': url,
+        'userName': 'demo-user',
+        'password': 'demo-mail-pw',
+      });
+      expect(known['state'], 'known');
+      expect(known['entryId'], _mail.entryId);
+      final changed = await check({
+        'url': url,
+        'userName': 'demo-user',
+        'password': 'demo-mail-pw-2',
+      });
+      expect(changed, {
+        'id': 9,
+        'op': 'check',
+        'state': 'changed',
+        'entryId': _mail.entryId,
+        'userName': 'demo-user',
+      });
+      expect(jsonEncode([known, changed]), isNot(contains('demo-mail-pw')));
+      // A change form without the user name: the page's one login.
+      expect(
+        (await check({'url': url, 'password': 'demo-mail-pw-2'}))['state'],
+        'changed',
+      );
+      expect(
+        ((await check({'url': url, 'userName': 'demo-user'}))['error']!
+            as Map)['kind'],
+        'malformed',
+      );
+      service.locked = true;
+      expect(
+        (await check({
+          'url': url,
+          'userName': 'demo-user',
+          'password': 'x',
+        }))['state'],
+        'unknown',
+      );
+      expect(service.waits.last, isFalse, reason: 'a submit does not wait');
+    });
+
     test('fill reads the values of an entry the page matches, the TOTP when '
         'asked', () async {
       final answer = await host.handle({

@@ -3,11 +3,22 @@
 
 // Builds the extension per browser family into dist/<family>/: the scripts
 // bundled by esbuild (a content script cannot load modules), the static
-// pages, and the manifest from src/manifest.ts. `npm run build`.
+// pages, the icons (tool/icon.ts) and the manifest from src/manifest.ts;
+// then the store packages into dist/packages/: one ZIP per family, its
+// manifest without the development `key` (the store gives the id).
+// `npm run build`.
 
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import {
+  cpSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,11 +36,46 @@ await build({
 });
 const { manifest } = await import(pathToFileURL(manifestModule).href);
 
+// The icon and ZIP writers, bundled for this script.
+const toolsModule = join(root, 'build', 'tools.mjs');
+await build({
+  stdin: {
+    contents: "export { iconPng, iconSizes } from './icon'; export { zip } from './zip';",
+    resolveDir: join(root, 'tool'),
+    loader: 'ts',
+  },
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  outfile: toolsModule,
+  logLevel: 'warning',
+});
+const { iconPng, iconSizes, zip } = await import(pathToFileURL(toolsModule).href);
+
+/** Every file below [dir], by its path relative to it with `/`. */
+function filesOf(dir) {
+  const out = new Map();
+  const walk = (d) => {
+    for (const name of readdirSync(d)) {
+      const path = join(d, name);
+      if (statSync(path).isDirectory()) walk(path);
+      else out.set(relative(dir, path).split(sep).join('/'), readFileSync(path));
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+const packages = join(root, 'dist', 'packages');
+rmSync(packages, { recursive: true, force: true });
+mkdirSync(packages, { recursive: true });
+
 const entries = {
   background: 'background-main.ts',
   content: 'content-main.ts',
   list: 'list.ts',
   popup: 'popup.ts',
+  bar: 'bar.ts',
 };
 
 for (const family of ['chromium', 'firefox']) {
@@ -49,9 +95,21 @@ for (const family of ['chromium', 'firefox']) {
   }
   cpSync(join(root, 'static'), out, { recursive: true });
   cpSync(join(root, 'LICENSE'), join(out, 'LICENSE'));
+  mkdirSync(join(out, 'icons'), { recursive: true });
+  for (const size of iconSizes) {
+    writeFileSync(join(out, 'icons', `icon-${size}.png`), iconPng(size));
+  }
   writeFileSync(
     join(out, 'manifest.json'),
     `${JSON.stringify(manifest(family, version), null, 2)}\n`,
   );
   process.stdout.write(`built dist/${family}\n`);
+  const files = filesOf(out);
+  files.set(
+    'manifest.json',
+    Buffer.from(`${JSON.stringify(manifest(family, version, { store: true }), null, 2)}\n`),
+  );
+  const name = `tom-secrets-browser-extension-${version}-${family}.zip`;
+  writeFileSync(join(packages, name), zip(files));
+  process.stdout.write(`packed dist/packages/${name}\n`);
 }

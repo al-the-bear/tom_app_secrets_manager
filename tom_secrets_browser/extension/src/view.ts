@@ -6,7 +6,7 @@
 // name, never a value) with a filter, and per login Fill and, for one with a
 // TOTP, Copy code.
 
-import type { Candidate, HostError, ListAnswer } from './messages';
+import type { BarAnswer, Candidate, HostError, ListAnswer } from './messages';
 
 /** What the view's buttons do. */
 export interface ViewActions {
@@ -140,4 +140,80 @@ function candidateItem(doc: Document, c: Candidate, actions: ViewActions): HTMLL
     item.append(button(doc, 'Copy code', `tsm-totp-${c.entryId}`, () => actions.copyCode(c.entryId)));
   }
   return item;
+}
+
+/** What the suggestion's buttons do. */
+export interface SuggestionActions {
+  use(password: string): void;
+  another(): void;
+  close?(): void;
+}
+
+/** A suggested password for a new-password field of [site]: shown, used
+ *  (filled into the new-password fields) or replaced by another. */
+export function renderSuggestion(
+  root: HTMLElement,
+  site: string,
+  password: string,
+  actions: SuggestionActions,
+): void {
+  const doc = root.ownerDocument;
+  root.replaceChildren();
+  const header = el(doc, 'header');
+  header.append(el(doc, 'strong', { text: `A new password for ${site}` }));
+  if (actions.close) header.append(button(doc, '×', 'tsm-close', actions.close));
+  root.append(header);
+  root.append(
+    el(doc, 'p', {
+      text: 'Suggested by Tom Secrets Manager. After you submit the form, the extension offers to save it.',
+    }),
+  );
+  root.append(el(doc, 'code', { text: password, id: 'tsm-suggestion', className: 'suggestion' }));
+  const row = el(doc, 'div', { className: 'actions' });
+  row.append(button(doc, 'Use this password', 'tsm-use-suggestion', () => actions.use(password)));
+  row.append(button(doc, 'Another', 'tsm-another', actions.another));
+  root.append(row);
+}
+
+/** What the bar's buttons do. */
+export interface BarActions {
+  save(): void;
+  notNow(): void;
+  never(): void;
+}
+
+/** The bar "Save in Tom Secrets Manager?" for [answer]: never the password. */
+export function renderBar(root: HTMLElement, answer: BarAnswer, actions: BarActions): void {
+  const doc = root.ownerDocument;
+  root.replaceChildren();
+  const what =
+    answer.state === 'changed'
+      ? `Update the password of ${answer.userName ?? 'your login'} for ${answer.site}?`
+      : `Save the login${answer.userName ? ` ${answer.userName}` : ''} for ${answer.site}?`;
+  root.append(el(doc, 'strong', { text: 'Save in Tom Secrets Manager?', id: 'tsm-bar-title' }));
+  root.append(el(doc, 'p', { text: what, id: 'tsm-bar-what' }));
+  const row = el(doc, 'div', { className: 'actions' });
+  row.append(button(doc, 'Save', 'tsm-bar-save', actions.save));
+  row.append(button(doc, 'Not now', 'tsm-bar-not-now', actions.notNow));
+  row.append(button(doc, 'Never for this site', 'tsm-bar-never', actions.never));
+  root.append(row);
+}
+
+/** The bar after Save: where the login went, or why it did not. */
+export function renderBarOutcome(root: HTMLElement, error?: HostError): void {
+  const doc = root.ownerDocument;
+  root.replaceChildren();
+  root.append(el(doc, 'strong', { text: 'Tom Secrets Manager' }));
+  root.append(
+    el(doc, 'p', {
+      id: 'tsm-bar-outcome',
+      text: error
+        ? error.kind === 'unavailable'
+          ? 'Tom Secrets Manager is not open, so the login could not be handed to it.'
+          : error.kind === 'denied'
+            ? 'Tom Secrets Manager refused it: approve this browser ("Always in this browser") first.'
+            : describeError(error)
+        : 'Sent to the app: save it there under Proposals.',
+    }),
+  );
 }
