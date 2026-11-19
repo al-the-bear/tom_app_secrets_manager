@@ -5,6 +5,8 @@
 /// the widget tree, and the screen the connection's phase calls for.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
@@ -14,6 +16,7 @@ import 'ports/desktop_ports.dart';
 import 'screens/first_run_wizard.dart';
 import 'screens/gate_screens.dart';
 import 'screens/main_shell.dart';
+import 'state/autofill.dart';
 import 'state/first_run_model.dart';
 import 'state/os_unlock.dart';
 import 'state/service_connection.dart';
@@ -53,6 +56,13 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
     host: widget.host.osUnlock,
     preferences: widget.host.preferences,
   );
+  late final TomSecretsAutofill? _autofill = widget.host.autofill == null
+      ? null
+      : TomSecretsAutofill(
+          port: widget.host.autofill!,
+          session: _session,
+          preferences: widget.host.preferences,
+        );
   late final TomSecretsHostBridge _bridge = TomSecretsHostBridge(
     host: widget.host,
     connection: _connection,
@@ -64,11 +74,13 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
     super.initState();
     _bridge.start();
     if (widget.connection == null) _connection.connect();
+    unawaited(_autofill?.refresh());
   }
 
   @override
   void dispose() {
     _bridge.dispose();
+    _autofill?.dispose();
     _osUnlock.dispose();
     _session.dispose();
     if (widget.connection == null) _connection.dispose();
@@ -82,6 +94,8 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
       ChangeNotifierProvider.value(value: _connection),
       ChangeNotifierProvider.value(value: _session),
       ChangeNotifierProvider.value(value: _osUnlock),
+      // Null where the host has no AutoFill (watched as nullable).
+      ChangeNotifierProvider<TomSecretsAutofill?>.value(value: _autofill),
     ],
     child: MaterialApp(
       title: 'Tom Secrets Manager',

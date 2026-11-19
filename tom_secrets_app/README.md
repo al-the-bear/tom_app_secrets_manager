@@ -54,6 +54,31 @@ Platform requirements:
 
 - **macOS** builds through Swift Package Manager (no CocoaPods); the app is
   not sandboxed (`macos/Runner/*.entitlements` says why).
+
+### The macOS AutoFill provider
+
+`macos/TomSecretsAutofill` is the credential provider extension
+(part-os-integration, DP-50, DP-51): an `ASCredentialProviderViewController`
+with a small SwiftUI list, no Flutter engine. It reads the encrypted
+snapshot of the personal and shared vaults' logins the app writes into the
+App Group container, after Touch ID or the login password releases its key
+from the keychain, matches the field's site like the browser extension,
+offers a search, and fills the login picked (or a one-time code on macOS
+15). It writes nothing and cannot save.
+
+- Its core, `macos/TomSecretsAutofillKit` (a Swift package: the snapshot
+  opened with CryptoKit, matching, TOTP), is tested with `swift test`,
+  against a vector the app's Dart code seals (`tom_secrets_ui`'s
+  `autofill_test.dart`).
+- The extension target is in `Runner.xcodeproj` but not embedded in the
+  app: its entitlements (the AutoFill credential provider, the App Group,
+  the keychain access group) need the Apple Developer team's provisioning
+  profile (DP-176). `Runner/Configs/Autofill.xcconfig` names the team
+  (`TSM_TEAM_ID`, empty) and derives the groups from it; without it the
+  app says AutoFill is not configured.
+- Compile it unsigned:
+  `xcodebuild -project macos/Runner.xcodeproj -target TomSecretsAutofill
+  CODE_SIGNING_ALLOWED=NO build` (`ci.sh :analyze` does).
 - **Linux** needs `libayatana-appindicator3-dev` (the tray) and
   `libsecret-1-dev` (the keychain).
 - **Windows** needs Visual Studio 2022 Build Tools with "Desktop development
@@ -79,6 +104,8 @@ Everything else is set in the app: its Settings screen (see the
 - Linux cannot keep the window out of screen capture.
 - The macOS app is ad-hoc signed, not notarised: the first start needs
   Control-click › Open.
+- The macOS AutoFill provider is in the team-signed build only; the
+  ad-hoc signed build has none (Settings › Password AutoFill says so).
 - Phase A is the desktop app; the mobile app, the browser extension and the
   relay are not built yet.
 

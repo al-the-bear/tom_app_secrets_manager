@@ -41,6 +41,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 import '../host_bridge.dart' show TomSecretsHostPreferenceKeys;
 import '../ports/desktop_ports.dart';
 import '../state/clients.dart';
+import '../state/autofill.dart';
 import '../state/integrations.dart';
 import '../state/os_unlock.dart';
 import '../state/service_connection.dart';
@@ -126,6 +127,8 @@ class _SettingsState extends State<TomSecretsSettingsView> {
 
   Future<void> _loadIntegrations() async {
     unawaited(_loadBrowsers());
+    // The provider may have been turned on in System Settings meanwhile.
+    unawaited(context.read<TomSecretsAutofill?>()?.refresh());
     final integrations = await tomSecretsIntegrationsOf(
       context.read<TomSecretsHost>(),
       context.read<TomSecretsServiceConnection>(),
@@ -311,6 +314,7 @@ class _SettingsState extends State<TomSecretsSettingsView> {
                 _device(context, session),
                 _app(context, host),
                 if (host.integrationPaths != null) _integrationsSection(theme),
+                ?_autofillSection(theme),
                 _shared(context, theme),
               ],
             ),
@@ -822,6 +826,90 @@ class _SettingsState extends State<TomSecretsSettingsView> {
             key: const Key('tsm-integration-error'),
             style: TextStyle(color: theme.colorScheme.error),
           ),
+      ],
+    );
+  }
+
+  /// Password AutoFill on macOS (part-os-integration, DP-50, DP-51): whether
+  /// this build has the provider, whether it is turned on in System
+  /// Settings (with the way there), the app's switch (off deletes the
+  /// snapshot, its key and the QuickType identities) and QuickType.
+  Widget? _autofillSection(ThemeData theme) {
+    final autofill = context.watch<TomSecretsAutofill?>();
+    if (autofill == null) return null;
+    final state = autofill.state;
+    return TomSecretsSection(
+      key: const Key('tsm-settings-autofill'),
+      title: 'Password AutoFill',
+      icon: Icons.password_rounded,
+      children: [
+        _whose(
+          "macOS fills logins in apps and Safari through the app's AutoFill "
+          'provider. It reads an encrypted copy of the logins of the personal '
+          'and shared vaults on this Mac (never a system vault\'s), each use '
+          'after Touch ID or your login password.',
+        ),
+        if (!state.available)
+          Text(
+            state.unavailableReason ?? 'This build has no AutoFill provider.',
+            key: const Key('tsm-autofill-unavailable'),
+          )
+        else ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  state.providerEnabled
+                      ? 'Tom Secrets Manager is turned on as an AutoFill '
+                            'provider in System Settings.'
+                      : 'Turn on Tom Secrets Manager in System Settings › '
+                            'General › AutoFill & Passwords (macOS 15; '
+                            'Passwords › Password Options before).',
+                  key: const Key('tsm-autofill-system'),
+                ),
+              ),
+              TextButton(
+                key: const Key('tsm-autofill-open-settings'),
+                onPressed: () => unawaited(autofill.openSettings()),
+                child: const Text('Open System Settings'),
+              ),
+            ],
+          ),
+          SwitchListTile(
+            key: const Key('tsm-autofill-enabled'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Fill passwords with Tom Secrets Manager'),
+            subtitle: Text(
+              autofill.lastWritten == null
+                  ? 'Off deletes the copy and its key from this Mac.'
+                  : 'Copy written ${TimeOfDay.fromDateTime(autofill.lastWritten!).format(context)}; '
+                        'off deletes it and its key from this Mac.',
+            ),
+            value: autofill.enabled,
+            onChanged: (v) => unawaited(autofill.setEnabled(v)),
+          ),
+          SwitchListTile(
+            key: const Key('tsm-autofill-quicktype'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('QuickType suggestions'),
+            subtitle: const Text(
+              'The keyboard suggests the login of the site (its site and user '
+              'name are registered with macOS, never a password).',
+            ),
+            value: autofill.quickType,
+            onChanged: autofill.enabled
+                ? (v) => unawaited(autofill.setQuickType(v))
+                : null,
+          ),
+          if (autofill.error case final error?)
+            Text(
+              error,
+              key: const Key('tsm-autofill-error'),
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+        ],
       ],
     );
   }

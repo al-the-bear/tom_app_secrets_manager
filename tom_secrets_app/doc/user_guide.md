@@ -804,6 +804,25 @@ browser you refused, or one you want to approve again, is under Clients ›
 Allow list ("Revoke"). The browser is never given the logins or values of
 system vaults.
 
+**Password AutoFill** (macOS): macOS fills logins in apps and Safari through
+Tom Secrets Manager's AutoFill provider. Turn it on in System Settings ›
+General › AutoFill & Passwords (macOS 15; Passwords › Password Options
+before); "Open System Settings" goes there, and the section says whether it
+is on. While it is on, the app keeps an encrypted copy of the logins of
+your personal and shared vaults on this Mac (never a system vault's),
+written after every unlock, edit and sync. A login field then offers "Tom
+Secrets Manager": Touch ID (or your login password) opens the list of the
+site's logins with a search over all of them; the one picked is filled. On
+macOS 15 one-time codes are offered too. A copy older than a day is shown
+with its age; open the app to bring it up to date. After a new fingerprint
+is added, AutoFill asks you to open the app once. "Fill passwords with Tom
+Secrets Manager" off deletes the copy and its key from this Mac.
+"QuickType suggestions" (on by default) lets the keyboard suggest the
+login of the site: macOS is told the site and the user name, never a
+password. The provider cannot save a new login: add it in the app or let
+the browser extension propose it. AutoFill needs the team-signed build of
+the app; a build without it says so here.
+
 **Shared by every device**: the configuration kept in the primary vault
 (`tsm.config`): the dimensions in priority order and the files per
 environment, edited as YAML and saved with "Save in the primary vault". For

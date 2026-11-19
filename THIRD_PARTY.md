@@ -24,6 +24,7 @@ A package that adds a shipped dependency adds its row here.
 | [http](https://pub.dev/packages/http) | BSD-3-Clause | `tom_secrets_mobile`: GitHub's REST API |
 | [mobile_scanner](https://pub.dev/packages/mobile_scanner) | BSD-3-Clause | `tom_secrets_mobile`: the camera's QR reader (the desktop's pairing code, TOTP secrets); on iOS over Apple's AVFoundation; on Android over Google's ML Kit barcode scanning model (`com.google.mlkit:barcode-scanning`), bundled into the APK: closed source under the [ML Kit terms](https://developers.google.com/ml-kit/terms), not copyleft |
 | [file_selector](https://pub.dev/packages/file_selector) | BSD-3-Clause | `tom_secrets_desktop`: key files and attachments |
+| [cryptography](https://pub.dev/packages/cryptography) | Apache-2.0 | `tom_secrets_ui`: AES-256-GCM of the macOS AutoFill snapshot (also in the closure through `tom_secrets_core`) |
 | [pdf](https://pub.dev/packages/pdf) | Apache-2.0 | `tom_secrets_ui`: the emergency sheet as a PDF (its QR codes through `barcode`, Apache-2.0, and `qr`, BSD-3-Clause) |
 | [qr](https://pub.dev/packages/qr) | BSD-3-Clause | `tom_secrets_ui`: the pairing window's QR code on the desktop's Pairing screen |
 | [url_launcher](https://pub.dev/packages/url_launcher) | BSD-3-Clause | `tom_secrets_desktop`: GitHub's token pages in the system browser |

@@ -32,6 +32,8 @@ dependencies:
   tom_core_storage: ^0.1.3
   # The sync states the top bar's indicator presents.
   tom_core_sync: ^0.1.0
+  # AES-256-GCM of the macOS AutoFill snapshot (DP-50), as the core uses it.
+  cryptography: ^2.9.0
   pdf: ^3.13.1
   # The pairing invitation's QR code on screen (DP-56).
   qr: ^3.0.2

@@ -99,6 +99,18 @@ offering the import and the pairing.
   (`saveProposalAsNew` into one of `proposalVaults`) or written into the
   login of that site and user (`proposalMatches`, `applyProposal`: the old
   password to the history); everything dropped on `locked`.
+- `TomSecretsAutofill`: Password AutoFill on macOS (part-os-integration,
+  DP-50, DP-51) over the host's `TomSecretsAutofillPort`: after every
+  unlock, edit and sync, while the provider is on in System Settings and
+  in the app, the snapshot of the personal and shared vaults' logins
+  (`tomSecretsAutofillDocument`: id, title, user name, password, the web
+  URLs with host and registrable domain, the match rule, the TOTP) sealed
+  with AES-256-GCM under a key made for each unlock
+  (`TomSecretsAutofillSnapshot`; the key handed to the host for the
+  keychain), and the QuickType identities (site and user name); off deletes
+  the snapshot, its key and the identities; the lock keeps the snapshot.
+  Settings › Password AutoFill shows the provider's state, the way to
+  System Settings, the switch and QuickType.
 - `TomSecretsProposalsView`: The Proposals screen (BP-28, DP-43, DP-52): the
   logins the browser extension and git's credential helper proposed, each
   updating a login of that site and user, saved as a new login in a vault

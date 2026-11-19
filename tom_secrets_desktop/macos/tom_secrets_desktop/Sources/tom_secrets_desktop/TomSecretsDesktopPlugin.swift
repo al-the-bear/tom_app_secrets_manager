@@ -20,7 +20,9 @@ import ServiceManagement
 ///   sleep, which the app senses for the service (part-service): the
 ///   distributed notification `com.apple.screenIsLocked` and NSWorkspace's
 ///   `willSleepNotification`, each sent to Dart as `event` with
-///   `screenLocked` or `sleep`.
+///   `screenLocked` or `sleep`;
+/// - `tom_secrets_desktop/autofill`: the macOS AutoFill provider's snapshot,
+///   its key and the QuickType identities (`TomSecretsAutofillChannel`).
 public class TomSecretsDesktopPlugin: NSObject, FlutterPlugin {
   private weak var registrar: FlutterPluginRegistrar?
 
@@ -37,6 +39,9 @@ public class TomSecretsDesktopPlugin: NSObject, FlutterPlugin {
     TomSecretsClipboard.register(messenger: registrar.messenger)
     TomSecretsLoginItem.register(messenger: registrar.messenger)
     TomSecretsSessionEvents.register(messenger: registrar.messenger)
+    if #available(macOS 11.0, *) {
+      TomSecretsAutofillChannel.register(messenger: registrar.messenger)
+    }
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {

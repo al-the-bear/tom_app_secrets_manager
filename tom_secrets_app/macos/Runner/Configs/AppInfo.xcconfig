@@ -12,3 +12,6 @@ PRODUCT_BUNDLE_IDENTIFIER = com.althebear.tomSecretsApp
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 Peter Nicolai Alexis Kyaw. BSD-3-Clause.
+
+// The AutoFill provider's groups.
+#include "Autofill.xcconfig"

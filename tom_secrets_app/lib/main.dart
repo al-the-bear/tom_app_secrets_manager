@@ -90,6 +90,7 @@ Future<void> main(List<String> args) async {
     // lock and sleep it senses for the service (part-os-unlock).
     osUnlock: tomSecretsDesktopOsUnlock(),
     sessionEvents: TomSecretsDesktopSessionEvents(),
+    autofill: tomSecretsDesktopAutofill(),
     preferences: await TomSecretsFilePreferences.open(
       File('$data${Platform.pathSeparator}app-preferences.json'),
     ),

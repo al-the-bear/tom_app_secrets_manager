@@ -19,6 +19,7 @@ import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFilePicker;
 import 'package:tom_host_ui/tom_host_ui.dart' show TomFlutterClipboardPort;
 
+import '../state/autofill.dart';
 import '../state/entry_requests.dart';
 import 'service_host.dart';
 
@@ -285,6 +286,7 @@ final class TomSecretsHost {
     this.attachmentsShare = false,
     this.unlockFooter,
     this.entryRequests,
+    this.autofill,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -294,6 +296,10 @@ final class TomSecretsHost {
         service: service,
         preferences: TomSecretsMemoryPreferences(),
       );
+
+  /// The system's password AutoFill (macOS: the credential provider's
+  /// snapshot and QuickType identities), or null where there is none.
+  final TomSecretsAutofillPort? autofill;
 
   /// The secrets service.
   final TomSecretsServiceHost service;

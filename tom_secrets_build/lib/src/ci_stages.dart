@@ -33,11 +33,13 @@ const Set<String> secretsCiStagesNotInAll = {'release', 'mobile'};
 const Map<String, String> secretsCiStageDescriptions = {
   'analyze':
       'pub get + analyze (infos fatal) in every package of the three '
-      'repositories; npm ci + npm run build in every npm package',
+      'repositories; npm ci + npm run build in every npm package; on macOS '
+      'the AutoFill provider\'s extension target compiled (unsigned)',
   'test':
       'every package suite, strictly serial, one full log per package '
       '(the licence-boundary check is :licences\', the integration suites '
-      ':integration\'); npm test in every npm package',
+      ':integration\'); npm test in every npm package; on macOS swift test '
+      'of the AutoFill provider\'s core',
   'integration':
       'the integration suites against the real service (test tag '
       'integration): the service built as a binary, started and driven by '
@@ -138,6 +140,7 @@ class SecretsCiStages {
             _npm(['run', 'build'], dir),
           ]);
         }
+        if (Platform.isMacOS) await _autofillBuild(run, stage);
       case 'test':
         for (final pkg in packages) {
           final noSuite = secretsCiNoSuiteReason(pkg.directory);
@@ -172,6 +175,13 @@ class SecretsCiStages {
           await run.step(stage, name, '${_npmLogName(name)}.log', [
             _npm(['ci'], dir),
             _npm(['test'], dir),
+          ]);
+        }
+        if (Platform.isMacOS) {
+          // The AutoFill provider's core (DP-50): CryptoKit and XCTest.
+          final kit = p.join(_appMacos, 'TomSecretsAutofillKit');
+          await run.step(stage, workspace.relative(kit), 'autofill_kit.log', [
+            CiCommand('swift', const ['test'], workingDirectory: kit),
           ]);
         }
       case 'integration':
@@ -284,6 +294,50 @@ extension on SecretsCiStages {
     directory: workspace.buildPackageDir,
     isFlutter: false,
   );
+
+  /// The app's macOS folder (the Xcode project, the AutoFill provider).
+  String get _appMacos =>
+      p.join(workspace.repoRoot, 'tom_secrets_app', 'macos');
+
+  /// The macOS AutoFill provider's extension target compiled, unsigned
+  /// (its entitlements need the team; the team-signed build embeds it):
+  /// Flutter's generated Swift package first, which the Xcode project
+  /// resolves.
+  Future<void> _autofillBuild(CiRun run, String stage) async {
+    final app = CiPackage(
+      name: workspace.relative(p.join(workspace.repoRoot, 'tom_secrets_app')),
+      directory: p.join(workspace.repoRoot, 'tom_secrets_app'),
+      isFlutter: true,
+    );
+    final out = p.join(app.directory, 'build', 'autofill');
+    await run.step(
+      stage,
+      'TomSecretsAutofill (macOS AutoFill provider)',
+      'analyze.autofill.log',
+      [
+        run.tool(app, ['build', 'macos', '--config-only']),
+        CiCommand('xcodebuild', [
+          '-project',
+          'Runner.xcodeproj',
+          '-target',
+          'TomSecretsAutofill',
+          '-configuration',
+          'Release',
+          'CODE_SIGNING_ALLOWED=NO',
+          'SYMROOT=$out',
+          'build',
+        ], workingDirectory: _appMacos),
+      ],
+      needsFlutter: true,
+      produces: p.join(
+        out,
+        'Release',
+        'TomSecretsAutofill.appex',
+        'Contents',
+        'Info.plist',
+      ),
+    );
+  }
 
   /// The mobile app's Android release: the signed APK beside the archives.
   Future<void> _mobile(CiRun run) async {

@@ -52,6 +52,16 @@ the app's, listed in [`tom_secrets_app`](../tom_secrets_app/README.md).
   claiming with the master password; a machine without `bootstrap.yaml` answers
   not set up, and its first run (`TomSecretsFirstRun`) writes into the data
   directory (`TSM_DATA_DIR`, else the platform's) and the OS keychain.
+- **AutoFill** (macOS): `TomSecretsMacAutofill` (`tomSecretsDesktopAutofill()`)
+  over this package's channel `tom_secrets_desktop/autofill`: whether the
+  build has the AutoFill provider and it is on in System Settings
+  (`ASCredentialIdentityStore.getState`), the snapshot key into the
+  data-protection keychain's shared access group (`biometryCurrentSet`, or
+  `userPresence` on a Mac without Touch ID), the sealed snapshot into the App
+  Group container (atomically), removal, the QuickType identities, and
+  System Settings opened. The groups come from the app's Info.plist
+  (`TSMAutofillAppGroup`, `TSMAutofillKeychainGroup`); null on Windows and
+  Linux.
 - **Tray**: `TomSecretsPluginTray` over `tray_manager`: the macOS menu bar
   (template images), the Windows notification area (ICO), the Linux tray
   (StatusNotifierItem through AppIndicator); the icons in `assets/tray/`
@@ -148,6 +158,8 @@ The admin key is kept in the OS keychain under the service name
 - Pairing discovery on Linux needs `avahi-daemon` running; without it the
   other machine types the address.
 - Start at login on macOS needs macOS 13 or later.
+- The AutoFill port answers "not configured" in a build without the Apple
+  team (no App Group, no keychain access group).
 
 ## Testing
 

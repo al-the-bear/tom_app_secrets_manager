@@ -1,0 +1,8 @@
+// The macOS AutoFill provider (part-os-integration, DP-50): the App Group
+// that holds the snapshot and the keychain access group that holds its key,
+// both named by the Apple Developer team. TSM_TEAM_ID stays empty until the
+// team-signed build (tsm_finalize_user12, DP-176): the app and the
+// provider then find no group and say AutoFill is not configured.
+TSM_TEAM_ID =
+TSM_AUTOFILL_APP_GROUP = $(TSM_TEAM_ID).tom.secrets
+TSM_AUTOFILL_KEYCHAIN_GROUP = $(TSM_TEAM_ID).tom.secrets.autofill

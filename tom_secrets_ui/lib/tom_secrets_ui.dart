@@ -32,6 +32,7 @@ export 'src/screens/rewritten_question.dart';
 export 'src/screens/settings_view.dart';
 export 'src/screens/status_view.dart';
 export 'src/screens/vault_browser.dart';
+export 'src/state/autofill.dart';
 export 'src/state/clients.dart';
 export 'src/state/conflicts.dart';
 export 'src/state/emergency_sheet.dart';

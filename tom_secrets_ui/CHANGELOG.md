@@ -2,6 +2,13 @@
 
 ## 0.1.0
 
+- Password AutoFill on macOS (DP-50, DP-51): `TomSecretsAutofill` writes the
+  sealed snapshot (`TomSecretsAutofillSnapshot`: AES-256-GCM, a key per
+  unlock) of the personal and shared vaults' logins after every unlock,
+  edit and sync while the provider is on, and the QuickType identities;
+  Settings › Password AutoFill (the provider's state, the way to System
+  Settings, the app's switch, QuickType); `TomSecretsHost.autofill`.
+- The Proposals screen (BP-28, DP-43, DP-52).
 - The browser integration (part-browser): Settings › Integrations ›
   Browsers switches each browser found for the user on and off (its
   native-messaging manifest naming the browser host,

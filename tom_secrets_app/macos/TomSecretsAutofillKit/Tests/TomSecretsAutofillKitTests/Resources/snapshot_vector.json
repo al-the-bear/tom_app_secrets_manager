@@ -1,0 +1,34 @@
+{
+  "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "sealed": "VFNNLUFVVE9GSUxMAAAATXsiZm9ybWF0VmVyc2lvbiI6MSwia2V5SWQiOiJkZW1vLWtleS0xIiwid3JpdHRlbiI6IjIwMjYtMTEtMTlUMDk6MzA6MDAuMDAwWiJ9oKGio6SlpqeoqaqrnToaQjemY8s0APWgbhWu/EqddTLlxSsY6GtIpEWJRzHgQGrOng9iBAusPfI6SrnJdzV2eFKKOFJjO2Uq1hngw5aG3hQSzIDCzsCLfe6j48T9OpmX8fSvTdZMX/jS/ijyv7UZmDebuaym4mcy5uyITgZ8Q92qWulZDfX80NE0n2/pM8QWpy7lNQ17s+p7JrP6qqzeDsyem+GY74fXy6JZROttbNTESGw08mtYURi9xIVVHN/8ZwvBE+/jH1Vx8mh1GBQ+vAy0mdfROS+iKE1cl37LkZpTEPqCtrp6kC+q+F1KOUZVyR7jEO/RIzYuJSUHatCyU+x8E+gGgsEFAlpGsDsduuSHqc+FRJl17RNPHKAaPSg41Mm3CMJFe7uL3KpI4ykr0kxnU66KAGwA0d/nKrA15HckCqzEG85Pgbf+3Hew/Cnymw1UeuO0Dif0a7mFBp6qM+IhQ4B6Je/oG1+nPyRngGr0fHwRgI9HyUHtaan4oUoU/HB4kZVKJ3PpqIeoF+mNGJEr8WoMK4ZSHYGKu3qVdfe1Gb9IGsKEqQAGHVHuNSglbI3Q2Ws4EtyyItUXfAWNtZrj1eQq0HvDIKI/UQ==",
+  "document": {
+    "formatVersion": 1,
+    "written": "2026-11-19T09:30:00.000Z",
+    "entries": [
+      {
+        "id": "team/~0123456789abcdef0123456789abcdef",
+        "store": "team",
+        "title": "Mail",
+        "userName": "demo-user",
+        "password": "demo-mail-pw",
+        "rule": "domain",
+        "urls": [
+          {
+            "url": "https://mail.example.com/login",
+            "scheme": "https",
+            "host": "mail.example.com",
+            "path": "/login",
+            "site": "example.com"
+          }
+        ],
+        "totp": {
+          "secret": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA=",
+          "digits": 6,
+          "period": 30,
+          "algorithm": "SHA1"
+        }
+      }
+    ]
+  },
+  "note": "Demo data. Written by tom_secrets_ui/test/autofill_test.dart (TSM_UPDATE_VECTORS=1)."
+}

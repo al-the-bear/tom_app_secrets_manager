@@ -64,11 +64,14 @@ Log and step names are paths relative to the folder that holds all three.
 
 - `:analyze`: `pub get` and `analyze` (infos fatal for Dart packages) in every
   package; `npm ci` and `npm run build` (`tsc` with the package's strict
-  settings) in every npm package.
+  settings) in every npm package; on macOS the AutoFill provider's extension
+  target (`tom_secrets_app/macos`, `TomSecretsAutofill`) compiled with
+  `xcodebuild`, unsigned (its entitlements need the team).
 - `:test`: every package's suite (without the tags `licence-boundary`,
   `integration` and `standalone`), one full log per package; a package without
   `*_test.dart` is reported skipped; `npm ci` and `npm test` in every npm
-  package.
+  package; on macOS `swift test` of the AutoFill provider's core
+  (`TomSecretsAutofillKit`).
 - `:integration`: the integration suites against the real service (test tag
   `integration`, left out of `:test`): `tsm`'s builds the service as a binary
   (`dart build cli`), starts it through `tsm start` on demo vaults in a scratch

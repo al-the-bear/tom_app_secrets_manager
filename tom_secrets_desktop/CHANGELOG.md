@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- The macOS AutoFill port (`TomSecretsMacAutofill`, channel
+  `tom_secrets_desktop/autofill`): the provider's state, the snapshot key
+  into the keychain under Touch ID, the snapshot into the App Group
+  container, removal, the QuickType identities, System Settings opened.
 - `TomSecretsSingleInstance` passes the entry a later launch names
   (`--show-entry`, the browser host's `openApp`) to the running app;
   `TomSecretsDesktopServiceHost.browserHostExecutable`, the browser host

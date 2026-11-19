@@ -21,6 +21,9 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		003BBDE9B8A7F728C8D1425A /* Totp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9BF9820BF000FA6A95B779 /* Totp.swift */; };
+		01084FC19C29152D53576CD8 /* Matching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9230F5A66D8661C67E002808 /* Matching.swift */; };
+		2493F2FDD1062545E46CF934 /* AutofillListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D243E963246C2DC7D51C0A7 /* AutofillListView.swift */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
@@ -28,6 +31,10 @@
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
+		9D0AEEC259D20ABBE240EC70 /* SnapshotReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09740225ED7A115CB5A3A8F /* SnapshotReader.swift */; };
+		AA6A13E030A013912DB80F4C /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1B9CB076BB74E8DA672FE42C /* Cocoa.framework */; };
+		B50BB27F5C1E94503C3C4261 /* CredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00690F4C96DE4D0C3C9549BE /* CredentialProviderViewController.swift */; };
+		D6546F937E8AB3BD3D28717A /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABAAA09D28D448281CEAC02 /* Snapshot.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +68,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		00690F4C96DE4D0C3C9549BE /* CredentialProviderViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CredentialProviderViewController.swift; sourceTree = "<group>"; };
+		13F5391E22A618A3B585DC11 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1B9CB076BB74E8DA672FE42C /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = Autofill.xcconfig; sourceTree = "<group>"; };
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		333000ED22D3DE5D00554162 /* Warnings.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Warnings.xcconfig; sourceTree = "<group>"; };
@@ -77,9 +88,16 @@
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
+		5213BDA67BBA45957D2FF6A5 /* TomSecretsAutofill.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = TomSecretsAutofill.entitlements; sourceTree = "<group>"; };
+		6B9BF9820BF000FA6A95B779 /* Totp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Totp.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
+		7949DD53BAC68F14438EB114 /* TomSecretsAutofill.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TomSecretsAutofill.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7ABAAA09D28D448281CEAC02 /* Snapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		9230F5A66D8661C67E002808 /* Matching.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Matching.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		9D243E963246C2DC7D51C0A7 /* AutofillListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AutofillListView.swift; sourceTree = "<group>"; };
+		D09740225ED7A115CB5A3A8F /* SnapshotReader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotReader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,6 +113,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B361A2A6E8D4AE2F341848EC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA6A13E030A013912DB80F4C /* Cocoa.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -116,6 +142,7 @@
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
 				333000ED22D3DE5D00554162 /* Warnings.xcconfig */,
+				2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */,
 			);
 			path = Configs;
 			sourceTree = "<group>";
@@ -128,6 +155,8 @@
 				331C80D6294CF71000263BE5 /* RunnerTests */,
 				33CC10EE2044A3C60003C045 /* Products */,
 				D73912EC22F37F3D000D13A0 /* Frameworks */,
+				5F7FDED66D10443ABD554E4A /* TomSecretsAutofill */,
+				D6E50BFDE2EDB7CDD409DF09 /* TomSecretsAutofillKit */,
 			);
 			sourceTree = "<group>";
 		};
@@ -136,6 +165,7 @@
 			children = (
 				33CC10ED2044A3C60003C045 /* tom_secrets_app.app */,
 				331C80D5294CF71000263BE5 /* RunnerTests.xctest */,
+				7949DD53BAC68F14438EB114 /* TomSecretsAutofill.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -176,9 +206,42 @@
 			path = Runner;
 			sourceTree = "<group>";
 		};
+		5F7FDED66D10443ABD554E4A /* TomSecretsAutofill */ = {
+			isa = PBXGroup;
+			children = (
+				00690F4C96DE4D0C3C9549BE /* CredentialProviderViewController.swift */,
+				9D243E963246C2DC7D51C0A7 /* AutofillListView.swift */,
+				D09740225ED7A115CB5A3A8F /* SnapshotReader.swift */,
+				13F5391E22A618A3B585DC11 /* Info.plist */,
+				5213BDA67BBA45957D2FF6A5 /* TomSecretsAutofill.entitlements */,
+			);
+			name = TomSecretsAutofill;
+			path = TomSecretsAutofill;
+			sourceTree = "<group>";
+		};
+		742387B699677CD127EB08DC /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				1B9CB076BB74E8DA672FE42C /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		D6E50BFDE2EDB7CDD409DF09 /* TomSecretsAutofillKit */ = {
+			isa = PBXGroup;
+			children = (
+				7ABAAA09D28D448281CEAC02 /* Snapshot.swift */,
+				9230F5A66D8661C67E002808 /* Matching.swift */,
+				6B9BF9820BF000FA6A95B779 /* Totp.swift */,
+			);
+			name = TomSecretsAutofillKit;
+			path = TomSecretsAutofillKit/Sources/TomSecretsAutofillKit;
+			sourceTree = "<group>";
+		};
 		D73912EC22F37F3D000D13A0 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				742387B699677CD127EB08DC /* OS X */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -226,6 +289,23 @@
 			productName = Runner;
 			productReference = 33CC10ED2044A3C60003C045 /* tom_secrets_app.app */;
 			productType = "com.apple.product-type.application";
+		};
+		4A324575360729E4A38D4512 /* TomSecretsAutofill */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 27E0661F59A9A1DB75B54EE6 /* Build configuration list for PBXNativeTarget "TomSecretsAutofill" */;
+			buildPhases = (
+				CBFDBAA1FC72CE6CEAFAFE08 /* Sources */,
+				B361A2A6E8D4AE2F341848EC /* Frameworks */,
+				D8CC0DC39BF8298E4B6A121A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TomSecretsAutofill;
+			productName = TomSecretsAutofill;
+			productReference = 7949DD53BAC68F14438EB114 /* TomSecretsAutofill.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -277,6 +357,7 @@
 				33CC10EC2044A3C60003C045 /* Runner */,
 				331C80D4294CF70F00263BE5 /* RunnerTests */,
 				33CC111A2044C6BA0003C045 /* Flutter Assemble */,
+				4A324575360729E4A38D4512 /* TomSecretsAutofill */,
 			);
 		};
 /* End PBXProject section */
@@ -295,6 +376,13 @@
 			files = (
 				33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */,
 				33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D8CC0DC39BF8298E4B6A121A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -357,6 +445,19 @@
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CBFDBAA1FC72CE6CEAFAFE08 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B50BB27F5C1E94503C3C4261 /* CredentialProviderViewController.swift in Sources */,
+				2493F2FDD1062545E46CF934 /* AutofillListView.swift in Sources */,
+				9D0AEEC259D20ABBE240EC70 /* SnapshotReader.swift in Sources */,
+				D6546F937E8AB3BD3D28717A /* Snapshot.swift in Sources */,
+				01084FC19C29152D53576CD8 /* Matching.swift in Sources */,
+				003BBDE9B8A7F728C8D1425A /* Totp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -666,9 +767,100 @@
 			};
 			name = Release;
 		};
+		6FE6C42B9C22F7D6CEC67BBE /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TomSecretsAutofill/TomSecretsAutofill.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(TSM_TEAM_ID)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TomSecretsAutofill/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.althebear.tomSecretsApp.autofill;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Profile;
+		};
+		A449ABD761428EB639988FF7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TomSecretsAutofill/TomSecretsAutofill.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(TSM_TEAM_ID)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TomSecretsAutofill/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.althebear.tomSecretsApp.autofill;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A56697D64CD845064D11B03D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TomSecretsAutofill/TomSecretsAutofill.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(TSM_TEAM_ID)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TomSecretsAutofill/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.althebear.tomSecretsApp.autofill;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		27E0661F59A9A1DB75B54EE6 /* Build configuration list for PBXNativeTarget "TomSecretsAutofill" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A449ABD761428EB639988FF7 /* Release */,
+				A56697D64CD845064D11B03D /* Debug */,
+				6FE6C42B9C22F7D6CEC67BBE /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		331C80DE294CF71000263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
