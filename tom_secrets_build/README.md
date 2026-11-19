@@ -19,7 +19,8 @@ switched off for the product's repositories).
 The package is not published (`publish_to: none`): it runs from a clone of
 this repository. It needs the Flutter SDK (3.38 or later, for the apps and
 the Dart it carries); `:conformance` needs Python 3 with `jsonschema`, and
-the npm packages Node.js with npm.
+the npm packages Node.js with npm, the Python packages Python 3.9 or later
+(`python3`; on Windows the `py` launcher).
 
 ## Running it
 
@@ -64,13 +65,15 @@ Log and step names are paths relative to the folder that holds all three.
 
 - `:analyze`: `pub get` and `analyze` (infos fatal for Dart packages) in every
   package; `npm ci` and `npm run build` (`tsc` with the package's strict
-  settings) in every npm package; on macOS the AutoFill provider's extension
+  settings) in every npm package; `python3 -m compileall` in every Python
+  package; on macOS the AutoFill provider's extension
   target (`tom_secrets_app/macos`, `TomSecretsAutofill`) compiled with
   `xcodebuild`, unsigned (its entitlements need the team).
 - `:test`: every package's suite (without the tags `licence-boundary`,
   `integration` and `standalone`), one full log per package; a package without
   `*_test.dart` is reported skipped; `npm ci` and `npm test` in every npm
-  package; on macOS `swift test` of the AutoFill provider's core
+  package; `python3 -m unittest discover -s tests` (with `PYTHONPATH=src`) in
+  every Python package; on macOS `swift test` of the AutoFill provider's core
   (`TomSecretsAutofillKit`).
 - `:integration`: the integration suites against the real service (test tag
   `integration`, left out of `:test`): `tsm`'s builds the service as a binary
@@ -81,9 +84,10 @@ Log and step names are paths relative to the folder that holds all three.
   (`test/licence_boundary_test.dart`, tag `licence-boundary`); every non-Dart
   dependency manifest (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`,
   `pyproject.toml`, `setup.py`) is red until a closure check reads it, except a
-  `go.mod` that requires nothing (its closure is the Go standard library, BSD-3)
-  and a `package.json` with its `package-lock.json` (the npm closure check
-  below).
+  `go.mod` that requires nothing (its closure is the Go standard library,
+  BSD-3), a `pyproject.toml` that requires nothing (its closure is the Python standard
+  library, PSF-2.0; its own licence is checked) and a `package.json` with its
+  `package-lock.json` (the npm closure check below).
 - `:conformance`: the client conformance suite of `tom_secrets_clients`
   (`conformance/tool/conformance.py all`): the reference table current, the
   coverage gate, every runner against every case table; a runner without its
@@ -94,7 +98,8 @@ Log and step names are paths relative to the folder that holds all three.
 - `:mobile`: not part of `:all`: the mobile app's Android release, below.
 
 The packages are found, never listed: every directory with a `pubspec.yaml`
-(an npm package: a `package.json` with its `package-lock.json`) up to four
+(an npm package: a `package.json` with its `package-lock.json`; a Python
+package: a `pyproject.toml` that requires nothing) up to four
 levels below a repository root, leaving out `example/`, `test/`,
 build output, scratch, `node_modules/` and the Flutter platform folders. A
 repository that is not checked out is a red step of every stage. The build

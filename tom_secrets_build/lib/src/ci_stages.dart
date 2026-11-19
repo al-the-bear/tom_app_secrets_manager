@@ -33,12 +33,14 @@ const Set<String> secretsCiStagesNotInAll = {'release', 'mobile'};
 const Map<String, String> secretsCiStageDescriptions = {
   'analyze':
       'pub get + analyze (infos fatal) in every package of the three '
-      'repositories; npm ci + npm run build in every npm package; on macOS '
+      'repositories; npm ci + npm run build in every npm package; '
+      'compileall in every Python package; on macOS '
       'the AutoFill provider\'s extension target compiled (unsigned)',
   'test':
       'every package suite, strictly serial, one full log per package '
       '(the licence-boundary check is :licences\', the integration suites '
-      ':integration\'); npm test in every npm package; on macOS swift test '
+      ':integration\'); npm test in every npm package; unittest in every '
+      'Python package; on macOS swift test '
       'of the AutoFill provider\'s core',
   'integration':
       'the integration suites against the real service (test tag '
@@ -47,7 +49,8 @@ const Map<String, String> secretsCiStageDescriptions = {
   'licences':
       'pub get in every package, then the licence-boundary check: no '
       'copyleft licence in any closure, KDBX only through tom_secrets_core; '
-      'the npm closures from their locks; every other non-Dart manifest is '
+      'the npm closures from their locks; Python packages that require '
+      'nothing; every other non-Dart manifest is '
       'red until its closure is checked',
   'conformance':
       'the client conformance suite (tom_secrets_clients/conformance): the '
@@ -140,6 +143,14 @@ class SecretsCiStages {
             _npm(['run', 'build'], dir),
           ]);
         }
+        for (final dir in workspace.pythonPackageDirs()) {
+          final name = workspace.relative(dir);
+          // Byte-compiling every module is the syntax check; the package
+          // uses the standard library only, so there is nothing to install.
+          await run.step(stage, name, 'analyze.${_pythonLogName(name)}.log', [
+            _python(['-m', 'compileall', '-q', 'src', 'tests'], dir),
+          ]);
+        }
         if (Platform.isMacOS) await _autofillBuild(run, stage);
       case 'test':
         for (final pkg in packages) {
@@ -177,6 +188,20 @@ class SecretsCiStages {
             _npm(['test'], dir),
           ]);
         }
+        for (final dir in workspace.pythonPackageDirs()) {
+          final name = workspace.relative(dir);
+          if (!Directory(p.join(dir, 'tests')).existsSync()) {
+            run.skip(stage, name, '${_pythonLogName(name)}.log', 'no tests/');
+            continue;
+          }
+          await run.step(stage, name, '${_pythonLogName(name)}.log', [
+            _python(
+              ['-m', 'unittest', 'discover', '-s', 'tests', '-v'],
+              dir,
+              environment: {'PYTHONPATH': 'src'},
+            ),
+          ]);
+        }
         if (Platform.isMacOS) {
           // The AutoFill provider's core (DP-50): CryptoKit and XCTest.
           final kit = p.join(_appMacos, 'TomSecretsAutofillKit');
@@ -211,6 +236,10 @@ class SecretsCiStages {
             p.basename(manifest) == 'package.json'
                 ? 'no package-lock.json beside it: the npm closure check '
                       'reads the lock — run npm install and commit it'
+                : p.basename(manifest) == 'pyproject.toml'
+                ? 'it declares requirements: only a Python project that '
+                      'requires nothing (the standard library its closure) '
+                      'is checked'
                 : 'no closure check reads '
                       '${secretsCiForeignManifests[p.basename(manifest)]} '
                       'manifests yet — add one to the licence-boundary check',
@@ -579,6 +608,21 @@ CiCommand _npm(List<String> args, String dir) =>
     CiCommand('npm', args, workingDirectory: dir);
 
 String _npmLogName(String name) => 'npm.${name.replaceAll('/', '.')}';
+
+/// A Python 3 command in [dir]: `py -3` on Windows (the launcher, where
+/// `python3` is often missing), `python3` elsewhere.
+CiCommand _python(
+  List<String> args,
+  String dir, {
+  Map<String, String> environment = const {},
+}) => CiCommand(
+  Platform.isWindows ? 'py' : 'python3',
+  [if (Platform.isWindows) '-3', ...args],
+  workingDirectory: dir,
+  environment: environment,
+);
+
+String _pythonLogName(String name) => 'python.${name.replaceAll('/', '.')}';
 
 /// Why [packageDir] has no suite to run, or null when it has one: no
 /// `test/` directory, or no `*_test.dart` in it.

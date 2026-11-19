@@ -59,6 +59,16 @@ void main() {
         'module example.com/b\n\ngo 1.27\n\n'
             'require golang.org/x/crypto v0.59.0\n',
       );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/py_stdlib/pyproject.toml',
+        '[project]\nname = "a"\ndependencies = []\n',
+      );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/py_deps/pyproject.toml',
+        '[project]\nname = "b"\ndependencies = [\n  "requests>=2",\n]\n',
+      );
       secretsWriteFile(root, 'tom_ai/secrets_manager/tom_repository.yaml', '');
       pubspec('tom_ai/secrets_manager/tom_secrets_core');
       pubspec('tom_ai/secrets_manager/a/b/c/d/too_deep');
@@ -96,17 +106,29 @@ void main() {
         expect(workspace.foreignManifests(), [
           'app_secrets_manager/tom_secrets_browser/package.json',
           'app_secrets_manager/tom_secrets_npm/package.json',
+          'app_secrets_manager/tools/py_deps/pyproject.toml',
+          'app_secrets_manager/tools/py_stdlib/pyproject.toml',
           'app_secrets_manager/tools/stdlib_only/go.mod',
           'app_secrets_manager/tools/with_deps/go.mod',
         ]);
       },
     );
 
-    test('a Go module that requires nothing and an npm package with its '
-        'lock are checked; one with requirements or no lock is not', () {
+    test('a Go module or Python project that requires nothing and an npm '
+        'package with its lock are checked; one with requirements or no lock '
+        'is not', () {
       expect(workspace.uncheckedForeignManifests(), [
         'app_secrets_manager/tom_secrets_browser/package.json',
+        'app_secrets_manager/tools/py_deps/pyproject.toml',
         'app_secrets_manager/tools/with_deps/go.mod',
+      ]);
+      expect(workspace.pythonPackageDirs(), [
+        p.join(
+          workspace.workspaceRoot,
+          'app_secrets_manager',
+          'tools',
+          'py_stdlib',
+        ),
       ]);
       expect(workspace.npmPackageDirs(), [
         p.join(

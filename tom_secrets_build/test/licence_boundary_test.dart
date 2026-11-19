@@ -54,6 +54,20 @@ void main() {
     }
   }
 
+  // A Python project that requires nothing has the standard library
+  // (PSF-2.0) as its whole closure: its own licence is checked, and that it
+  // still requires nothing.
+  for (final manifest in workspace.foreignManifests()) {
+    if (workspace.isStandardLibraryPythonProject(manifest)) {
+      test(manifest, () {
+        expect(
+          secretsPythonProblems(workspace.repositoryDir(p.dirname(manifest))),
+          isEmpty,
+        );
+      });
+    }
+  }
+
   // An npm package with its lock: its own licence and the licences of its
   // closure (the lock's packages but the dev ones), as installed by npm ci.
   for (final manifest in workspace.foreignManifests()) {

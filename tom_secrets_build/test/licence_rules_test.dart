@@ -232,6 +232,78 @@ void main() {
     });
   });
 
+  group('secretsPythonRequirements', () {
+    test('reads dependencies over lines and the optional ones; not the '
+        'build system', () {
+      const toml = '''
+[build-system]
+requires = ["setuptools>=61"]
+
+[project]
+name = "x"   # the name
+license = { text = "BSD-3-Clause" }
+dependencies = [
+  "requests[socks]>=2",  # a comment ]
+  'idna',
+]
+
+[project.optional-dependencies]
+fast = ["ujson"]
+''';
+      expect(secretsPythonRequirements(toml), [
+        'requests[socks]>=2',
+        'idna',
+        'ujson',
+      ]);
+      final project = secretsPyprojectStrings(toml)['project']!;
+      expect(project['name'], ['x']);
+      expect(project['license'], ['BSD-3-Clause']);
+    });
+
+    test('an empty or missing list requires nothing', () {
+      expect(
+        secretsPythonRequirements('[project]\ndependencies = []\n'),
+        isEmpty,
+      );
+      expect(secretsPythonRequirements('[project]\nname = "x"\n'), isEmpty);
+    });
+  });
+
+  group('secretsPythonProblems', () {
+    late Directory root;
+
+    String pythonProject(String toml, {String? licenceFile = _bsd3}) {
+      secretsWriteFile(root, 'py/pyproject.toml', toml);
+      if (licenceFile != null) {
+        secretsWriteFile(root, 'py/LICENSE', licenceFile);
+      }
+      return p.join(root.path, 'py');
+    }
+
+    setUp(() => root = secretsScratchDir('python'));
+
+    test('a BSD-3 project that requires nothing passes', () {
+      final dir = pythonProject(
+        '[project]\nname = "x"\nlicense = "BSD-3-Clause"\n'
+        'dependencies = []\n',
+      );
+      expect(secretsPythonProblems(dir), isEmpty);
+    });
+
+    test('another licence, no licence file and a requirement are red', () {
+      final dir = pythonProject(
+        '[project]\nname = "x"\nlicense = { text = "MIT" }\n'
+        'dependencies = ["requests"]\n',
+        licenceFile: null,
+      );
+      expect(secretsPythonProblems(dir), [
+        contains('declares licence MIT'),
+        contains('no BSD-3 licence file'),
+        contains('requires requests'),
+      ]);
+    });
+  });
+
   group('secretsNpmProblems', () {
     late Directory root;
     const mit =

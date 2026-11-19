@@ -70,9 +70,11 @@ const Set<String> secretsCiSkippedDirectories = {
 
 /// Dependency manifests of the languages other than Dart. Each one found is a
 /// closure the licence-boundary check must read, so `:licences` reports it red
-/// rather than passing it unread, except two the check reads: a Go module
+/// rather than passing it unread, except three the check reads: a Go module
 /// that requires nothing ([secretsGoModuleRequirements]), whose closure is the
-/// Go standard library alone (BSD-3), and an npm package with its
+/// Go standard library alone (BSD-3), a Python project that requires nothing
+/// ([secretsPythonRequirements]), whose closure is the Python standard
+/// library alone (PSF-2.0, permissive), and an npm package with its
 /// `package-lock.json` ([secretsNpmProblems]).
 const Map<String, String> secretsCiForeignManifests = {
   'package.json': 'npm',
@@ -103,6 +105,90 @@ List<String> secretsGoModuleRequirements(String goMod) {
     }
   }
   return found;
+}
+
+/// The string values of a `pyproject.toml`, per `[section]` and key: a
+/// string, an array of strings (over several lines) or an inline table gives
+/// the strings it holds, in order. Only the subset of TOML the Python
+/// manifests use: enough for [secretsPythonRequirements] and the declared
+/// licence ([secretsPythonProblems]).
+Map<String, Map<String, List<String>>> secretsPyprojectStrings(String text) {
+  final out = <String, Map<String, List<String>>>{};
+  var section = '';
+  String? key;
+  var depth = 0;
+  for (final raw in text.split('\n')) {
+    // The line outside its strings and comment, and each string with the
+    // length of that outside text where it began.
+    final bare = StringBuffer();
+    final strings = <(int, String)>[];
+    String? quote;
+    var current = StringBuffer();
+    for (var i = 0; i < raw.length; i++) {
+      final c = raw[i];
+      if (quote != null) {
+        if (c == r'\' && quote == '"' && i + 1 < raw.length) {
+          current.write(raw[++i]);
+        } else if (c == quote) {
+          strings.add((bare.length, current.toString()));
+          current = StringBuffer();
+          quote = null;
+        } else {
+          current.write(c);
+        }
+        continue;
+      }
+      if (c == '#') break;
+      if (c == '"' || c == "'") {
+        quote = c;
+        continue;
+      }
+      bare.write(c);
+    }
+    final line = bare.toString();
+    var values = strings;
+    var valuePart = line;
+    if (depth == 0) {
+      final trimmed = line.trim();
+      if (trimmed.startsWith('[')) {
+        section = trimmed.replaceAll(RegExp(r'[\[\]\s]'), '');
+        key = null;
+        continue;
+      }
+      final eq = line.indexOf('=');
+      if (eq < 0) continue;
+      key = line.substring(0, eq).trim();
+      values = [
+        for (final s in strings)
+          if (s.$1 > eq) s,
+      ];
+      valuePart = line.substring(eq + 1);
+    }
+    if (key == null) continue;
+    (out[section] ??= {})[key] = [
+      ...?out[section]?[key],
+      for (final s in values) s.$2,
+    ];
+    for (final c in valuePart.split('')) {
+      if (c == '[' || c == '{') depth++;
+      if (c == ']' || c == '}') depth--;
+    }
+    if (depth < 0) depth = 0;
+  }
+  return out;
+}
+
+/// The requirements a `pyproject.toml` declares: `[project]`'s
+/// `dependencies` and every list of `[project.optional-dependencies]`. The
+/// build system's `requires` are build tools, never linked, as an npm
+/// package's dev dependencies are not.
+List<String> secretsPythonRequirements(String pyproject) {
+  final strings = secretsPyprojectStrings(pyproject);
+  return [
+    ...?strings['project']?['dependencies'],
+    for (final extra in (strings['project.optional-dependencies'] ?? {}).values)
+      ...extra,
+  ];
 }
 
 /// How deep below a repository root a package may sit
@@ -276,13 +362,23 @@ class SecretsCiWorkspace {
   }
 
   /// The [foreignManifests] whose closure no check reads: all but the Go
-  /// modules that require nothing beyond the standard library and the npm
-  /// packages with a lock ([isLockedNpmManifest]).
+  /// modules and Python projects that require nothing beyond the standard
+  /// library and the npm packages with a lock ([isLockedNpmManifest]).
   List<String> uncheckedForeignManifests() => [
     for (final manifest in foreignManifests())
       if (!isStandardLibraryGoModule(manifest) &&
+          !isStandardLibraryPythonProject(manifest) &&
           !isLockedNpmManifest(manifest))
         manifest,
+  ];
+
+  /// The absolute directories of the Python projects that require nothing
+  /// ([isStandardLibraryPythonProject]), sorted: the stages check and test
+  /// them.
+  List<String> pythonPackageDirs() => [
+    for (final manifest in foreignManifests())
+      if (isStandardLibraryPythonProject(manifest))
+        p.normalize(p.join(workspaceRoot, p.dirname(manifest))),
   ];
 
   /// The absolute directories of the npm packages with a lock
@@ -306,6 +402,14 @@ class SecretsCiWorkspace {
   bool isStandardLibraryGoModule(String manifest) =>
       p.basename(manifest) == 'go.mod' &&
       secretsGoModuleRequirements(
+        File(p.join(workspaceRoot, manifest)).readAsStringSync(),
+      ).isEmpty;
+
+  /// Whether the workspace-relative [manifest] is a `pyproject.toml` that
+  /// requires nothing ([secretsPythonRequirements]).
+  bool isStandardLibraryPythonProject(String manifest) =>
+      p.basename(manifest) == 'pyproject.toml' &&
+      secretsPythonRequirements(
         File(p.join(workspaceRoot, manifest)).readAsStringSync(),
       ).isEmpty;
 

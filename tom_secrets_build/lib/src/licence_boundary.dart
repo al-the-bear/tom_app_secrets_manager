@@ -23,6 +23,9 @@ import 'package:path/path.dart' as p;
 import 'package:tom_test_support/licence_audit.dart';
 import 'package:yaml/yaml.dart';
 
+import 'ci_workspace.dart'
+    show secretsPyprojectStrings, secretsPythonRequirements;
+
 /// The one package that may depend on [secretsKdbxStore].
 const String secretsKdbxGateway = 'tom_secrets_core';
 
@@ -184,6 +187,41 @@ List<String> secretsBoundaryProblems(
       linked: {for (final l in linked) l.name},
     ),
   ];
+}
+
+/// Every problem of the Python project whose `pyproject.toml` is in
+/// [packageDir]: its declared licence (`license`, BSD-3-Clause), its licence
+/// file, and any requirement ([secretsPythonRequirements]) — a project that
+/// requires nothing has the Python standard library (PSF-2.0) as its whole
+/// closure; no check reads the closure of one that requires something.
+/// Empty when it passes.
+List<String> secretsPythonProblems(String packageDir) {
+  final manifest = File(p.join(packageDir, 'pyproject.toml'));
+  final text = manifest.readAsStringSync();
+  final project = secretsPyprojectStrings(text)['project'] ?? const {};
+  final name = project['name']?.firstOrNull ?? manifest.path;
+  final problems = <String>[];
+  final licence = project['license'];
+  if (licence == null ||
+      licence.length != 1 ||
+      licence.single != secretsNpmLicence) {
+    problems.add(
+      '$name declares licence ${licence?.join(' ')}, not $secretsNpmLicence.',
+    );
+  }
+  final own = tomLicenceFileOf(Directory(packageDir));
+  if (own == null ||
+      tomClassifyLicence(own.readAsStringSync()) != TomLicence.bsd3) {
+    problems.add('$name has no BSD-3 licence file.');
+  }
+  final requirements = secretsPythonRequirements(text);
+  if (requirements.isNotEmpty) {
+    problems.add(
+      '$name requires ${requirements.join(', ')}: no check reads a Python '
+      'closure yet.',
+    );
+  }
+  return problems;
 }
 
 /// The npm package's own licence ([secretsNpmProblems]): BSD-3 (DP-203).
