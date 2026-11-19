@@ -2,6 +2,16 @@
 
 ## 0.1.0
 
+- Auto-type's keyboard through FFI, no plugin: `TomSecretsMacKeyboard`
+  (`CGEventPost`, the Accessibility API and its prompt, secure input),
+  `TomSecretsWindowsKeyboard` (`SendInput`, `GetWindowTextW`),
+  `TomSecretsX11Keyboard` (XTest, `_NET_WM_NAME`; Wayland refused,
+  `tomSecretsX11Unavailable`); `tomSecretsDesktopKeyboard`.
+- Global hotkeys with this package's own platform code (DP-32): macOS
+  Carbon `RegisterEventHotKey`, Windows `RegisterHotKey` on
+  `tom_secrets_desktop/hotkeys` (`TomSecretsChannelHotkeys`), X11
+  `XGrabKey` through FFI (`TomSecretsX11Hotkeys`);
+  `tomSecretsDesktopHotkeys`.
 - Notification buttons (`TomSecretsNotifier.notify`'s `actions`): macOS
   categories registered at the start (`actionCategories`), Linux and Windows
   actions; a button runs its action, a click the notification's.

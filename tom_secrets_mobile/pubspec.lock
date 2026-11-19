@@ -729,18 +729,18 @@ packages:
     dependency: "direct dev"
     description:
       name: tom_kdbx_store
-      sha256: "958fdd0a9caa608434af3d7b1ce698c6fdbe7184efa51883dfe93c4177f9adf2"
+      sha256: "459d77c99785a6f3777950a0a236bcc42233ec3062c823b77e39efcbb4ac60c9"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.5"
+    version: "0.2.6"
   tom_kpasslib:
     dependency: transitive
     description:
       name: tom_kpasslib
-      sha256: f300f72540689f0c414a086b855e68b640be59e5fa1928d582318744bb7eab1e
+      sha256: "63d384e312bcfa9a6968168a2ff4847b21fa998f2dbcdfd922ebaf70afdeac31"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.2+tom.3"
+    version: "1.1.2+tom.4"
   tom_pqc:
     dependency: "direct main"
     description:
@@ -761,10 +761,10 @@ packages:
     dependency: "direct main"
     description:
       name: tom_secrets_core
-      sha256: "08fe190eeec01af737955275a52c49b1e4b3a1ce2816480e3e20f4967b1dea29"
+      sha256: "9130521232ba314bff6920c249830d8202b96cafb674a4bdf2dfec8612cfc9a7"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.11"
+    version: "0.2.12"
   tom_secrets_service:
     dependency: "direct main"
     description:

@@ -23,6 +23,7 @@ import 'package:tom_secrets_client/tom_secrets_client.dart'
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
+import '../state/auto_type.dart';
 import '../state/session_state.dart';
 import '../widgets/generator_dialog.dart';
 import '../widgets/protected_field.dart';
@@ -109,6 +110,10 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
   TomSecretsEntryType _type = TomSecretsEntryType.login;
   bool _expires = false;
   bool _breachExcluded = false;
+  // Auto-type (the KDBX AutoType element).
+  bool _autoTypeOn = true;
+  final _autoTypeSequence = TextEditingController();
+  final List<(TextEditingController, TextEditingController)> _windows = [];
   DateTime? _expiry;
   bool _dirty = false;
   bool _saving = false;
@@ -146,6 +151,22 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
     _type = TomSecretsEntryType.of(text(TomSecretsEntryFields.type));
     _expires = entry.times.expires.get() == true;
     _breachExcluded = tomSecretsBreachCheckExcluded(entry);
+    final autoType = entry.autoType;
+    _autoTypeOn = autoType.enabled;
+    _autoTypeSequence.text = autoType.defaultSequence ?? '';
+    for (final (w, q) in _windows) {
+      w.dispose();
+      q.dispose();
+    }
+    _windows
+      ..clear()
+      ..addAll([
+        for (final a in autoType.associations)
+          (
+            TextEditingController(text: a.window),
+            TextEditingController(text: a.sequence),
+          ),
+      ]);
     _expiry = entry.times.expiryTime.get();
     for (final c in _urls) {
       c.dispose();
@@ -354,6 +375,17 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
       );
       entry.times.expires.set(_expires && _expiry != null);
       if (_expires && _expiry != null) entry.times.expiryTime.set(_expiry);
+      final sequence = _autoTypeSequence.text.trim();
+      final autoType = KdbxAutoTypeSettings(
+        enabled: _autoTypeOn,
+        defaultSequence: sequence.isEmpty ? null : sequence,
+        associations: [
+          for (final (w, q) in _windows)
+            if (w.text.trim().isNotEmpty)
+              KdbxAutoTypeAssociation(w.text.trim(), q.text.trim()),
+        ],
+      );
+      if (entry.autoType != autoType) entry.autoType = autoType;
     });
   }
 
@@ -399,6 +431,11 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
 
   @override
   void dispose() {
+    _autoTypeSequence.dispose();
+    for (final (w, q) in _windows) {
+      w.dispose();
+      q.dispose();
+    }
     for (final c in [
       _title,
       _user,
@@ -629,6 +666,145 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
           _sshError!,
           key: const Key('tsm-ssh-error'),
           style: TextStyle(color: theme.colorScheme.error),
+        ),
+    ]);
+  }
+
+  /// Auto-type (part-password-manager): on or off, the entry's sequence
+  /// (KeePass's syntax; empty: its group's, else the default), the window
+  /// associations, and typing it into the window behind the app.
+  Widget _autoTypeSection(bool readOnly) {
+    final quick = context.watch<TomSecretsQuickAccess>();
+    final support = quick.support;
+    final outcome = quick.lastOutcome;
+    void touched() {
+      if (!_dirty) setState(() => _dirty = true);
+    }
+
+    return _section('Auto-type', Icons.keyboard_rounded, [
+      CheckboxListTile(
+        key: const Key('tsm-auto-type-on'),
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        value: _autoTypeOn,
+        onChanged: readOnly
+            ? null
+            : (on) => setState(() {
+                _autoTypeOn = on == true;
+                _dirty = true;
+              }),
+        title: const Text('Auto-type this entry'),
+      ),
+      TextField(
+        key: const Key('tsm-auto-type-sequence'),
+        controller: _autoTypeSequence,
+        readOnly: readOnly,
+        onChanged: (_) => touched(),
+        decoration: const InputDecoration(
+          labelText: 'Sequence',
+          hintText: tomSecretsDefaultAutoTypeSequence,
+          helperText:
+              'Empty: the group\'s, else {USERNAME}{TAB}{PASSWORD}{ENTER}. '
+              'Placeholders {USERNAME} {PASSWORD} {TITLE} {URL} {TOTP} '
+              '{S:field}; keys {TAB} {ENTER} {DELAY 500}; + Shift, ^ Ctrl, '
+              '% Alt.',
+          helperMaxLines: 3,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'Windows (title patterns with * and ?, or //regex//)',
+        style: Theme.of(context).textTheme.labelLarge,
+      ),
+      for (final (i, (window, sequence)) in _windows.indexed)
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: Key('tsm-auto-type-window-$i'),
+                controller: window,
+                readOnly: readOnly,
+                onChanged: (_) => touched(),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: 'Window title',
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                key: Key('tsm-auto-type-window-sequence-$i'),
+                controller: sequence,
+                readOnly: readOnly,
+                onChanged: (_) => touched(),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: 'Sequence (empty: the entry\'s)',
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Remove',
+              icon: const Icon(Icons.remove_circle_outline),
+              onPressed: readOnly
+                  ? null
+                  : () => setState(() {
+                      final (w, q) = _windows.removeAt(i);
+                      w.dispose();
+                      q.dispose();
+                      _dirty = true;
+                    }),
+            ),
+          ],
+        ),
+      Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          TextButton.icon(
+            key: const Key('tsm-auto-type-window-add'),
+            icon: const Icon(Icons.add),
+            label: const Text('Add a window'),
+            onPressed: readOnly
+                ? null
+                : () => setState(() {
+                    _windows.add((
+                      TextEditingController(),
+                      TextEditingController(),
+                    ));
+                    _dirty = true;
+                  }),
+          ),
+          OutlinedButton.icon(
+            key: const Key('tsm-auto-type-now'),
+            icon: const Icon(Icons.keyboard),
+            label: const Text('Type into the window behind'),
+            onPressed: support.available && !_dirty
+                ? () => unawaited(quick.typeFromEditor(widget.ref))
+                : null,
+          ),
+        ],
+      ),
+      if (!support.available && support.reason != null)
+        Text(
+          support.reason!,
+          key: const Key('tsm-auto-type-unavailable'),
+          style: Theme.of(context).textTheme.bodySmall,
+        )
+      else if (_dirty)
+        Text(
+          'Save first: auto-type types the saved entry.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      if (outcome != null &&
+          outcome.result != TomSecretsAutoTypeResult.typed &&
+          outcome.message != null)
+        Text(
+          outcome.message!,
+          key: const Key('tsm-auto-type-outcome'),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
     ]);
   }
@@ -1162,6 +1338,9 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                       ),
               ),
           ]),
+          if (_type == TomSecretsEntryType.login ||
+              _type == TomSecretsEntryType.apiToken)
+            _autoTypeSection(readOnly != null),
         ],
       ),
     );

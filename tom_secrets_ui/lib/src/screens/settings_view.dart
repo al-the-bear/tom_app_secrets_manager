@@ -42,6 +42,7 @@ import '../host_bridge.dart' show TomSecretsHostPreferenceKeys;
 import '../ports/desktop_ports.dart';
 import '../state/clients.dart';
 import '../state/health.dart';
+import '../state/auto_type.dart';
 import '../state/autofill.dart';
 import '../state/integrations.dart';
 import '../state/os_unlock.dart';
@@ -314,6 +315,8 @@ class _SettingsState extends State<TomSecretsSettingsView> {
               children: [
                 _device(context, session),
                 _app(context, host),
+                if (host.keyboard != null || host.hotkeys != null)
+                  const _AutoTypeSettings(),
                 if (host.integrationPaths != null) _integrationsSection(theme),
                 ?_autofillSection(theme),
                 _shared(context, theme),
@@ -1026,4 +1029,141 @@ class _SettingsState extends State<TomSecretsSettingsView> {
       ),
     ],
   );
+}
+
+/// Settings › Auto-type and quick access (part-app, part-password-manager,
+/// DP-41): whether auto-type works here (and the permission it needs), the
+/// two global hotkeys.
+class _AutoTypeSettings extends StatefulWidget {
+  const _AutoTypeSettings();
+
+  @override
+  State<_AutoTypeSettings> createState() => _AutoTypeSettingsState();
+}
+
+class _AutoTypeSettingsState extends State<_AutoTypeSettings> {
+  final Map<String, TextEditingController> _fields = {};
+  String? _error;
+
+  TextEditingController _field(TomSecretsQuickAccess quick, String key) =>
+      _fields.putIfAbsent(
+        key,
+        () => TextEditingController(text: quick.hotkey(key)?.toString() ?? ''),
+      );
+
+  @override
+  void dispose() {
+    for (final c in _fields.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _set(TomSecretsQuickAccess quick, String key) async {
+    final text = _fields[key]!.text.trim();
+    final hotkey = text.isEmpty ? null : TomSecretsHotkey.parse(text);
+    if (text.isNotEmpty && hotkey == null) {
+      setState(
+        () => _error =
+            '"$text" is no hotkey: write it like Ctrl+Shift+Space (with at '
+            'least one of Ctrl, Alt, Shift, Cmd and one key).',
+      );
+      return;
+    }
+    setState(() => _error = null);
+    await quick.setHotkey(key, hotkey);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final quick = context.watch<TomSecretsQuickAccess>();
+    final support = quick.support;
+    final theme = Theme.of(context);
+    Widget hotkey(String key, String label) => Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          SizedBox(
+            width: 220,
+            child: TextField(
+              key: Key('tsm-settings-hotkey-$key'),
+              controller: _field(quick, key),
+              decoration: const InputDecoration(isDense: true, hintText: 'off'),
+              onSubmitted: (_) => unawaited(_set(quick, key)),
+            ),
+          ),
+          TextButton(
+            key: Key('tsm-settings-hotkey-$key-set'),
+            onPressed: () => unawaited(_set(quick, key)),
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+    return TomSecretsSection(
+      key: const Key('tsm-settings-auto-type'),
+      title: 'Auto-type and quick access',
+      icon: Icons.keyboard_rounded,
+      children: [
+        Text(
+          'Kept in this machine\'s app preferences. Auto-type types a '
+          'login\'s user name and password into another program\'s window; '
+          'quick access finds a login from anywhere.',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Icon(
+              support.available ? Icons.check_circle : Icons.info_outline,
+              size: 18,
+              color: support.available
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.error,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                support.available
+                    ? 'Auto-type works on this machine.'
+                    : (support.reason ?? 'Auto-type does not work here.'),
+                key: const Key('tsm-settings-auto-type-state'),
+              ),
+            ),
+            if (support.permissionNeeded && quick.keyboard != null)
+              FilledButton.tonal(
+                key: const Key('tsm-settings-auto-type-grant'),
+                onPressed: () async {
+                  await quick.keyboard!.requestPermission();
+                  if (mounted) setState(() {});
+                },
+                child: const Text('Grant…'),
+              ),
+          ],
+        ),
+        if (quick.hotkeys != null) ...[
+          hotkey(
+            TomSecretsQuickAccessKeys.quickAccessHotkey,
+            'Quick access (anywhere)',
+          ),
+          hotkey(
+            TomSecretsQuickAccessKeys.autoTypeHotkey,
+            'Type the login of the active window',
+          ),
+          Text(
+            'Write a hotkey like Ctrl+Shift+Space (Cmd on macOS); empty '
+            'turns it off.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+        if (_error ?? quick.hotkeyError case final error?)
+          Text(
+            error,
+            key: const Key('tsm-settings-hotkey-error'),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+      ],
+    );
+  }
 }

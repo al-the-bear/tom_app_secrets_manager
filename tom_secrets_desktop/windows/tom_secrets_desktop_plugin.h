@@ -10,8 +10,10 @@
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 
+#include <map>
 #include <memory>
 #include <optional>
+#include <string>
 
 namespace tom_secrets_desktop {
 
@@ -38,6 +40,16 @@ class TomSecretsDesktopPlugin : public flutter::Plugin {
   // (PBT_APMSUSPEND) of the app's top-level window, sent to Dart as `event`.
   std::optional<LRESULT> HandleWindowProc(HWND hwnd, UINT message,
                                           WPARAM wparam, LPARAM lparam);
+
+  // The global hotkeys (`tom_secrets_desktop/hotkeys`): RegisterHotKey on
+  // the app's top-level window, WM_HOTKEY sent to Dart as `pressed` with
+  // the hotkey's id.
+  void HandleHotkeyCall(
+      const flutter::MethodCall<flutter::EncodableValue> &method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> hotkeys_;
+  std::map<int, std::string> hotkey_names_;
+  int next_hotkey_ = 1;
 
   // The registrar, for the view whose window the capture setting applies to.
   flutter::PluginRegistrarWindows *registrar_;

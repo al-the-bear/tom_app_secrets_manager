@@ -22,7 +22,9 @@ import ServiceManagement
 ///   `willSleepNotification`, each sent to Dart as `event` with
 ///   `screenLocked` or `sleep`;
 /// - `tom_secrets_desktop/autofill`: the macOS AutoFill provider's snapshot,
-///   its key and the QuickType identities (`TomSecretsAutofillChannel`).
+///   its key and the QuickType identities (`TomSecretsAutofillChannel`);
+/// - `tom_secrets_desktop/hotkeys`: the global hotkeys of quick access and
+///   auto-type (`TomSecretsHotkeys`).
 public class TomSecretsDesktopPlugin: NSObject, FlutterPlugin {
   private weak var registrar: FlutterPluginRegistrar?
 
@@ -39,6 +41,7 @@ public class TomSecretsDesktopPlugin: NSObject, FlutterPlugin {
     TomSecretsClipboard.register(messenger: registrar.messenger)
     TomSecretsLoginItem.register(messenger: registrar.messenger)
     TomSecretsSessionEvents.register(messenger: registrar.messenger)
+    TomSecretsHotkeys.register(messenger: registrar.messenger)
     if #available(macOS 11.0, *) {
       TomSecretsAutofillChannel.register(messenger: registrar.messenger)
     }

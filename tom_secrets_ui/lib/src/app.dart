@@ -18,6 +18,7 @@ import 'ports/desktop_ports.dart';
 import 'screens/first_run_wizard.dart';
 import 'screens/gate_screens.dart';
 import 'screens/main_shell.dart';
+import 'state/auto_type.dart';
 import 'state/autofill.dart';
 import 'state/first_run_model.dart';
 import 'state/health.dart';
@@ -75,11 +76,20 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
     preferences: widget.host.preferences,
     check: widget.host.breachCheck ?? _ownBreachCheck!,
   );
+  late final TomSecretsQuickAccess _quickAccess = TomSecretsQuickAccess(
+    session: _session,
+    preferences: widget.host.preferences,
+    keyboard: widget.host.keyboard,
+    hotkeys: widget.host.hotkeys,
+    window: widget.host.window,
+    macOS: widget.host.macOS,
+  );
   late final TomSecretsHostBridge _bridge = TomSecretsHostBridge(
     host: widget.host,
     connection: _connection,
     osUnlock: _osUnlock,
     health: _health,
+    quickAccess: _quickAccess,
   );
 
   @override
@@ -87,6 +97,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
     super.initState();
     _bridge.start();
     _health.start();
+    unawaited(_quickAccess.registerHotkeys());
     if (widget.connection == null) _connection.connect();
     unawaited(_autofill?.refresh());
   }
@@ -95,6 +106,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
   void dispose() {
     _bridge.dispose();
     _health.dispose();
+    _quickAccess.dispose();
     _ownBreachCheck?.close();
     _autofill?.dispose();
     _osUnlock.dispose();
@@ -111,6 +123,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
       ChangeNotifierProvider.value(value: _session),
       ChangeNotifierProvider.value(value: _osUnlock),
       ChangeNotifierProvider.value(value: _health),
+      ChangeNotifierProvider.value(value: _quickAccess),
       // Null where the host has no AutoFill (watched as nullable).
       ChangeNotifierProvider<TomSecretsAutofill?>.value(value: _autofill),
     ],

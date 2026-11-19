@@ -22,6 +22,7 @@ It goes task by task; the labels in quotes are the ones the app shows.
 - [Conflicts](#conflicts)
 - [Proposals](#proposals)
 - [Health](#health)
+- [Quick access and auto-type](#quick-access-and-auto-type)
 - [Settings](#settings)
 - [Status](#status)
 - [Troubleshooting](#troubleshooting)
@@ -66,8 +67,9 @@ window) on its first start; switch that off under
 [Settings](#settings) if you prefer.
 
 Closing the window keeps the app in the tray (the menu bar on macOS). The
-tray menu has "Open", "Lock" or "Unlock…", the number of approvals waiting,
-"Quit the app (the service keeps running)" and "Stop the service".
+tray menu has "Open", "Quick access" (while unlocked), "Lock" or "Unlock…",
+the number of approvals waiting, "Quit the app (the service keeps running)"
+and "Stop the service".
 
 The command line `tsm` comes inside the app (on macOS in
 `Tom Secrets Manager.app/Contents/Resources/tsm/bin`, elsewhere in the app
@@ -821,6 +823,75 @@ off, as Settings › This app does.
 The app keeps only whether the check is on, the age setting, and per login
 when its password was checked with the result: never a password or a hash.
 
+## Quick access and auto-type
+
+**Quick access** finds a login from anywhere: press **Ctrl+Shift+Space**
+(**Cmd+Shift+Space** on macOS), or choose "Quick access" in the tray menu. A
+search over the open vaults' logins and API tokens opens:
+
+- **Enter** copies the password (cleared from the clipboard after its
+  timeout);
+- **Shift+Enter** copies the user name;
+- **Alt+Enter** (Option+Enter on macOS) types the user name and password
+  into the window you came from (auto-type);
+- **Escape** closes it; the window hides again when it was hidden.
+
+Each line also has the three as buttons.
+
+**Auto-type** types an entry's user name and password into another
+program's window, for the places the browser extension and the system's
+autofill do not reach: desktop programs, remote desktops, terminals.
+
+- **Ctrl+Alt+A** (**Cmd+Option+A** on macOS) types into the active window
+  the entry associated with it: an entry with a window association that
+  matches the window's title, or whose title the window's title contains.
+  One such entry is typed at once; several are listed in the quick-access
+  popup to choose from; none opens it with every login.
+- The entry editor's **"Type into the window behind"** hides the app and
+  types the saved entry into the window that comes to the front.
+- Typing stops when another window comes to the front, and the app says so.
+  On macOS a secure input field (a password field, a terminal with "Secure
+  Keyboard Entry") refuses typed keys; the app says so too.
+
+**What is typed** is the entry's sequence, in KeePass's syntax (the entry
+editor's "Auto-type" section, at its end):
+
+- the default `{USERNAME}{TAB}{PASSWORD}{ENTER}`, or the entry's own
+  "Sequence", or its group's;
+- placeholders `{USERNAME}`, `{PASSWORD}`, `{TITLE}`, `{URL}`, `{NOTES}`,
+  `{TOTP}` (the current code) and `{S:field}` for any field;
+- keys `{TAB}`, `{ENTER}`, `{SPACE}`, `{BACKSPACE}`, `{ESC}`, `{UP}`,
+  `{DOWN}`, `{LEFT}`, `{RIGHT}`, `{HOME}`, `{END}`, `{PGUP}`, `{PGDN}`,
+  `{DEL}`, `{INSERT}`, `{F1}`–`{F16}`, with a count (`{TAB 2}`); `~` is
+  Enter;
+- `+` Shift, `^` Ctrl, `%` Alt, `@` the Windows key or Command, on the next
+  key or a group: `^v`, `+{TAB}`, `%(ab)`;
+- `{DELAY 500}` waits 500 ms, `{DELAY=50}` sets the pause between keys;
+- `{+}`, `{^}`, `{%}`, `{@}`, `{~}`, `{{}`, `{}}` type the character itself.
+
+**"Windows"** pairs a window title pattern with a sequence (empty: the
+entry's): `*` matches any text and `?` one character, the whole title in
+any case (`Demo Login - *`); `//…//` is a regular expression found anywhere
+(`//^ssh .*@db//`). "Auto-type this entry" turns it off for one entry.
+
+**Where it works:**
+
+- **macOS** needs the Accessibility permission: Settings › Auto-type and
+  quick access says whether it is granted, and "Grant…" opens macOS's
+  prompt (System Settings › Privacy & Security › Accessibility).
+- **Windows** types into every window except those of a program running as
+  administrator, when the app is not; the app says when Windows refused the
+  keys.
+- **Linux** only in an X11 session. Wayland, the default of current Ubuntu,
+  Fedora and most desktops, lets no program type into another's window or
+  read its title, on purpose (a keylogger could do the same); there the
+  browser extension and copying cover logins, and the hotkeys are not
+  offered.
+
+The hotkeys are changed in Settings › Auto-type and quick access: write
+them like `Ctrl+Alt+K` (`Cmd` on macOS) and press "Set"; empty turns one
+off. A hotkey another program holds is refused, with that said.
+
 ## Settings
 
 Each setting says whose it is.
@@ -855,6 +926,11 @@ the app at login, in the tray"
 autostart entry in `~/.config/autostart`),
 and "Stop the service" (programs then get no secrets until it is started and
 unlocked again).
+
+**Auto-type and quick access** (kept in this app's preferences): whether
+auto-type works here, with "Grant…" for macOS's Accessibility permission,
+and the two hotkeys (see [Quick access and
+auto-type](#quick-access-and-auto-type)).
 
 **Integrations** (this user's tool configuration on this machine): "ssh
 uses the ssh-agent" (`IdentityAgent` in `~/.ssh/config`; "For the hosts"

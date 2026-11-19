@@ -104,10 +104,24 @@ the app's, listed in [`tom_secrets_app`](../tom_secrets_app/README.md).
   pages in the system browser (`https` only).
 - **One instance**: `TomSecretsSingleInstance`: a second launch brings the
   window to the front (`app.port` in the data directory).
+- **Auto-type's keyboard** (DP-41): `tomSecretsDesktopKeyboard()`, FFI into
+  the OS, no plugin: `TomSecretsMacKeyboard` (`CGEventPost` with Unicode
+  text, the Accessibility API for the permission, its prompt and the active
+  window's title, Carbon's `IsSecureEventInputEnabled`),
+  `TomSecretsWindowsKeyboard` (`SendInput` with `KEYEVENTF_UNICODE`,
+  `GetWindowTextW`), `TomSecretsX11Keyboard` (XTest, a spare keycode for a
+  character the layout lacks, `_NET_WM_NAME`; on Wayland one that says why
+  not).
+- **Global hotkeys**: `tomSecretsDesktopHotkeys()`, this package's own code
+  (DP-32; the hotkey plugins build through CocoaPods): Carbon
+  `RegisterEventHotKey` on macOS and `RegisterHotKey` on Windows
+  (`TomSecretsChannelHotkeys`), `XGrabKey` through FFI on X11
+  (`TomSecretsX11Hotkeys`, its events read every 100 ms); none on Wayland.
 
 The platform code is in `macos/` (Swift, the channels
-`tom_secrets_desktop/capture`, `/clipboard`, `/login`) and `windows/` (C++,
-`/capture`).
+`tom_secrets_desktop/capture`, `/clipboard`, `/login`, `/session`,
+`/autofill`, `/hotkeys`) and `windows/` (C++, `/capture`, `/session`,
+`/hotkeys`).
 
 ## Usage
 
@@ -158,6 +172,9 @@ The admin key is kept in the OS keychain under the service name
 - Pairing discovery on Linux needs `avahi-daemon` running; without it the
   other machine types the address.
 - Start at login on macOS needs macOS 13 or later.
+- Auto-type needs the Accessibility permission on macOS; on Windows it
+  cannot type into a program running as administrator; on Linux it needs an
+  X11 session and `libxtst6` (Wayland: no auto-type and no global hotkeys).
 - The AutoFill port answers "not configured" in a build without the Apple
   team (no App Group, no keychain access group).
 

@@ -22,7 +22,7 @@ dependencies:
   # without an offline cache: the vaults are held in memory only. No service
   # runs on a phone (part-mobile).
   tom_secrets_service: ^0.16.0
-  tom_secrets_core: ^0.2.11
+  tom_secrets_core: ^0.2.12
   tom_secrets_client: ^0.2.11
   tom_core_storage: ^0.1.3
   # The keychain items (key files, repository keys, GitHub tokens) and the

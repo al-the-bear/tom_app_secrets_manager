@@ -115,6 +115,18 @@ offering the import and the pairing.
   logins the browser extension and git's credential helper proposed, each
   updating a login of that site and user, saved as a new login in a vault
   chosen, or dropped; a known password said so.
+- `TomSecretsQuickAccess`, `TomSecretsQuickAccessDialog` and
+  `TomSecretsAutoTyper` (part-app, part-password-manager, DP-41): the
+  quick-access popup a global hotkey or the tray opens (Enter copies the
+  password, Shift+Enter the user name, Alt+Enter types it into the window it
+  was opened for), the global auto-type hotkey (the entry associated with
+  the active window typed at once, several listed), the entry editor's
+  Auto-type section (sequence, window associations, "Type into the window
+  behind"), Settings › Auto-type and quick access (the state with Grant…,
+  the hotkeys). The typer runs `tom_secrets_core`'s parsed sequence through
+  the host's `TomSecretsKeyboard`, stopping when the window changes, on
+  secure input and when the system refuses keys; hotkeys through
+  `TomSecretsHotkeys` (`TomSecretsHost.keyboard`, `.hotkeys`, `.macOS`).
 - `TomSecretsHealthView` and `TomSecretsHealth`: The Health screen
   (part-password-manager, DP-39, DP-179): weak (zxcvbn), reused, old (the
   age chosen, one year by default), expiring and breached passwords and

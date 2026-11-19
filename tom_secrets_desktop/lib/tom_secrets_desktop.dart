@@ -6,7 +6,11 @@
 /// Linux.
 library;
 
+export 'src/auto_type.dart';
 export 'src/autofill.dart';
+export 'src/keyboard_macos.dart';
+export 'src/keyboard_windows.dart';
+export 'src/keyboard_x11.dart';
 export 'src/browser.dart';
 export 'src/device_files.dart';
 export 'src/platform_channels.dart';

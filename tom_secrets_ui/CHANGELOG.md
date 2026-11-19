@@ -2,6 +2,13 @@
 
 ## 0.1.0
 
+- Quick access and auto-type (part-app, part-password-manager, DP-41):
+  `TomSecretsQuickAccess` (the popup from a global hotkey or the tray, the
+  global auto-type hotkey), `TomSecretsQuickAccessDialog`,
+  `TomSecretsAutoTyper` over the host's `TomSecretsKeyboard`, the
+  `TomSecretsHotkeys` port and `TomSecretsHotkey`; the entry editor's
+  Auto-type section; Settings › Auto-type and quick access; the tray's
+  Quick access; `TomSecretsHost.keyboard`, `.hotkeys`, `.macOS`.
 - The other imports and the exports (part-password-manager, DP-40): the
   Import screen reads Bitwarden JSON (asking a protected export's
   password), the browsers' CSVs and KeePass files (as a group or merged,

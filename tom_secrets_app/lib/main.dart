@@ -91,6 +91,11 @@ Future<void> main(List<String> args) async {
     osUnlock: tomSecretsDesktopOsUnlock(),
     sessionEvents: TomSecretsDesktopSessionEvents(),
     autofill: tomSecretsDesktopAutofill(),
+    // Auto-type (FFI into the OS; X11 only on Linux, DP-41) and the global
+    // hotkeys of quick access and auto-type (part-app).
+    keyboard: tomSecretsDesktopKeyboard(),
+    hotkeys: tomSecretsDesktopHotkeys(),
+    macOS: Platform.isMacOS,
     preferences: await TomSecretsFilePreferences.open(
       File('$data${Platform.pathSeparator}app-preferences.json'),
     ),

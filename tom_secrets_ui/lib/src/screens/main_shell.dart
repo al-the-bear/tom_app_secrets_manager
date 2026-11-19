@@ -20,6 +20,7 @@ import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
 
 import '../ports/desktop_ports.dart';
 import '../state/entry_requests.dart';
+import '../state/auto_type.dart';
 import '../state/health.dart';
 import '../state/integrations.dart';
 import '../state/reminders.dart';
@@ -34,6 +35,7 @@ import 'keys_view.dart';
 import 'pairing_view.dart';
 import 'health_view.dart';
 import 'proposals_view.dart';
+import 'quick_access.dart';
 import 'environments_view.dart';
 import 'settings_view.dart';
 import 'status_view.dart';
@@ -98,6 +100,24 @@ class _MainShellState extends State<TomSecretsMainShell> {
   TomSecretsSession? _session;
   TomSecretsHealth? _health;
   int _healthShown = 0;
+  TomSecretsQuickAccess? _quickAccess;
+  TomSecretsQuickAccessRequest? _quickShown;
+
+  /// Quick access asked for its popup (a hotkey, the tray): shown once.
+  void _showQuickAccess() {
+    final request = _quickAccess?.request;
+    if (request == null || identical(request, _quickShown) || !mounted) {
+      return;
+    }
+    _quickShown = request;
+    unawaited(
+      tomSecretsShowQuickAccess(
+        context,
+        request: request,
+        clipboard: widget.clipboard,
+      ),
+    );
+  }
 
   /// A notification of the breach check was clicked: show Health.
   void _showHealth() {
@@ -132,6 +152,12 @@ class _MainShellState extends State<TomSecretsMainShell> {
       _requests = requests?..addListener(_showRequested);
       _session = session..addListener(_showRequested);
       WidgetsBinding.instance.addPostFrameCallback((_) => _showRequested());
+    }
+    final quick = context.read<TomSecretsQuickAccess>();
+    if (!identical(quick, _quickAccess)) {
+      _quickAccess?.removeListener(_showQuickAccess);
+      _quickAccess = quick..addListener(_showQuickAccess);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showQuickAccess());
     }
     final health = context.read<TomSecretsHealth>();
     if (!identical(health, _health)) {
@@ -196,6 +222,7 @@ class _MainShellState extends State<TomSecretsMainShell> {
     _session?.removeListener(_showRequested);
     _connection?.removeListener(_onConnection);
     _health?.removeListener(_showHealth);
+    _quickAccess?.removeListener(_showQuickAccess);
     _search.dispose();
     _query.dispose();
     super.dispose();

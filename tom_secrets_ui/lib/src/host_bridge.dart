@@ -12,6 +12,7 @@ library;
 import 'dart:async';
 
 import 'ports/desktop_ports.dart';
+import 'state/auto_type.dart';
 import 'state/health.dart';
 import 'state/os_unlock.dart';
 import 'state/proposals.dart';
@@ -38,6 +39,7 @@ final class TomSecretsHostBridge {
     required this.connection,
     this.osUnlock,
     this.health,
+    this.quickAccess,
   });
 
   /// The host.
@@ -51,6 +53,10 @@ final class TomSecretsHostBridge {
 
   /// The health report, or null.
   final TomSecretsHealth? health;
+
+  /// Quick access and auto-type, or null.
+  final TomSecretsQuickAccess? quickAccess;
+  TomSecretsAutoTypeOutcome? _notifiedOutcome;
 
   StreamSubscription<TomSecretsBreachRun>? _breachRuns;
 
@@ -87,7 +93,30 @@ final class TomSecretsHostBridge {
       const Duration(hours: 1),
       (_) => unawaited(remind()),
     );
+    quickAccess?.addListener(_onQuickAccess);
     _update();
+  }
+
+  /// An auto-type run that did not type everything is said in a
+  /// notification (the window is hidden while it types).
+  void _onQuickAccess() {
+    final outcome = quickAccess?.lastOutcome;
+    if (outcome == null || identical(outcome, _notifiedOutcome)) return;
+    _notifiedOutcome = outcome;
+    if (outcome.result == TomSecretsAutoTypeResult.typed) return;
+    final notifier = host.notifier;
+    if (notifier == null) return;
+    unawaited(
+      notifier.notify(
+        title: outcome.result == TomSecretsAutoTypeResult.stopped
+            ? 'Auto-type stopped'
+            : 'Auto-type did not start',
+        body: outcome.message ?? '',
+        onClick: host.window == null
+            ? null
+            : () => unawaited(host.window!.show()),
+      ),
+    );
   }
 
   /// Shows a run of the breach check as a notification (DP-39), whether the
@@ -225,6 +254,11 @@ final class TomSecretsHostBridge {
               'Open',
               onSelected: () => unawaited(window.show()),
             ),
+          if (attached && !c.locked && quickAccess != null)
+            TomSecretsTrayItem(
+              'Quick access',
+              onSelected: () => unawaited(quickAccess!.open()),
+            ),
           if (attached && !c.locked)
             TomSecretsTrayItem(
               'Lock',
@@ -348,6 +382,7 @@ final class TomSecretsHostBridge {
   void dispose() {
     connection.removeListener(_update);
     _daily?.cancel();
+    quickAccess?.removeListener(_onQuickAccess);
     unawaited(_breachRuns?.cancel());
     unawaited(_events?.cancel());
     unawaited(_session?.cancel());

@@ -21,6 +21,7 @@ import 'package:tom_host_ui/tom_host_ui.dart' show TomFlutterClipboardPort;
 import 'package:tom_secrets_core/tom_secrets_core.dart'
     show TomSecretsBreachCheck;
 
+import '../state/auto_type.dart';
 import '../state/autofill.dart';
 import '../state/entry_requests.dart';
 import 'service_host.dart';
@@ -312,6 +313,9 @@ final class TomSecretsHost {
     this.entryRequests,
     this.autofill,
     this.breachCheck,
+    this.keyboard,
+    this.hotkeys,
+    this.macOS = false,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -330,6 +334,16 @@ final class TomSecretsHost {
   /// DP-39); null: the Have I Been Pwned range API over a client of the
   /// app's own.
   final TomSecretsBreachCheck? breachCheck;
+
+  /// The keyboard auto-type types with (part-password-manager, DP-41), or
+  /// null where the app has none (the phone).
+  final TomSecretsKeyboard? keyboard;
+
+  /// The global hotkeys of quick access and auto-type, or null.
+  final TomSecretsHotkeys? hotkeys;
+
+  /// Whether the app runs on macOS (the default hotkeys use Cmd).
+  final bool macOS;
 
   /// The secrets service.
   final TomSecretsServiceHost service;
