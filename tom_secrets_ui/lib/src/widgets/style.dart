@@ -110,6 +110,8 @@ Color tomSecretsTypeColour(TomSecretsEntryType type) => switch (type) {
   TomSecretsEntryType.sshKey => const Color(0xFF5E35B1),
   TomSecretsEntryType.certificate => const Color(0xFF00838F),
   TomSecretsEntryType.pgpKey => const Color(0xFF6D4C41),
+  TomSecretsEntryType.memberKey => const Color(0xFFC2185B),
+  TomSecretsEntryType.member => const Color(0xFFAD1457),
   TomSecretsEntryType.login => const Color(0xFF1E88E5),
 };
 
@@ -120,6 +122,8 @@ IconData tomSecretsTypeIcon(TomSecretsEntryType type) => switch (type) {
   TomSecretsEntryType.sshKey => Icons.terminal_rounded,
   TomSecretsEntryType.certificate => Icons.verified_rounded,
   TomSecretsEntryType.pgpKey => Icons.enhanced_encryption_rounded,
+  TomSecretsEntryType.memberKey => Icons.badge_rounded,
+  TomSecretsEntryType.member => Icons.group_rounded,
   TomSecretsEntryType.login => Icons.person_rounded,
 };
 

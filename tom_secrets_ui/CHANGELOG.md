@@ -2,6 +2,14 @@
 
 ## 0.1.0
 
+- The Sharing screen (part-sharing, phase C): the member key, a hybrid
+  `age` v1.3 key made into the primary vault the first time the screen
+  opens, shown as fingerprint, text and QR code, copied or saved as an
+  `age` recipients file; the directory of members, added from a pasted
+  key, a file or a QR code, fingerprints compared, classical keys kept
+  for exports only (`TomSecretsSharingView`, the session's member-key
+  operations). The entry types `member-key` and `member` in the vault
+  browser.
 - Quick access and auto-type (part-app, part-password-manager, DP-41):
   `TomSecretsQuickAccess` (the popup from a global hotkey or the tray, the
   global auto-type hotkey), `TomSecretsQuickAccessDialog`,

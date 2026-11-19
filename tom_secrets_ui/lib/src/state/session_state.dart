@@ -1706,6 +1706,127 @@ class TomSecretsSession extends ChangeNotifier {
     return file == null ? null : _groupOf(file, uuid);
   }
 
+  // Member keys (part-sharing, phase C), in the primary vault's
+  // `tsm.sharing` group.
+
+  KdbxFile? get _primaryFile => _vaults.values.firstOrNull?.file;
+
+  /// Why the primary cannot take a member key or a member now (read-only,
+  /// not open), or null.
+  String? get sharingReadOnlyReason {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) return 'the primary vault is not open';
+    return readOnlyReason(primary.store);
+  }
+
+  /// The `member-key` entry in use (the newest), or null before the user
+  /// has one.
+  TomSecretsEntryRef? get memberKeyEntry {
+    final primary = _vaults.values.firstOrNull;
+    final entry = primary == null
+        ? null
+        : tomSecretsMemberKeyEntries(primary.file).firstOrNull;
+    return entry == null
+        ? null
+        : TomSecretsEntryRef(primary!.store, entry.uuid);
+  }
+
+  /// The user's member key's public key, read without its identity.
+  TomSecretsAgeRecipient? get memberKeyRecipient {
+    final ref = memberKeyEntry;
+    final entry = ref == null ? null : entryOf(ref);
+    return entry == null ? null : tomSecretsMemberKeyRecipientOf(entry);
+  }
+
+  /// When the member key was made.
+  DateTime? get memberKeyCreated {
+    final ref = memberKeyEntry;
+    return ref == null ? null : entryOf(ref)?.times.creationTime.get();
+  }
+
+  /// The name the user gives with their member key (the entry's
+  /// `UserName`), shown in the published key file.
+  String get memberName {
+    final ref = memberKeyEntry;
+    final entry = ref == null ? null : entryOf(ref);
+    return entry?.getString(KdbxKeyCommon.USER_NAME)?.getText() ?? '';
+  }
+
+  /// Makes the user's member key (a hybrid `age` key, DP-177) into the
+  /// primary vault and saves it; the identity never leaves the vault.
+  /// Refused when the user has one already.
+  Future<TomSecretsAgeRecipient> createMemberKey({String name = ''}) async {
+    final file = _primaryFile;
+    if (file == null) throw StateError('no primary is open');
+    final why = sharingReadOnlyReason;
+    if (why != null) throw StateError(why);
+    if (tomSecretsMemberKeyEntries(file).isNotEmpty) {
+      throw StateError('a member key exists already');
+    }
+    final key = await TomSecretsMemberKey.generate();
+    try {
+      final entry = tomSecretsAddMemberKey(file, key);
+      if (name.trim().isNotEmpty) {
+        entry.setString(KdbxKeyCommon.USER_NAME, PlainValue(name.trim()));
+      }
+      await save(_vaults.values.first.store);
+      return key.recipient;
+    } finally {
+      key.dispose();
+    }
+  }
+
+  /// Sets the name given with the member key, and saves.
+  Future<void> setMemberName(String name) async {
+    final ref = memberKeyEntry;
+    if (ref == null) throw StateError('no member key');
+    await updateEntry(
+      ref,
+      (e) => e.modify(
+        () => e.setString(KdbxKeyCommon.USER_NAME, PlainValue(name.trim())),
+      ),
+    );
+  }
+
+  /// The directory of members (the public keys received), by name.
+  List<TomSecretsMember> get members {
+    final file = _primaryFile;
+    return file == null ? const [] : tomSecretsMembers(file);
+  }
+
+  /// Adds a received public key to the directory as [name] ([checked]: the
+  /// day the user compared its fingerprint with its owner) and saves the
+  /// primary. Throws [TomSecretsMemberKeyException] for a key the directory
+  /// holds, the user's own, or an invalid one.
+  Future<void> addMember(
+    String name,
+    TomSecretsAgeRecipient recipient, {
+    DateTime? checked,
+  }) async {
+    final file = _primaryFile;
+    if (file == null) throw StateError('no primary is open');
+    final why = sharingReadOnlyReason;
+    if (why != null) throw StateError(why);
+    await tomSecretsAddMember(
+      file,
+      name: name,
+      recipient: recipient,
+      checked: checked,
+    );
+    await save(_vaults.values.first.store);
+  }
+
+  /// Records that the user compared [member]'s fingerprint today, and saves.
+  Future<void> markMemberChecked(TomSecretsMember member) => updateEntry(
+    TomSecretsEntryRef(_vaults.values.first.store, member.entry.uuid),
+    (e) => tomSecretsMarkMemberChecked(e, DateTime.now()),
+  );
+
+  /// Removes [member] from the directory (to the recycle bin), and saves.
+  Future<void> removeMember(TomSecretsMember member) => deleteEntries([
+    TomSecretsEntryRef(_vaults.values.first.store, member.entry.uuid),
+  ]);
+
   void _reindex() {
     _indexRevision++;
     _resolution = null;

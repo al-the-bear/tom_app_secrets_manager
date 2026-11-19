@@ -38,6 +38,7 @@ import 'proposals_view.dart';
 import 'quick_access.dart';
 import 'environments_view.dart';
 import 'settings_view.dart';
+import 'sharing_view.dart';
 import 'status_view.dart';
 import 'vault_browser.dart';
 
@@ -66,6 +67,10 @@ enum TomSecretsDestination {
 
   /// Pairing another device, the paired devices (part-sharing).
   pairing,
+
+  /// The user's member key and the directory of members (part-sharing,
+  /// phase C).
+  sharing,
 
   /// Importing an export of another password manager.
   import,
@@ -374,6 +379,11 @@ class _MainShellState extends State<TomSecretsMainShell> {
                     label: Text('Pairing'),
                   ),
                   const NavigationRailDestination(
+                    icon: Icon(Icons.group_outlined),
+                    selectedIcon: Icon(Icons.group_rounded),
+                    label: Text('Sharing'),
+                  ),
+                  const NavigationRailDestination(
                     icon: Icon(Icons.download_outlined),
                     selectedIcon: Icon(Icons.download_rounded),
                     label: Text('Import'),
@@ -553,6 +563,8 @@ class _MainShellState extends State<TomSecretsMainShell> {
                           const TomSecretsKeysView(),
                         TomSecretsDestination.pairing =>
                           const TomSecretsPairingView(),
+                        TomSecretsDestination.sharing =>
+                          const TomSecretsSharingView(),
                         TomSecretsDestination.import =>
                           const TomSecretsImportView(),
                         TomSecretsDestination.settings =>

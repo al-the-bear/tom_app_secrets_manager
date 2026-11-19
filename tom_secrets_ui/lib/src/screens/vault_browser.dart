@@ -496,6 +496,8 @@ String tomSecretsTypeName(TomSecretsEntryType type) => switch (type) {
   TomSecretsEntryType.sshKey => 'SSH key',
   TomSecretsEntryType.certificate => 'Certificate',
   TomSecretsEntryType.pgpKey => 'PGP key',
+  TomSecretsEntryType.memberKey => 'Member key',
+  TomSecretsEntryType.member => 'Member',
   TomSecretsEntryType.login => 'Login',
 };
 

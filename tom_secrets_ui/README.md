@@ -171,7 +171,7 @@ offering the import and the pairing.
 - `TomSecretsMainShell`: The rail (Vaults, Environments, Conflicts with the
   count of conflicted entries, Clients with the count of waiting approvals,
   Proposals with the count of proposed logins, Health, Keys with the count
-  of keys due, Pairing, Import, Settings, Status); a banner while
+  of keys due, Pairing, Sharing, Import, Settings, Status); a banner while
   a key is due (Snooze until its next reminder step, Open Keys); a new approval
   prompt shown on top at once, one at a time; the top bar (search over every
   vault, tree/list, vault-aware/uniform, the sync status of the GitHub vaults,
@@ -286,6 +286,15 @@ offering the import and the pairing.
   approval link and those that take the key change from the vault).; at the top
   "GitHub sign-in (this machine)" (`TomSecretsGitHubSignInSection`): the GitHub
   App named once, the device flow's code, signed in or a pasted token instead
+- `TomSecretsSharingView`: The Sharing screen (part-sharing, phase C; desktop
+  only): the member key made into the primary vault's `tsm.sharing` group the
+  first time the screen opens (`TomSecretsSession.createMemberKey`, a hybrid
+  `age` v1.3 key), shown as its fingerprint, the `age1pq1…` text and a QR code,
+  copied or saved as an `age` recipients file with the user's name; the
+  members (`TomSecretsSession.members`, `addMember`, `markMemberChecked`,
+  `removeMember`): a key pasted, opened from a file (several keys at once) or
+  scanned, its fingerprint compared, a classical `age1…` key marked for exports
+  only, a duplicate or the own key refused.
 - `TomSecretsPairingView`: The giving side of a pairing (part-sharing), over
   `TomSecretsPairingModel`: "Pair a device" opens a `TomSecretsPairingWindow` on
   this machine's LAN and VPN addresses (`tomSecretsPairingAddresses`, or the

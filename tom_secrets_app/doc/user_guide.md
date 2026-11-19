@@ -19,6 +19,7 @@ It goes task by task; the labels in quotes are the ones the app shows.
 - [Exporting](#exporting)
 - [Keys](#keys)
 - [Pairing another device](#pairing-another-device)
+- [Sharing](#sharing)
 - [Conflicts](#conflicts)
 - [Proposals](#proposals)
 - [Health](#health)
@@ -246,7 +247,7 @@ The rail on the left holds the screens: **Vaults**, **Environments**,
 **Conflicts** (with the number of conflicted entries), **Clients** (with the
 number of approvals waiting), **Proposals** (with the number of logins
 proposed), **Health**, **Keys** (with the number of keys due),
-**Pairing**, **Import**, **Settings** and **Status**.
+**Pairing**, **Sharing**, **Import**, **Settings** and **Status**.
 
 The top bar holds:
 
@@ -744,6 +745,39 @@ paired, the key ids it received and its key-pair dates. **"Revoke"** ends
 the mutual approvals. The device keeps the keys it received: if it is lost
 or no longer trusted, rotate those keys on the [Keys](#keys) screen (the
 confirmation names them).
+
+## Sharing
+
+**Sharing** holds what you share with other people. The first time you open
+it, the app makes your **member key** and keeps it in your primary vault,
+which brings it to your other devices when you pair them.
+
+- **Your member key** is a hybrid `age` key (X25519 + ML-KEM-768), safe
+  against a future quantum computer. Its public half, `age1pq1…`, is about
+  1,960 characters: give it as a file, paste it into a message, or let
+  someone scan the QR code. "Copy" puts it on the clipboard; "Save as
+  file…" writes `<your name>.age-recipient.txt`, which the `age` command
+  line (v1.3.0 or later) also reads (`age -R <file>`). "Your name, written
+  into the key file" names you in that file.
+- **The fingerprint** (five groups of four characters) is what you and the
+  other person compare, by phone or in person, before either of you trusts
+  a key. The key itself is too long to read out.
+
+**Members** are the public keys other people gave you. **"Add a member…"**
+takes a key pasted into "Their public key", one from "Open file…" (a key
+file names its owner; a file with several keys adds each), or, where the
+machine has a camera, "Scan QR code". The dialog shows the key's
+fingerprint: tick "I compared the fingerprint with them, by phone or in
+person" once you have. A key in the list, or your own, is refused.
+
+- A member shows its fingerprint and when it was checked, or "fingerprint
+  not checked yet" with **"Compare fingerprint"**, which shows it to read
+  out: "The same" records today, "Not the same" warns you not to use it.
+- A classical key (`age1…`, without `pq`) is kept for exports to that
+  person only: it is not protected against a future quantum computer and
+  cannot join shared vaults, so ask them to make a hybrid one
+  (`age-keygen -pq`).
+- The bin icon removes a member (to the primary vault's recycle bin).
 
 ## Conflicts
 
