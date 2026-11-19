@@ -15,7 +15,8 @@ It goes task by task; the labels in quotes are the ones the app shows.
 - [The vault browser](#the-vault-browser)
 - [System secrets](#system-secrets)
 - [Approvals](#approvals)
-- [Importing from 1Password and Enpass](#importing-from-1password-and-enpass)
+- [Importing](#importing)
+- [Exporting](#exporting)
 - [Keys](#keys)
 - [Pairing another device](#pairing-another-device)
 - [Conflicts](#conflicts)
@@ -539,16 +540,31 @@ A lasting answer also needs who asks and the secret, as that machine shows
 them (`tsm approvals`). The code is valid for a few minutes (see
 [Settings](#settings)).
 
-## Importing from 1Password and Enpass
+## Importing
 
-Open **Import** (also offered at the end of the First run wizard).
+Open **Import** (also offered at the end of the First run wizard). It reads:
 
-1. **"The export"**: export from 1Password 8 (File › Export, as 1PUX,
-   recommended, or CSV) or from Enpass (File › Export, as JSON, recommended,
-   or CSV, one vault per file), then "Choose the export…". The format is
-   taken from the file extension; for a CSV, choose which app made it. For
-   an Enpass CSV, name the Enpass vault the file holds. Keep the export
-   outside every repository: it holds every password in plaintext.
+- **1Password 8**: File › Export, as 1PUX (recommended) or CSV.
+- **Enpass**: File › Export, as JSON (recommended) or CSV, one vault per
+  file; name the Enpass vault the file holds.
+- **Bitwarden**: Tools › Export vault, as JSON, or as "JSON (Encrypted)"
+  with "Password protected", whose password the screen asks for. The
+  "Account restricted" kind is encrypted with your Bitwarden account's key
+  and only Bitwarden reads it: export again as one of the others. Folders
+  become groups, cards go into `Credit Cards` and identities into
+  `Identities` (their fields as custom fields), SSH keys become SSH key
+  entries; passkeys are named as not imported.
+- **Chrome, Edge, Firefox, Safari**: the browser's password manager ›
+  Export passwords (CSV). Firefox has no titles, so the site is the title.
+- **KeePass, KeePassXC** and every other tool writing KDBX: the KDBX file
+  itself (see [A KeePass file](#a-keepass-file)).
+
+Keep an export outside every repository: it holds every password in
+plaintext.
+
+1. **"The export"**: "Choose the export…". The format comes from the file
+   extension and, where several fit (a JSON, a CSV), from what the file
+   holds; the chips show it and let you choose another.
 2. **"Where each vault goes"**: for each vault of the export, the vault and
    the "Group (a/b/c)" it goes to; "Into a new vault…" creates the vault
    first (see [A new vault](#a-new-vault)). Tick "Import the archived items
@@ -558,8 +574,43 @@ Open **Import** (also offered at the end of the First run wizard).
    imported), "What the format loses", the "Largest attachments" and every
    item. **"Import"** writes it and shows the report.
 
-Importing the same export again updates what changed and skips the rest.
-Afterwards, "Delete the export".
+Importing the same export again updates what changed and skips the rest; a
+CSV row is recognised by its title, address and user name, whichever app
+wrote the CSV. Afterwards, "Delete the export".
+
+### A KeePass file
+
+For a `.kdbx` file the screen asks for its master password (and "Key
+file…" when it has one), and how to bring it in:
+
+- **"As a group"**: its groups and entries are copied into a new group of
+  the vault chosen (named after the file; another name can be typed), each
+  entry with its history and attachments.
+- **"Merged (a copy of this vault)"**: for a copy of the same vault edited
+  elsewhere, for example in KeePassXC or an older backup. It is merged entry
+  by entry like two machines' edits: what only one side holds is kept, an
+  entry changed on both sides keeps the newer state with the other in its
+  history and shows under [Conflicts](#conflicts). A file of another vault
+  is refused: import it as a group.
+
+## Exporting
+
+A vault's menu (the three dots beside it in the tree) or a group's menu ›
+**"Export…"** writes it as:
+
+- **KDBX (KeePass)**: a copy under a new master password of its own, for
+  KeePass and every tool reading KDBX. The only export that is encrypted.
+- **CSV**: one row per entry (title, URL, user name, password, notes, the
+  TOTP as an `otpauth://` URI, the group and the tags), for other tools.
+- **Bitwarden (JSON)**: Bitwarden's own JSON, so a move to Bitwarden keeps
+  the folders, the item types and the custom fields.
+
+CSV and Bitwarden JSON are shown with a warning first: the file holds every
+password in plaintext. Save it where nothing syncs or backs it up, and
+delete it once imported. After the export the dialog names what the format
+did not carry (for example attachments, expiry dates, tags other than the
+favourite). The product's own groups (`.tom-secrets`, the grants) and the
+recycle bin are never exported. Enpass is served by the CSV for now.
 
 ## Keys
 

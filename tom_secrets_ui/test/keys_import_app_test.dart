@@ -218,6 +218,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tsm-import-pick')));
       await wait(tester);
+      // A .json can be Enpass's or Bitwarden's, and this content tells
+      // neither: the user picks.
+      expect(find.byKey(const Key('tsm-import-error')), findsNothing);
+      await tester.tap(find.byKey(const Key('tsm-import-format-enpassJson')));
+      await wait(tester);
       expect(
         tester.widget<Text>(find.byKey(const Key('tsm-import-error'))).data,
         startsWith('Not a Enpass (JSON) export'),

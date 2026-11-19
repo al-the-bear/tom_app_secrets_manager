@@ -1,19 +1,26 @@
 // Copyright (c) 2026 Peter Nicolai Alexis Kyaw
 // SPDX-License-Identifier: BSD-3-Clause
 
-/// The Import screen (part-app, Screens › Import, phase A): pick the export
-/// (1Password's 1PUX or CSV, Enpass's JSON or CSV), choose where each of the
+/// The Import screen (part-app, Screens › Import): pick the export
+/// (1Password's 1PUX or CSV, Enpass's JSON or CSV, Bitwarden's JSON — a
+/// password-protected one opened with its password —, a browser's CSV), or
+/// another KDBX file (imported as a group or merged, opened with its own
+/// password or key file). For an export: choose where each of the
 /// source's vaults goes (a group of a vault, so several source vaults can go
 /// to groups of one vault or to different vault files), preview the mapping
 /// and what the format loses, run, read the report. Re-importing skips what
 /// was imported already. Afterwards the app reminds the user that the export
-/// holds every password in plaintext and offers to delete it.
+/// holds every password in plaintext and offers to delete it. Exports are
+/// made from a vault's or group's menu (`tomSecretsShowExportDialog`).
 library;
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tom_core_sync/tom_core_sync.dart' show TomMergeRefusedException;
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
@@ -59,10 +66,23 @@ class _ImportState extends State<TomSecretsImportView> {
   TomSecretsImportReport? _report;
   bool _running = false;
   bool _exportGone = false;
+  final _exportPassword = TextEditingController();
+  bool _needsPassword = false;
+  // The KeePass import.
+  final _kdbxPassword = TextEditingController();
+  final _kdbxName = TextEditingController();
+  Uint8List? _kdbxKeyFile;
+  String? _kdbxKeyFileName;
+  bool _kdbxMerge = false;
+  String? _kdbxStore;
+  String? _kdbxResult;
 
   @override
   void dispose() {
     _vaultName.dispose();
+    _exportPassword.dispose();
+    _kdbxPassword.dispose();
+    _kdbxName.dispose();
     for (final c in _groups.values) {
       c.dispose();
     }
@@ -79,15 +99,31 @@ class _ImportState extends State<TomSecretsImportView> {
     if (path == null || !mounted) return;
     final name = path.split(RegExp(r'[/\\]')).last;
     final formats = tomSecretsImportFormatsOf(name);
+    TomSecretsImportFormat? guess;
+    if (formats.length == 1) {
+      guess = formats.single;
+    } else {
+      // The content tells several formats apart (a JSON of Bitwarden's or
+      // Enpass's, a CSV of a browser's); the chips stay for the user.
+      final bytes = await files.read(path);
+      guess = tomSecretsGuessImportFormat(formats, bytes);
+      bytes.fillRange(0, bytes.length, 0);
+    }
+    if (!mounted) return;
+    final dot = name.lastIndexOf('.');
     setState(() {
       _path = path;
       _fileName = name;
       _formats = formats;
-      _format = formats.length == 1 ? formats.single : null;
+      _format = guess;
       _source = null;
       _report = null;
       _exportGone = false;
       _error = null;
+      _needsPassword = false;
+      _exportPassword.clear();
+      _kdbxResult = null;
+      _kdbxName.text = dot > 0 ? name.substring(0, dot) : name;
     });
     if (_format != null) await _read();
   }
@@ -98,16 +134,45 @@ class _ImportState extends State<TomSecretsImportView> {
     final path = _path;
     final format = _format;
     if (files == null || path == null || format == null) return;
+    if (format.isKdbx) {
+      // Opened at the import, with its own key.
+      setState(() {
+        _source = null;
+        _report = null;
+        _error = null;
+      });
+      return;
+    }
     try {
       final bytes = await files.read(path);
-      final source = tomSecretsReadExport(
-        format,
-        bytes,
-        vaultName: _vaultName.text.trim().isEmpty
-            ? 'Vault'
-            : _vaultName.text.trim(),
-      );
-      bytes.fillRange(0, bytes.length, 0);
+      if (format == TomSecretsImportFormat.bitwardenJson &&
+          tomSecretsBitwardenNeedsPassword(
+            utf8.decode(bytes, allowMalformed: true),
+          ) &&
+          _exportPassword.text.isEmpty) {
+        bytes.fillRange(0, bytes.length, 0);
+        if (mounted) {
+          setState(() {
+            _needsPassword = true;
+            _source = null;
+            _error = null;
+          });
+        }
+        return;
+      }
+      final TomSecretsImportSource source;
+      try {
+        source = await tomSecretsReadExport(
+          format,
+          bytes,
+          vaultName: _vaultName.text.trim().isEmpty
+              ? 'Vault'
+              : _vaultName.text.trim(),
+          password: _exportPassword.text,
+        );
+      } finally {
+        bytes.fillRange(0, bytes.length, 0);
+      }
       final writable = [
         for (final v in session.vaults)
           if (session.readOnlyReason(v.store) == null) v.store,
@@ -136,8 +201,89 @@ class _ImportState extends State<TomSecretsImportView> {
     }
   }
 
+  /// Opens the KDBX file with its key and imports it as chosen.
+  Future<void> _importKdbx() async {
+    final files = context.read<TomSecretsHost>().files;
+    final session = context.read<TomSecretsSession>();
+    final path = _path;
+    final store = _kdbxStore;
+    if (files == null || path == null || store == null) return;
+    setState(() {
+      _running = true;
+      _error = null;
+      _kdbxResult = null;
+    });
+    try {
+      final bytes = await files.read(path);
+      final KdbxFile source;
+      try {
+        source = await KdbxFormat().read(
+          bytes,
+          tomSecretsVaultCredentials(
+            password: _kdbxPassword.text.isEmpty ? null : _kdbxPassword.text,
+            keyFile: _kdbxKeyFile,
+          ),
+        );
+      } on KdbxInvalidKeyException {
+        if (mounted) {
+          setState(() => _error = 'Wrong password or key file for $_fileName.');
+        }
+        return;
+      } on Object catch (e) {
+        if (mounted) setState(() => _error = 'Not a KDBX file: $e');
+        return;
+      }
+      if (_kdbxMerge) {
+        final r = await session.importKdbxMerged(source, store: store);
+        _kdbxResult = r.isClean
+            ? 'Merged into $store: nothing to settle.'
+            : 'Merged into $store: ${r.conflicts.length} conflicts (under '
+                  'Conflicts), ${r.editsAgainstDeletion.length} edits kept '
+                  'against a deletion, ${r.keptGroups.length} groups kept.';
+      } else {
+        final r = await session.importKdbxAsGroup(
+          source,
+          store: store,
+          name: _kdbxName.text.trim().isEmpty
+              ? 'KeePass'
+              : _kdbxName.text.trim(),
+        );
+        _kdbxResult =
+            '${r.entries} entries in ${r.groups} groups copied into '
+            '$store › ${r.group.join(' › ')}.';
+      }
+    } on TomMergeRefusedException {
+      _error =
+          '$_fileName is another vault, not a copy of $store: import it as '
+          'a group.';
+    } on TomSecretsAdminException catch (e) {
+      _error = 'The import was not saved: ${tomSecretsDescribeAdminError(e)}';
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  Future<void> _pickKeyFile() async {
+    final files = context.read<TomSecretsHost>().files;
+    if (files == null) return;
+    final path = await files.choosePath(save: false);
+    if (path == null) return;
+    final bytes = await files.read(path);
+    if (!mounted) return;
+    setState(() {
+      _kdbxKeyFile = bytes;
+      _kdbxKeyFileName = path.split(RegExp(r'[/\\]')).last;
+    });
+  }
+
   void _notThe(TomSecretsImportFormat format, String why) {
-    if (mounted) setState(() => _error = 'Not a ${format.label} export: $why');
+    if (!mounted) return;
+    // A protected export read with a wrong password is still the export.
+    setState(
+      () => _error = _needsPassword
+          ? 'The ${format.label} export cannot be opened: $why'
+          : 'Not a ${format.label} export: $why',
+    );
   }
 
   /// The mapping menu's "Into a new vault…".
@@ -235,9 +381,14 @@ class _ImportState extends State<TomSecretsImportView> {
                     const Text(
                       '1Password 8: File › Export, as 1PUX (recommended) or '
                       'CSV. Enpass: File › Export, as JSON (recommended) or '
-                      'CSV, one vault per file. Keep the export outside '
-                      'every repository: it holds every password in '
-                      'plaintext.',
+                      'CSV, one vault per file. Bitwarden: Tools › Export '
+                      'vault, as JSON or password-protected JSON. Chrome, '
+                      'Edge, Firefox and Safari: the password manager\'s '
+                      'Export passwords (CSV). KeePass and KeePassXC: the '
+                      'KDBX file itself. Keep an export outside every '
+                      'repository: it holds every password in plaintext. '
+                      'To export a vault or a group, use its menu in the '
+                      'vault browser › Export….',
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -284,6 +435,32 @@ class _ImportState extends State<TomSecretsImportView> {
                           labelText: 'The Enpass vault this file holds',
                         ),
                         onSubmitted: (_) => unawaited(_read()),
+                      ),
+                    if (_needsPassword &&
+                        _format == TomSecretsImportFormat.bitwardenJson)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key: const Key('tsm-import-export-password'),
+                              controller: _exportPassword,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                labelText:
+                                    'The password this export was protected '
+                                    'with',
+                              ),
+                              onSubmitted: (_) => unawaited(_read()),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.tonal(
+                            key: const Key('tsm-import-open'),
+                            onPressed: () => unawaited(_read()),
+                            child: const Text('Open'),
+                          ),
+                        ],
                       ),
                     if (_error != null)
                       Text(
@@ -413,10 +590,115 @@ class _ImportState extends State<TomSecretsImportView> {
                     ],
                   ),
                 if (report != null) _reportCard(context, report),
+                if (_format?.isKdbx ?? false) _keepassCard(context, writable),
               ],
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _keepassCard(BuildContext context, List<String> writable) {
+    final store = writable.contains(_kdbxStore)
+        ? _kdbxStore
+        : writable.firstOrNull;
+    _kdbxStore = store;
+    return TomSecretsSection(
+      key: const Key('tsm-import-kdbx'),
+      title: '2. The KeePass file',
+      icon: Icons.key_rounded,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('tsm-import-kdbx-password'),
+                controller: _kdbxPassword,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: 'Its master password',
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              key: const Key('tsm-import-kdbx-keyfile'),
+              onPressed: () => unawaited(_pickKeyFile()),
+              child: Text(_kdbxKeyFileName ?? 'Key file…'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ChoiceChip(
+              key: const Key('tsm-import-kdbx-as-group'),
+              label: const Text('As a group'),
+              selected: !_kdbxMerge,
+              onSelected: (_) => setState(() => _kdbxMerge = false),
+            ),
+            ChoiceChip(
+              key: const Key('tsm-import-kdbx-merge'),
+              label: const Text('Merged (a copy of this vault)'),
+              selected: _kdbxMerge,
+              onSelected: (_) => setState(() => _kdbxMerge = true),
+            ),
+            const SizedBox(width: 8),
+            DropdownButton<String>(
+              key: const Key('tsm-import-kdbx-store'),
+              value: store,
+              isDense: true,
+              items: [
+                for (final s in writable)
+                  DropdownMenuItem(value: s, child: Text(s)),
+              ],
+              onChanged: (s) => setState(() => _kdbxStore = s),
+            ),
+          ],
+        ),
+        if (!_kdbxMerge)
+          TextField(
+            key: const Key('tsm-import-kdbx-name'),
+            controller: _kdbxName,
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: 'The new group',
+            ),
+          ),
+        Text(
+          _kdbxMerge
+              ? 'Merged entry by entry like two machines\' edits: what only '
+                    'one side holds is kept, an entry changed on both sides '
+                    'keeps the newer state with the other in its history '
+                    '(under Conflicts). Only a copy of the same vault merges.'
+              : 'Its groups and entries are copied into a new group, each '
+                    'entry with its history and attachments.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            FilledButton(
+              key: const Key('tsm-import-kdbx-run'),
+              onPressed: _running || store == null
+                  ? null
+                  : () => unawaited(_importKdbx()),
+              child: const Text('Import'),
+            ),
+            const SizedBox(width: 12),
+            if (_running)
+              const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        if (_kdbxResult != null)
+          Text(_kdbxResult!, key: const Key('tsm-import-kdbx-result')),
       ],
     );
   }

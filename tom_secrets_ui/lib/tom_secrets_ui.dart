@@ -17,6 +17,7 @@ export 'src/screens/clients_view.dart';
 export 'src/screens/conflicts_view.dart';
 export 'src/screens/entry_editor.dart';
 export 'src/screens/environments_view.dart';
+export 'src/screens/export_dialog.dart';
 export 'src/screens/first_run_wizard.dart';
 export 'src/screens/pairing_view.dart';
 export 'src/screens/proposals_view.dart';

@@ -245,14 +245,23 @@ offering the import and the pairing.
   `TomSecretsHost.integrationPaths`): ssh using the agent and git's credential
   helper, switched on and off, their host patterns and problems, checked and
   repaired at every start (`tomSecretsCheckIntegrations`)
-- `TomSecretsImportView`: The export (1Password 1PUX or CSV, Enpass JSON or CSV;
-  the format by extension, asked for a CSV), where each source vault goes (a
-  vault and a group, so source vaults go to groups of one vault or to different
-  vaults), archived items or not, the preview (`tomSecretsImport` dry run:
-  counts per outcome, what the format loses, the largest attachments, every
-  item), the import saved through the service (every vault read again when a
-  save is refused), the report, and the offer to delete the export. Also opened
-  by the First run wizard's last step (`tomSecretsShowImport`).
+- `TomSecretsImportView`: The export (1Password 1PUX or CSV, Enpass JSON or CSV,
+  Bitwarden JSON — a password-protected one opened with its password —, a
+  browser's CSV; the format by extension, and by content where several fit
+  (`tomSecretsGuessImportFormat`), chips to choose another), where each source
+  vault goes (a vault and a group, so source vaults go to groups of one vault or
+  to different vaults), archived items or not, the preview (`tomSecretsImport`
+  dry run: counts per outcome, what the format loses, the largest attachments,
+  every item), the import saved through the service (every vault read again when
+  a save is refused), the report, and the offer to delete the export. Also
+  opened by the First run wizard's last step (`tomSecretsShowImport`). A `.kdbx`
+  file is imported with its master password or key file as a new group
+  (`TomSecretsSession.importKdbxAsGroup`) or, a copy of the same vault, merged
+  entry by entry (`importKdbxMerged`; another vault refused).
+- `tomSecretsShowExportDialog` (a vault's or group's menu › Export…): KDBX
+  under a new master password, CSV or Bitwarden JSON
+  (`tomSecretsExport`), the plaintext warning before a CSV or JSON, what the
+  format does not carry after; saved through `TomSecretsFiles.save`.
 - `TomSecretsKeysView`: Every key with a date (`keys`), soonest first: the
   GitHub tokens, the vaults' key files and repository keys, the approver and
   approval-link key pairs; its use, date, time left, reminding or expired; a

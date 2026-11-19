@@ -20,6 +20,7 @@ import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
+import 'export_dialog.dart';
 import '../state/service_connection.dart';
 import '../state/overlays.dart' show TomSecretsGrantUse;
 import '../state/session_state.dart';
@@ -289,6 +290,10 @@ class _VaultHeader extends StatelessWidget {
             await tomSecretsShowRewrittenQuestion(context, vault.store);
             return;
           }
+          if (v == 'export') {
+            await tomSecretsShowExportDialog(context, store: vault.store);
+            return;
+          }
           if (v == 'ssh-confirm') {
             await tomSecretsGuarded(
               context,
@@ -321,6 +326,11 @@ class _VaultHeader extends StatelessWidget {
               value: 'rewritten',
               child: Text('The rewritten branch…'),
             ),
+          PopupMenuItem(
+            key: Key('tsm-vault-export-${vault.store}'),
+            value: 'export',
+            child: const Text('Export…'),
+          ),
         ],
       ),
     );
@@ -402,12 +412,19 @@ class _GroupRow extends StatelessWidget {
                       context,
                       () => session.moveGroup(store, group.uuid, target.group),
                     );
+                  case 'export':
+                    await tomSecretsShowExportDialog(
+                      context,
+                      store: store,
+                      group: group.uuid,
+                    );
                 }
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'new', child: Text('New group in it')),
                 PopupMenuItem(value: 'rename', child: Text('Rename')),
                 PopupMenuItem(value: 'move', child: Text('Move…')),
+                PopupMenuItem(value: 'export', child: Text('Export…')),
               ],
             ),
     );

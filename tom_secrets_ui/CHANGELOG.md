@@ -2,6 +2,15 @@
 
 ## 0.1.0
 
+- The other imports and the exports (part-password-manager, DP-40): the
+  Import screen reads Bitwarden JSON (asking a protected export's
+  password), the browsers' CSVs and KeePass files (as a group or merged,
+  `TomSecretsSession.importKdbxAsGroup` / `importKdbxMerged`), telling a
+  JSON or CSV apart by its content (`tomSecretsGuessImportFormat`);
+  `tomSecretsReadExport` is asynchronous. The Export dialog
+  (`tomSecretsShowExportDialog`, `tomSecretsExport`) from a vault's or
+  group's menu: KDBX under a new password, CSV, Bitwarden JSON, with the
+  plaintext warning.
 - The Health screen and the breach check (part-password-manager, DP-39,
   DP-179): `TomSecretsHealthView` in the rail, `TomSecretsHealth` (the report
   over the open vaults, the breach check on by default: new and changed

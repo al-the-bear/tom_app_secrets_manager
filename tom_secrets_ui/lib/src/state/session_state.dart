@@ -407,6 +407,51 @@ class TomSecretsSession extends ChangeNotifier {
     return report;
   }
 
+  /// Imports the KDBX file [source] into [store] as a new group [name]
+  /// under the group path [parent] (part-password-manager, KeePass) and
+  /// saves the vault; a refused save reads every vault again and throws.
+  Future<TomSecretsKdbxImportResult> importKdbxAsGroup(
+    KdbxFile source, {
+    required String store,
+    required String name,
+    List<String> parent = const [],
+  }) async {
+    final vault = _vaults[store];
+    if (vault == null) throw StateError('$store is not open');
+    final result = tomSecretsImportKdbxAsGroup(
+      vault.file,
+      source,
+      name: name,
+      parent: parent,
+    );
+    await _saveImported(store);
+    return result;
+  }
+
+  /// Merges the KDBX file [source], a copy of [store]'s vault edited
+  /// elsewhere, into it entry by entry and saves the vault. Throws
+  /// `TomMergeRefusedException` for a file of another vault (nothing
+  /// changes).
+  Future<TomSecretsMergeResult> importKdbxMerged(
+    KdbxFile source, {
+    required String store,
+  }) async {
+    final vault = _vaults[store];
+    if (vault == null) throw StateError('$store is not open');
+    final result = tomSecretsImportKdbxMerged(vault.file, source);
+    await _saveImported(store);
+    return result;
+  }
+
+  Future<void> _saveImported(String store) async {
+    try {
+      await save(store);
+    } on TomSecretsAdminException {
+      await load();
+      rethrow;
+    }
+  }
+
   /// Sets when the key file and repository key of [store] are due for
   /// rotation (DP-85): the primary's `tsm.keys-due`, else the Expires of the
   /// vault's entry in the primary; saves the primary. The service reminds
