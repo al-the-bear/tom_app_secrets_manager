@@ -68,6 +68,20 @@ void main() {
     }
   }
 
+  // A Cargo package with its lock: its own licence and, for every crate it
+  // links (not the dev dependencies), the declared SPDX expression and the
+  // licence file, from `cargo metadata` (`:licences` fetched the lock).
+  for (final manifest in workspace.foreignManifests()) {
+    if (workspace.isLockedCargoManifest(manifest)) {
+      test(manifest, () {
+        expect(
+          secretsCargoProblems(workspace.repositoryDir(p.dirname(manifest))),
+          isEmpty,
+        );
+      });
+    }
+  }
+
   // An npm package with its lock: its own licence and the licences of its
   // closure (the lock's packages but the dev ones), as installed by npm ci.
   for (final manifest in workspace.foreignManifests()) {

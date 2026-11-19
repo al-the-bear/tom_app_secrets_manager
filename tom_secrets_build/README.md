@@ -22,7 +22,8 @@ the Dart it carries); `:conformance` needs Python 3 with `jsonschema`, and
 the npm packages Node.js with npm, the Python packages Python 3.9 or later
 (`python3`; on Windows the `py` launcher), the Go modules and the Go
 conformance runner Go (`go` on `PATH`; a module asking for a newer Go
-fetches its toolchain).
+fetches its toolchain), the Cargo packages and the Rust runner Rust with
+`cargo` and `clippy`.
 
 ## Running it
 
@@ -67,16 +68,18 @@ Log and step names are paths relative to the folder that holds all three.
 
 - `:analyze`: `pub get` and `analyze` (infos fatal for Dart packages) in every
   package; `npm ci` and `npm run build` (`tsc` with the package's strict
-  settings) in every npm package; `go vet ./...` in every Go module that
-  requires nothing; `python3 -m compileall` in every Python package; on macOS
-  the AutoFill provider's extension target (`tom_secrets_app/macos`,
+  settings) in every npm package; `cargo clippy --all-features --all-targets
+  --locked -- -D warnings` in every Cargo package; `go vet ./...` in every Go
+  module that requires nothing; `python3 -m compileall` in every Python package;
+  on macOS the AutoFill provider's extension target (`tom_secrets_app/macos`,
   `TomSecretsAutofill`) compiled with `xcodebuild`, unsigned (its entitlements
   need the team).
 - `:test`: every package's suite (without the tags `licence-boundary`,
   `integration` and `standalone`), one full log per package; a package without
   `*_test.dart` is reported skipped; `npm ci` and `npm test` in every npm
-  package; `go test -count=1 ./...` in every Go module that requires nothing
-  and has `_test.go` files; `python3 -m unittest discover -s tests` (with `PYTHONPATH=src`) in
+  package; `cargo test --all-features --locked` in every Cargo package; `go test
+  -count=1 ./...` in every Go module that requires nothing and has `_test.go`
+  files; `python3 -m unittest discover -s tests` (with `PYTHONPATH=src`) in
   every Python package; on macOS `swift test` of the AutoFill provider's core
   (`TomSecretsAutofillKit`).
 - `:integration`: the integration suites against the real service (test tag
@@ -84,26 +87,29 @@ Log and step names are paths relative to the folder that holds all three.
   (`dart build cli`), starts it through `tsm start` on demo vaults in a scratch
   data directory, and drives it with `tsm` and the Dart client.
 - `:licences`: `pub get` in every package, `npm ci --omit=dev` in every npm
-  package that links anything, then the licence-boundary check
-  (`test/licence_boundary_test.dart`, tag `licence-boundary`); every non-Dart
-  dependency manifest (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`,
-  `pyproject.toml`, `setup.py`) is red until a closure check reads it, except a
-  `go.mod` that requires nothing (its closure is the Go standard library,
-  BSD-3), a `pyproject.toml` that requires nothing (its closure is the Python
-  standard library, PSF-2.0; its own licence is checked) and a `package.json`
-  with its `package-lock.json` (the npm closure check below).
+  package that links anything, `cargo fetch --locked` in every Cargo package,
+  then the licence-boundary check (`test/licence_boundary_test.dart`, tag
+  `licence-boundary`); every non-Dart dependency manifest (`package.json`,
+  `Cargo.toml`, `go.mod`, `pom.xml`, `pyproject.toml`, `setup.py`) is red until
+  a closure check reads it, except a `go.mod` that requires nothing (its closure
+  is the Go standard library, BSD-3), a `pyproject.toml` that requires nothing
+  (its closure is the Python standard library, PSF-2.0; its own licence is
+  checked), a `package.json` with its `package-lock.json` (the npm closure check
+  below) and a `Cargo.toml` with its `Cargo.lock` (the Cargo closure check
+  below).
 - `:conformance`: the client conformance suite of `tom_secrets_clients`
   (`conformance/tool/conformance.py all`): the reference table current, the
   coverage gate, every runner against every case table; a runner without its
   toolchain is red here (Python 3 with `jsonschema` needed, and each
-  runner's toolchain: Dart, Node.js, Python, Go).
+  runner's toolchain: Dart, Node.js, Python, Go, Rust).
 - `:standalone`: the standalone check (`test/standalone_test.dart`), below.
 - `:all`: the stages above, in that order.
 - `:release`: not part of `:all`: the release for this platform, below.
 - `:mobile`: not part of `:all`: the mobile app's Android release, below.
 
 The packages are found, never listed: every directory with a `pubspec.yaml`
-(an npm package: a `package.json` with its `package-lock.json`; a Go module:
+(an npm package: a `package.json` with its `package-lock.json`; a Cargo
+package: a `Cargo.toml` with its `Cargo.lock`; a Go module:
 a `go.mod` that requires nothing; a Python package: a `pyproject.toml` that
 requires nothing) up to four
 levels below a repository root, leaving out `example/`, `test/`,
@@ -133,6 +139,14 @@ For every npm package (`secretsNpmProblems`): its `package.json` declares
 is classified by its licence file as `npm ci` installs it under
 `node_modules/` (not by the lock's SPDX tag), with the same admitted licences.
 A package that links nothing needs no install.
+
+For every Cargo package (`secretsCargoProblems`, from `cargo metadata` with
+every feature and the lock): its `Cargo.toml` declares `BSD-3-Clause` and,
+unless `publish = false`, ships a BSD-3 licence file; its closure is every
+crate reached through normal and build dependencies (never dev ones), and
+each must declare an SPDX expression the admitted licences meet (an `OR`
+needs one side, an `AND` both) and ship a licence file (`LICENSE`,
+`LICENSE-MIT`, `COPYING`, ...) with permissive terms.
 
 An exception is named in `secretsLicenceExceptions`, by package, with its
 reason; the check prints each one on every run and turns red when one is no

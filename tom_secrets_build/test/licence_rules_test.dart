@@ -232,6 +232,134 @@ void main() {
     });
   });
 
+  group('secretsSpdxAdmitted', () {
+    test('permissive ids, OR with one admitted side, AND of admitted ones, '
+        'WITH an exception, the old slash', () {
+      for (final e in [
+        'MIT',
+        'MIT OR Apache-2.0',
+        'Apache-2.0 OR GPL-3.0',
+        '(MIT OR Apache-2.0) AND BSD-3-Clause',
+        'Apache-2.0 WITH LLVM-exception',
+        'MIT/Apache-2.0',
+      ]) {
+        expect(secretsSpdxAdmitted(e), isTrue, reason: e);
+      }
+    });
+
+    test('copyleft, AND with a copyleft side, unknown ids, nothing, '
+        'unreadable expressions', () {
+      for (final e in [
+        'GPL-3.0',
+        'MIT AND GPL-3.0',
+        '(MIT OR Apache-2.0) AND Unicode-3.0',
+        'MPL-2.0',
+        '',
+        null,
+        '(MIT',
+        'MIT OR',
+      ]) {
+        expect(secretsSpdxAdmitted(e), isFalse, reason: '$e');
+      }
+    });
+  });
+
+  group('secretsCargoProblemsOf', () {
+    late Directory root;
+    const mit =
+        'Permission is hereby granted, free of charge, to any person '
+        'obtaining a copy of this software.';
+
+    Map<String, Object?> package(
+      String name,
+      String? licence, {
+      Map<String, String> files = const {},
+      List<Object?>? publish,
+    }) {
+      for (final MapEntry(key: file, value: text) in files.entries) {
+        secretsWriteFile(root, '$name/$file', text);
+      }
+      secretsWriteFile(root, '$name/Cargo.toml', '');
+      return {
+        'id': '$name 1.0.0',
+        'name': name,
+        'version': '1.0.0',
+        'license': licence,
+        'manifest_path': p.join(root.path, name, 'Cargo.toml'),
+        'publish': publish,
+      };
+    }
+
+    Map<String, Object?> dep(String name, List<String?> kinds) => {
+      'pkg': '$name 1.0.0',
+      'dep_kinds': [
+        for (final k in kinds) {'kind': k},
+      ],
+    };
+
+    setUp(() => root = secretsScratchDir('cargo'));
+
+    test('a BSD-3 crate linking permissive crates passes; dev dependencies '
+        'are not linked', () {
+      final metadata = {
+        'packages': [
+          package('client', 'BSD-3-Clause', files: {'LICENSE': _bsd3}),
+          package('rt', 'MIT OR Apache-2.0', files: {'LICENSE-MIT': mit}),
+          package('devtool', 'GPL-3.0'),
+        ],
+        'resolve': {
+          'root': 'client 1.0.0',
+          'nodes': [
+            {
+              'id': 'client 1.0.0',
+              'deps': [
+                dep('rt', [null]),
+                dep('devtool', ['dev']),
+              ],
+            },
+            {'id': 'rt 1.0.0', 'deps': <Object?>[]},
+            {'id': 'devtool 1.0.0', 'deps': <Object?>[]},
+          ],
+        },
+      };
+      expect(secretsCargoProblemsOf(metadata), isEmpty);
+    });
+
+    test('a copyleft crate, one without a licence file and the own licence '
+        'are named; an unpublished root needs no licence file', () {
+      final metadata = {
+        'packages': [
+          package('runner', 'MIT', publish: const []),
+          package('bad', 'GPL-3.0', files: {'COPYING': mit}),
+          package('bare', 'MIT'),
+        ],
+        'resolve': {
+          'root': 'runner 1.0.0',
+          'nodes': [
+            {
+              'id': 'runner 1.0.0',
+              'deps': [
+                dep('bad', [null]),
+              ],
+            },
+            {
+              'id': 'bad 1.0.0',
+              'deps': [
+                dep('bare', ['build']),
+              ],
+            },
+            {'id': 'bare 1.0.0', 'deps': <Object?>[]},
+          ],
+        },
+      };
+      expect(secretsCargoProblemsOf(metadata), [
+        contains('declares licence MIT'),
+        contains('links bad 1.0.0 under GPL-3.0'),
+        contains('links bare 1.0.0, which ships no permissive licence file'),
+      ]);
+    });
+  });
+
   group('secretsPythonRequirements', () {
     test('reads dependencies over lines and the optional ones; not the '
         'build system', () {

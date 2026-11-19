@@ -34,13 +34,15 @@ const Map<String, String> secretsCiStageDescriptions = {
   'analyze':
       'pub get + analyze (infos fatal) in every package of the three '
       'repositories; npm ci + npm run build in every npm package; '
-      'go vet in every Go module that requires nothing; compileall in every '
+      'cargo clippy in every Cargo package; go vet in every Go module that '
+      'requires nothing; compileall in every '
       'Python package; on macOS '
       'the AutoFill provider\'s extension target compiled (unsigned)',
   'test':
       'every package suite, strictly serial, one full log per package '
       '(the licence-boundary check is :licences\', the integration suites '
-      ':integration\'); npm test in every npm package; go test in every Go '
+      ':integration\'); npm test in every npm package; cargo test in every '
+      'Cargo package; go test in every Go '
       'module with tests; unittest in every Python package; on macOS swift '
       'test '
       'of the AutoFill provider\'s core',
@@ -51,7 +53,8 @@ const Map<String, String> secretsCiStageDescriptions = {
   'licences':
       'pub get in every package, then the licence-boundary check: no '
       'copyleft licence in any closure, KDBX only through tom_secrets_core; '
-      'the npm closures from their locks; Python packages that require '
+      'the npm and Cargo closures from their locks; Python packages that '
+      'require '
       'nothing; every other non-Dart manifest is '
       'red until its closure is checked',
   'conformance':
@@ -145,6 +148,21 @@ class SecretsCiStages {
             _npm(['run', 'build'], dir),
           ]);
         }
+        for (final dir in workspace.cargoPackageDirs()) {
+          final name = workspace.relative(dir);
+          // clippy with every feature, warnings fatal, is the analyzer.
+          await run.step(stage, name, 'analyze.${_cargoLogName(name)}.log', [
+            _cargo(const [
+              'clippy',
+              '--all-features',
+              '--all-targets',
+              '--locked',
+              '--',
+              '-D',
+              'warnings',
+            ], dir),
+          ]);
+        }
         for (final dir in workspace.goModuleDirs()) {
           final name = workspace.relative(dir);
           await run.step(stage, name, 'analyze.${_goLogName(name)}.log', [
@@ -194,6 +212,12 @@ class SecretsCiStages {
           await run.step(stage, name, '${_npmLogName(name)}.log', [
             _npm(['ci'], dir),
             _npm(['test'], dir),
+          ]);
+        }
+        for (final dir in workspace.cargoPackageDirs()) {
+          final name = workspace.relative(dir);
+          await run.step(stage, name, '${_cargoLogName(name)}.log', [
+            _cargo(const ['test', '--all-features', '--locked'], dir),
           ]);
         }
         for (final dir in workspace.goModuleDirs()) {
@@ -263,6 +287,9 @@ class SecretsCiStages {
             p.basename(manifest) == 'package.json'
                 ? 'no package-lock.json beside it: the npm closure check '
                       'reads the lock — run npm install and commit it'
+                : p.basename(manifest) == 'Cargo.toml'
+                ? 'no Cargo.lock beside it: the Cargo closure check reads '
+                      'the lock — run cargo generate-lockfile and commit it'
                 : p.basename(manifest) == 'pyproject.toml'
                 ? 'it declares requirements: only a Python project that '
                       'requires nothing (the standard library its closure) '
@@ -291,6 +318,19 @@ class SecretsCiStages {
             'licences.npm-ci.${_npmLogName(name)}.log',
             [
               _npm(['ci', '--omit=dev'], dir),
+            ],
+          );
+        }
+        for (final dir in workspace.cargoPackageDirs()) {
+          // The check reads every linked crate's manifest and licence
+          // files: fetched from the lock first.
+          final name = workspace.relative(dir);
+          await run.step(
+            stage,
+            '$name cargo fetch',
+            'licences.cargo-fetch.${_cargoLogName(name)}.log',
+            [
+              _cargo(const ['fetch', '--locked'], dir),
             ],
           );
         }
@@ -648,6 +688,12 @@ CiCommand _python(
   workingDirectory: dir,
   environment: environment,
 );
+
+/// A cargo command in [dir].
+CiCommand _cargo(List<String> args, String dir) =>
+    CiCommand('cargo', args, workingDirectory: dir);
+
+String _cargoLogName(String name) => 'cargo.${name.replaceAll('/', '.')}';
 
 String _goLogName(String name) => 'go.${name.replaceAll('/', '.')}';
 

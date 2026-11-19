@@ -70,12 +70,13 @@ const Set<String> secretsCiSkippedDirectories = {
 
 /// Dependency manifests of the languages other than Dart. Each one found is a
 /// closure the licence-boundary check must read, so `:licences` reports it red
-/// rather than passing it unread, except three the check reads: a Go module
+/// rather than passing it unread, except four the check reads: a Go module
 /// that requires nothing ([secretsGoModuleRequirements]), whose closure is the
 /// Go standard library alone (BSD-3), a Python project that requires nothing
 /// ([secretsPythonRequirements]), whose closure is the Python standard
-/// library alone (PSF-2.0, permissive), and an npm package with its
-/// `package-lock.json` ([secretsNpmProblems]).
+/// library alone (PSF-2.0, permissive), an npm package with its
+/// `package-lock.json` ([secretsNpmProblems]) and a Cargo package with its
+/// `Cargo.lock` ([secretsCargoProblems]).
 const Map<String, String> secretsCiForeignManifests = {
   'package.json': 'npm',
   'Cargo.toml': 'Cargo',
@@ -363,12 +364,14 @@ class SecretsCiWorkspace {
 
   /// The [foreignManifests] whose closure no check reads: all but the Go
   /// modules and Python projects that require nothing beyond the standard
-  /// library and the npm packages with a lock ([isLockedNpmManifest]).
+  /// library and the npm and Cargo packages with a lock
+  /// ([isLockedNpmManifest], [isLockedCargoManifest]).
   List<String> uncheckedForeignManifests() => [
     for (final manifest in foreignManifests())
       if (!isStandardLibraryGoModule(manifest) &&
           !isStandardLibraryPythonProject(manifest) &&
-          !isLockedNpmManifest(manifest))
+          !isLockedNpmManifest(manifest) &&
+          !isLockedCargoManifest(manifest))
         manifest,
   ];
 
@@ -396,6 +399,23 @@ class SecretsCiWorkspace {
       if (isLockedNpmManifest(manifest))
         p.normalize(p.join(workspaceRoot, p.dirname(manifest))),
   ];
+
+  /// The absolute directories of the Cargo packages with a lock
+  /// ([isLockedCargoManifest]), sorted: the stages lint, test and check
+  /// them.
+  List<String> cargoPackageDirs() => [
+    for (final manifest in foreignManifests())
+      if (isLockedCargoManifest(manifest))
+        p.normalize(p.join(workspaceRoot, p.dirname(manifest))),
+  ];
+
+  /// Whether the workspace-relative [manifest] is a `Cargo.toml` with a
+  /// `Cargo.lock` beside it, whose closure [secretsCargoProblems] reads.
+  bool isLockedCargoManifest(String manifest) =>
+      p.basename(manifest) == 'Cargo.toml' &&
+      File(
+        p.join(workspaceRoot, p.dirname(manifest), 'Cargo.lock'),
+      ).existsSync();
 
   /// Whether the workspace-relative [manifest] is a `package.json` with a
   /// `package-lock.json` beside it, whose closure [secretsNpmProblems] reads.

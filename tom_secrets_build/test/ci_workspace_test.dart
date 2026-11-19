@@ -61,6 +61,21 @@ void main() {
       );
       secretsWriteFile(
         root,
+        'app_secrets_manager/tools/rs_locked/Cargo.toml',
+        '[package]\nname = "a"\n',
+      );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/rs_locked/Cargo.lock',
+        '',
+      );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/rs_unlocked/Cargo.toml',
+        '[package]\nname = "b"\n',
+      );
+      secretsWriteFile(
+        root,
         'app_secrets_manager/tools/py_stdlib/pyproject.toml',
         '[project]\nname = "a"\ndependencies = []\n',
       );
@@ -108,6 +123,8 @@ void main() {
           'app_secrets_manager/tom_secrets_npm/package.json',
           'app_secrets_manager/tools/py_deps/pyproject.toml',
           'app_secrets_manager/tools/py_stdlib/pyproject.toml',
+          'app_secrets_manager/tools/rs_locked/Cargo.toml',
+          'app_secrets_manager/tools/rs_unlocked/Cargo.toml',
           'app_secrets_manager/tools/stdlib_only/go.mod',
           'app_secrets_manager/tools/with_deps/go.mod',
         ]);
@@ -120,7 +137,16 @@ void main() {
       expect(workspace.uncheckedForeignManifests(), [
         'app_secrets_manager/tom_secrets_browser/package.json',
         'app_secrets_manager/tools/py_deps/pyproject.toml',
+        'app_secrets_manager/tools/rs_unlocked/Cargo.toml',
         'app_secrets_manager/tools/with_deps/go.mod',
+      ]);
+      expect(workspace.cargoPackageDirs(), [
+        p.join(
+          workspace.workspaceRoot,
+          'app_secrets_manager',
+          'tools',
+          'rs_locked',
+        ),
       ]);
       expect(workspace.goModuleDirs(), [
         p.join(

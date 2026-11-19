@@ -224,6 +224,193 @@ List<String> secretsPythonProblems(String packageDir) {
   return problems;
 }
 
+/// The SPDX licence ids a Cargo package may declare, by the family each
+/// names ([secretsSpdxAdmitted]); the permissive families of
+/// [secretsAdmittedLicences].
+const Map<String, TomLicence> secretsSpdxLicences = {
+  'MIT': TomLicence.mit,
+  'Apache-2.0': TomLicence.apache2,
+  'BSD-2-Clause': TomLicence.bsd2,
+  'BSD-3-Clause': TomLicence.bsd3,
+  'ISC': TomLicence.isc,
+  'Zlib': TomLicence.zlib,
+};
+
+/// Whether the SPDX licence [expression] (a Cargo package's `license`) can
+/// be met with admitted licences: an `OR` needs one side, an `AND` both, a
+/// `WITH` exception keeps its licence's verdict; Cargo's old `/` is `OR`.
+/// No expression, or one this reader cannot read, is not admitted.
+bool secretsSpdxAdmitted(String? expression) {
+  if (expression == null || expression.trim().isEmpty) return false;
+  final tokens = RegExp(r'\(|\)|[^\s()]+')
+      .allMatches(expression.replaceAll('/', ' OR '))
+      .map((m) => m.group(0)!)
+      .toList();
+  var at = 0;
+  // A parenthesised expression nests the whole grammar again.
+  late final bool? Function() orExpression;
+  bool? factor() {
+    if (at >= tokens.length) return null;
+    final token = tokens[at++];
+    if (token == '(') {
+      final value = orExpression();
+      if (at >= tokens.length || tokens[at++] != ')') return null;
+      return value;
+    }
+    if (token == ')' || token == 'AND' || token == 'OR') return null;
+    if (at < tokens.length && tokens[at] == 'WITH') at += 2;
+    final family = secretsSpdxLicences[token];
+    return family != null && secretsAdmittedLicences.contains(family);
+  }
+
+  bool? andExpression() {
+    var value = factor();
+    while (value != null && at < tokens.length && tokens[at] == 'AND') {
+      at++;
+      final next = factor();
+      value = next == null ? null : value && next;
+    }
+    return value;
+  }
+
+  orExpression = () {
+    var value = andExpression();
+    while (value != null && at < tokens.length && tokens[at] == 'OR') {
+      at++;
+      final next = andExpression();
+      value = next == null ? null : value || next;
+    }
+    return value;
+  };
+
+  final value = orExpression();
+  return value == true && at == tokens.length;
+}
+
+/// The licence files of a Cargo package's [root]: `LICENSE`, `LICENCE` or
+/// `COPYING`, alone or with a suffix (`LICENSE-MIT`, `LICENSE-APACHE`,
+/// `LICENSE.txt`), as crates ship one per licence of a choice.
+List<File> secretsCargoLicenceFiles(Directory root) {
+  final pattern = RegExp(
+    r'^(LICEN[CS]E|COPYING)([-._].*)?$',
+    caseSensitive: false,
+  );
+  if (!root.existsSync()) return const [];
+  return [
+    for (final entry in root.listSync())
+      if (entry is File && pattern.hasMatch(p.basename(entry.path))) entry,
+  ]..sort((a, b) => a.path.compareTo(b.path));
+}
+
+/// Every problem of the Cargo package in [packageDir]: what
+/// [secretsCargoProblemsOf] finds in its `cargo metadata` (all features,
+/// from its `Cargo.lock`; Cargo downloads the closure's sources to read
+/// their manifests).
+List<String> secretsCargoProblems(String packageDir) {
+  final result = Process.runSync(
+    'cargo',
+    ['metadata', '--format-version', '1', '--all-features', '--locked'],
+    workingDirectory: packageDir,
+    runInShell: Platform.isWindows,
+  );
+  if (result.exitCode != 0) {
+    return ['$packageDir: cargo metadata failed: ${result.stderr}'];
+  }
+  final metadata = jsonDecode(result.stdout as String);
+  if (metadata is! Map) return ['$packageDir: cargo metadata is no object.'];
+  return secretsCargoProblemsOf(metadata);
+}
+
+/// Every problem in a Cargo package's [metadata] (`cargo metadata
+/// --format-version 1`): its own licence (`license` BSD-3-Clause, and a
+/// BSD-3 licence file unless `publish = false`), and every package it links
+/// — reached from the root through normal and build dependencies, never
+/// dev ones — declaring an admitted SPDX expression
+/// ([secretsSpdxAdmitted]) and shipping a permissive licence file
+/// ([secretsCargoLicenceFiles]), as for npm by the file's terms, not the
+/// tag alone. Empty when it passes.
+List<String> secretsCargoProblemsOf(Map<Object?, Object?> metadata) {
+  final packages = <String, Map<Object?, Object?>>{
+    for (final p
+        in (metadata['packages'] as List? ?? const [])
+            .cast<Map<Object?, Object?>>())
+      p['id'] as String: p,
+  };
+  final resolve = metadata['resolve'];
+  if (resolve is! Map || resolve['root'] is! String) {
+    return ['cargo metadata has no resolve root (run it in the package).'];
+  }
+  final rootId = resolve['root'] as String;
+  final root = packages[rootId];
+  if (root == null) return ['cargo metadata names no package $rootId.'];
+  final name = root['name'];
+  final problems = <String>[];
+  if (root['license'] != secretsNpmLicence) {
+    problems.add(
+      '$name declares licence ${root['license']}, not $secretsNpmLicence.',
+    );
+  }
+  // publish = false is written as an empty list.
+  final publishable =
+      root['publish'] is! List || (root['publish'] as List).isNotEmpty;
+  if (publishable) {
+    final own = secretsCargoLicenceFiles(
+      Directory(p.dirname(root['manifest_path'] as String)),
+    );
+    if (!own.any(
+      (f) => tomClassifyLicence(f.readAsStringSync()) == TomLicence.bsd3,
+    )) {
+      problems.add('$name has no BSD-3 licence file.');
+    }
+  }
+  final nodes = <String, List<Map<Object?, Object?>>>{
+    for (final n
+        in (resolve['nodes'] as List? ?? const [])
+            .cast<Map<Object?, Object?>>())
+      n['id'] as String: (n['deps'] as List? ?? const [])
+          .cast<Map<Object?, Object?>>(),
+  };
+  final linked = <String>{};
+  final queue = [rootId];
+  while (queue.isNotEmpty) {
+    for (final dep
+        in nodes[queue.removeLast()] ?? const <Map<Object?, Object?>>[]) {
+      final kinds = (dep['dep_kinds'] as List? ?? const [])
+          .cast<Map<Object?, Object?>>();
+      if (!kinds.any((k) => k['kind'] != 'dev')) continue;
+      final id = dep['pkg'] as String;
+      if (linked.add(id)) queue.add(id);
+    }
+  }
+  for (final id in linked.toList()..sort()) {
+    final package = packages[id];
+    if (package == null) {
+      problems.add('$name links $id, which cargo metadata does not describe.');
+      continue;
+    }
+    final linkedName = '${package['name']} ${package['version']}';
+    final licence = package['license'] as String?;
+    if (!secretsSpdxAdmitted(licence)) {
+      problems.add(
+        '$name links $linkedName under ${licence ?? 'no declared licence'}.',
+      );
+    }
+    final files = secretsCargoLicenceFiles(
+      Directory(p.dirname(package['manifest_path'] as String)),
+    );
+    final permissive = files.any((f) {
+      final family = tomClassifyLicence(f.readAsStringSync());
+      return family != null && secretsAdmittedLicences.contains(family);
+    });
+    if (!permissive) {
+      problems.add(
+        '$name links $linkedName, which ships no permissive licence file.',
+      );
+    }
+  }
+  return problems;
+}
+
 /// The npm package's own licence ([secretsNpmProblems]): BSD-3 (DP-203).
 const String secretsNpmLicence = 'BSD-3-Clause';
 
