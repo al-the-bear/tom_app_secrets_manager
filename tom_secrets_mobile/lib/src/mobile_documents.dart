@@ -338,6 +338,23 @@ final class TomSecretsDocumentOpener implements TomSecretsVaultOpener {
     required Uint8List base,
     required Uint8List stored,
     String? outerKey,
+    Map<String, Uint8List> beside = const {},
+  }) async => _desktopOnly();
+
+  /// A document picked on the phone has no folder to read beside it: a
+  /// shared vault lives in a repository, not in the phone's Files.
+  @override
+  Future<({Uint8List bytes, String revision})?> readBeside(
+    String locator,
+    String name,
+  ) async => null;
+
+  @override
+  Future<String> writeBeside(
+    String locator,
+    String name,
+    Uint8List bytes, {
+    required String? baseRevision,
   }) async => _desktopOnly();
 
   @override

@@ -1325,7 +1325,23 @@ class TomSecretsSession extends ChangeNotifier {
       notifyListeners();
     }
     await _migrateSshKeys();
+    if (!_refreshingSharedKeys) {
+      _refreshingSharedKeys = true;
+      try {
+        sharedKeysTakenUp.addAll(await refreshSharedVaultKeys());
+      } on Object {
+        // Tried again at the next load; the vault stays as it is.
+      } finally {
+        _refreshingSharedKeys = false;
+      }
+    }
   }
+
+  bool _refreshingSharedKeys = false;
+
+  /// The shared vaults whose new keys the session took up from their
+  /// recipients file since it started (another member re-keyed them).
+  final Set<String> sharedKeysTakenUp = {};
 
   /// The SSH keys retyped since the session started, by store (the
   /// migration of [load]).
@@ -1493,7 +1509,11 @@ class TomSecretsSession extends ChangeNotifier {
   ///
   /// [keys] are the primary's new keys when its file is re-keyed (`save`'s
   /// `keys`, protocol.md 6.4).
-  Future<void> save(String store, {Map<String, Object?>? keys}) async {
+  Future<void> save(
+    String store, {
+    Map<String, Object?>? keys,
+    Uint8List? recipients,
+  }) async {
     final vault = _vaultOf(store);
     if (vault == null) throw StateError('$store is not open');
     final bytes = await tomSecretsEncodeStored(
@@ -1509,6 +1529,7 @@ class TomSecretsSession extends ChangeNotifier {
         'bytes': base64.encode(bytes),
         'baseRevision': vault.revision,
         'keys': ?keys,
+        if (recipients != null) 'recipients': base64.encode(recipients),
       });
       await _reopen(store);
     } on TomSecretsAdminException catch (e) {
@@ -1827,6 +1848,346 @@ class TomSecretsSession extends ChangeNotifier {
     TomSecretsEntryRef(_vaults.values.first.store, member.entry.uuid),
   ]);
 
+  // Shared vaults (part-sharing, phase C): the recipients file beside each
+  // is read and written through the service, opened with the member key.
+
+  /// The user's member key, opened from the primary; the caller disposes
+  /// it. Throws [StateError] before the user has one.
+  Future<TomSecretsMemberKey> _openMemberKey() async {
+    final ref = memberKeyEntry;
+    final entry = ref == null ? null : entryOf(ref);
+    if (entry == null) {
+      throw StateError('make your member key first (open Sharing)');
+    }
+    return tomSecretsMemberKeyOf(entry);
+  }
+
+  /// The user as a member of a shared vault: their name and member key.
+  TomSecretsSharedVaultMember _self(TomSecretsAgeRecipient own) => (
+    name: memberName.trim().isEmpty ? 'Me' : memberName.trim(),
+    recipient: own,
+  );
+
+  /// The open shared vaults (kind `shared`), the primary never among them.
+  List<String> get sharedVaults => [
+    for (final v in _vaults.values.skip(1))
+      if (kindOf(v.store) == TomSecretsVaultKind.shared) v.store,
+  ];
+
+  /// The keys and members of a shared vault, from its recipients file
+  /// opened with the member key: of the store [store], or of the vault at
+  /// [location] not listed yet, read with [githubToken]. Throws
+  /// [TomSecretsSharedVaultException] (`notAMember`) when the vault is not
+  /// shared with the user's key, `TomSecretsAdminException` (`not_found`,
+  /// reason `no_recipients`) when it has no recipients file.
+  Future<TomSecretsSharedVaultRead> readSharedVault({
+    String? store,
+    String? location,
+    String? githubToken,
+  }) async {
+    final answer = await connection.request('vault.recipients', {
+      'store': ?store,
+      'location': ?location,
+      'githubToken': ?githubToken,
+    });
+    final key = await _openMemberKey();
+    try {
+      final keys = await tomSecretsReadRecipientsFile(
+        base64.decode(answer['bytes']! as String),
+        key,
+      );
+      return TomSecretsSharedVaultRead(
+        keys: keys,
+        location: answer['location']! as String,
+        revision: answer['revision']! as String,
+      );
+    } finally {
+      key.dispose();
+    }
+  }
+
+  /// Creates the shared vault [spec] names (its name, place, outer
+  /// encryption; its kind is `shared`) for the user and [members] (hybrid
+  /// keys only): a key file alone opens it, and its recipients file goes
+  /// beside it. The vault is listed in the primary with its keys and
+  /// served; the members need write access to its repository, which the
+  /// user grants on GitHub.
+  Future<String> createSharedVault(
+    TomSecretsNewVaultSpec spec,
+    List<TomSecretsMember> members, {
+    DateTime? now,
+  }) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final own = memberKeyRecipient;
+    if (own == null) {
+      throw StateError('make your member key first (open Sharing)');
+    }
+    final name = spec.name;
+    if ({
+      ..._vaults.keys,
+      for (final v in TomSecretsPrimaryVaults(primary.file).list()) v.name,
+    }.contains(name)) {
+      throw ArgumentError.value(name, 'name', 'a vault $name exists already');
+    }
+    final location = tomSecretsNewVaultLocation(spec, primary.location);
+    final keys = TomSecretsSharedVaultKeys.generate(
+      name,
+      members: [
+        _self(own),
+        for (final m in members) (name: m.name, recipient: m.recipient),
+      ],
+      outer: spec.outer,
+    );
+    final purpose = spec.purpose?.trim();
+    final file = tomSecretsNewSharedVault(
+      name,
+      keys,
+      purpose: purpose == null || purpose.isEmpty ? null : purpose,
+    );
+    final bytes = await tomSecretsEncodeStored(
+      location,
+      file,
+      outerKey: keys.repositoryKey,
+      cipher: spec.cipher,
+    );
+    final device = await _deviceSettings();
+    final at = (now ?? DateTime.now()).toUtc();
+    final token = spec.githubToken?.trim();
+    try {
+      await connection.request('vault.create', {
+        'store': name,
+        'location': location,
+        'bytes': base64.encode(bytes),
+        'keys': {
+          'keyFile': base64.encode(keys.keyFile),
+          'outerKey': ?keys.repositoryKey,
+        },
+        'recipients': base64.encode(await tomSecretsWriteRecipientsFile(keys)),
+        if (token != null && token.isNotEmpty) 'githubToken': token,
+        'keysDue': tomSecretsAddMonths(
+          at,
+          device.vaultKeyAgeMonths,
+        ).toIso8601String(),
+      });
+    } finally {
+      bytes.fillRange(0, bytes.length, 0);
+      keys.dispose();
+    }
+    await load();
+    return location;
+  }
+
+  /// Adds [member] (a hybrid key) to the shared vault [store]: its
+  /// recipients file written again for one member more, over the file as
+  /// read (a member who changed it meanwhile makes it `stale_base`: read
+  /// again). The vault and its keys stay.
+  Future<void> addSharedVaultMember(
+    String store,
+    TomSecretsMember member,
+  ) async {
+    final read = await readSharedVault(store: store);
+    final next = read.keys.withMember((
+      name: member.name,
+      recipient: member.recipient,
+    ));
+    try {
+      await connection.request('vault.recipients.set', {
+        'store': store,
+        'bytes': base64.encode(await tomSecretsWriteRecipientsFile(next)),
+        'baseRevision': read.revision,
+      });
+    } finally {
+      read.keys.dispose();
+      next.dispose();
+    }
+  }
+
+  /// Removes the member [recipient] from the shared vault [store] (not the
+  /// user's own key): new keys (a key file, and a repository key when outer
+  /// encrypted) listed in the primary, then the vault re-keyed and its
+  /// recipients file for the members left written with it in one commit.
+  /// The removed member keeps what they saw, and older versions in the
+  /// history stay readable to them. Answers the vault's entries, for the
+  /// offer to rotate the important ones.
+  Future<List<TomSecretsEntryRef>> removeSharedVaultMember(
+    String store,
+    TomSecretsAgeRecipient recipient, {
+    DateTime? now,
+  }) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    if (recipient == memberKeyRecipient) {
+      throw ArgumentError('you cannot remove your own key');
+    }
+    final read = await readSharedVault(store: store);
+    final next = read.keys.withoutMember(recipient);
+    try {
+      final list = TomSecretsPrimaryVaults(primary.file);
+      final listed = list.byName(store);
+      if (listed == null) throw StateError('the primary lists no $store');
+      var opened = false;
+      if (_vaultOf(store) == null) {
+        await openUnserved(store);
+        opened = true;
+      }
+      final device = await _deviceSettings();
+      final at = (now ?? DateTime.now()).toUtc();
+      list.put(
+        TomSecretsVaultKeys(
+          name: listed.name,
+          locator: listed.locator,
+          keyFile: Uint8List.fromList(next.keyFile),
+          outerKey: next.repositoryKey,
+          githubToken: listed.githubToken,
+          githubTokenExpires: listed.githubTokenExpires,
+          expires: tomSecretsAddMonths(at, device.vaultKeyAgeMonths),
+        ),
+      );
+      await save(primary.store);
+      final vault = _vaultOf(store)!;
+      vault.file.credentials = next.credentials;
+      if (next.repositoryKey != null) vault.outerKey = next.repositoryKey;
+      await save(store, recipients: await tomSecretsWriteRecipientsFile(next));
+      final refs = [
+        for (final e in vault.file.body.rootGroup.getAllEntries())
+          if (e.label != tomSecretsMetadataTitle)
+            TomSecretsEntryRef(store, e.uuid),
+      ];
+      if (opened) closeEditOnly(store);
+      return refs;
+    } finally {
+      read.keys.dispose();
+      next.dispose();
+    }
+  }
+
+  /// Joins the shared vault at [location] (`github:` or `file:`): its
+  /// recipients file read with [githubToken] (that repository's token, kept
+  /// in the vault's entry), opened with the member key, and the vault
+  /// listed in the primary as [name] (default the name the file gives) with
+  /// its keys, then served.
+  Future<String> joinSharedVault({
+    required String location,
+    String? name,
+    String? githubToken,
+    DateTime? now,
+  }) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final token = githubToken?.trim();
+    final read = await readSharedVault(
+      location: location.trim(),
+      githubToken: token == null || token.isEmpty ? null : token,
+    );
+    try {
+      final store = (name ?? '').trim().isEmpty
+          ? read.keys.vault
+          : name!.trim();
+      if (!tomSecretsStoreNamePattern.hasMatch(store)) {
+        throw ArgumentError.value(store, 'name', 'not a store name');
+      }
+      final list = TomSecretsPrimaryVaults(primary.file);
+      if (store == primary.store ||
+          _vaults.containsKey(store) ||
+          list.byName(store) != null) {
+        throw ArgumentError.value(
+          store,
+          'name',
+          'a vault $store exists already',
+        );
+      }
+      final device = await _deviceSettings();
+      final at = (now ?? DateTime.now()).toUtc();
+      list.put(
+        TomSecretsVaultKeys(
+          name: store,
+          locator: read.location,
+          keyFile: Uint8List.fromList(read.keys.keyFile),
+          outerKey: read.keys.repositoryKey,
+          githubToken: token == null || token.isEmpty ? null : token,
+          expires: tomSecretsAddMonths(at, device.vaultKeyAgeMonths),
+        ),
+      );
+      await save(primary.store);
+      await connection.reload();
+      await load();
+      return store;
+    } finally {
+      read.keys.dispose();
+    }
+  }
+
+  /// The shared vaults the primary lists whose keys no longer open them
+  /// (another member removed someone and re-keyed): their recipients files
+  /// read again, and the new keys listed in the primary, then served.
+  /// Answers the vaults taken up; a vault not shared with the user's key
+  /// any more, or without a recipients file, is left as it is.
+  Future<List<String>> refreshSharedVaultKeys() async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null || memberKeyEntry == null) return const [];
+    if (readOnlyReason(primary.store) != null) return const [];
+    final list = TomSecretsPrimaryVaults(primary.file);
+    final stuck = [
+      for (final v in list.list())
+        if (connection.stores[v.name]?.state == 'needs_unlock' ||
+            _failures.any((f) => f.store == v.name))
+          v,
+    ];
+    final updated = <String>[];
+    for (final listed in stuck) {
+      final TomSecretsSharedVaultRead read;
+      try {
+        read = await readSharedVault(store: listed.name);
+      } on Object {
+        continue;
+      }
+      try {
+        final same =
+            listed.keyFile != null &&
+            listEquals(listed.keyFile, read.keys.keyFile) &&
+            listed.outerKey == read.keys.repositoryKey;
+        if (same) continue;
+        list.put(
+          TomSecretsVaultKeys(
+            name: listed.name,
+            locator: listed.locator,
+            keyFile: Uint8List.fromList(read.keys.keyFile),
+            outerKey: read.keys.repositoryKey,
+            githubToken: listed.githubToken,
+            githubTokenExpires: listed.githubTokenExpires,
+            expires: listed.expires,
+          ),
+        );
+        updated.add(listed.name);
+      } finally {
+        read.keys.dispose();
+      }
+    }
+    if (updated.isEmpty) return updated;
+    await save(primary.store);
+    await connection.reload();
+    await load();
+    return updated;
+  }
+
+  /// Marks [refs] for rotation after a member was removed: each gets the
+  /// tag `rotate` and expires today, so the Health screen lists it until
+  /// its secret is changed (at its service too).
+  Future<void> markForRotation(Iterable<TomSecretsEntryRef> refs) {
+    final today = DateTime.now().toUtc();
+    return _onEntries(refs, (file, entry) {
+      entry.modify(() {
+        final tags = tomSecretsTagsOf(entry);
+        if (!tags.contains(tomSecretsRotateTag)) {
+          entry.tags.set([...tags, tomSecretsRotateTag].join(';'));
+        }
+        entry.times.expires.set(true);
+        entry.times.expiryTime.set(today);
+      });
+    });
+  }
+
   void _reindex() {
     _indexRevision++;
     _resolution = null;
@@ -1949,3 +2310,26 @@ class TomSecretsSession extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// **[C]** A shared vault's recipients file as read
+/// ([TomSecretsSession.readSharedVault]).
+final class TomSecretsSharedVaultRead {
+  /// What the file holds, read from [location] at [revision].
+  const TomSecretsSharedVaultRead({
+    required this.keys,
+    required this.location,
+    required this.revision,
+  });
+
+  /// The vault's keys and members; the reader disposes them.
+  final TomSecretsSharedVaultKeys keys;
+
+  /// The vault's locator.
+  final String location;
+
+  /// The file's revision, which a write names as its base.
+  final String revision;
+}
+
+/// The tag of an entry to rotate after a member left a shared vault.
+const String tomSecretsRotateTag = 'rotate';

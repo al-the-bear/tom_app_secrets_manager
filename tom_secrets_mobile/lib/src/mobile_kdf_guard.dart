@@ -176,13 +176,29 @@ final class TomSecretsKdfGuardedOpener implements TomSecretsVaultOpener {
     required Uint8List base,
     required Uint8List stored,
     String? outerKey,
+    Map<String, Uint8List> beside = const {},
   }) => inner.rekey(
     locator,
     file,
     base: base,
     stored: stored,
     outerKey: outerKey,
+    beside: beside,
   );
+
+  @override
+  Future<({Uint8List bytes, String revision})?> readBeside(
+    String locator,
+    String name,
+  ) => inner.readBeside(locator, name);
+
+  @override
+  Future<String> writeBeside(
+    String locator,
+    String name,
+    Uint8List bytes, {
+    required String? baseRevision,
+  }) => inner.writeBeside(locator, name, bytes, baseRevision: baseRevision);
 
   @override
   Future<TomSecretsOpenedVault> move(

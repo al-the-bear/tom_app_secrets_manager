@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- Takes `tom_secrets_service` 0.17.0: the vault openers pass the
+  recipients file beside a vault on (`readBeside`, `writeBeside`, the
+  re-key's `beside`); a file vault in the phone's Files has none and writes
+  none (shared vaults live in repositories, part-sharing).
 - The health report and the breach check (DP-39): Settings › Health opens
   the Health screen, Settings has the breach check's switch, each run shows
   a snack bar with "Turn off breach check"; `TomSecretsMobileApp.breachCheck`.

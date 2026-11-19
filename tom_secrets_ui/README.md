@@ -294,7 +294,17 @@ offering the import and the pairing.
   members (`TomSecretsSession.members`, `addMember`, `markMemberChecked`,
   `removeMember`): a key pasted, opened from a file (several keys at once) or
   scanned, its fingerprint compared, a classical `age1…` key marked for exports
-  only, a duplicate or the own key refused.
+  only, a duplicate or the own key refused; and the shared vaults
+  (`TomSecretsSharedVaultsSection`): a new shared vault for chosen members
+  (`TomSecretsSession.createSharedVault`, a key file alone, the recipients
+  file beside it), another person's vault opened by its location
+  (`joinSharedVault`), per vault its members from the recipients file
+  (`readSharedVault`), a member added (`addSharedVaultMember`) or removed
+  (`removeSharedVaultMember`: new keys listed in the primary, the vault
+  re-keyed with its recipients file in one commit) with the offer to rotate
+  its entries (`markForRotation`: the tag `rotate`, expiring today); a vault
+  another member re-keyed takes up its new keys at the next load
+  (`refreshSharedVaultKeys`).
 - `TomSecretsPairingView`: The giving side of a pairing (part-sharing), over
   `TomSecretsPairingModel`: "Pair a device" opens a `TomSecretsPairingWindow` on
   this machine's LAN and VPN addresses (`tomSecretsPairingAddresses`, or the

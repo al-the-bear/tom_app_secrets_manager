@@ -43,8 +43,9 @@ final class FakeStore {
 
   final String name;
 
-  /// The keys the service holds (a re-keyed save replaces them).
-  String password;
+  /// The keys the service holds (a re-keyed save replaces them); a shared
+  /// vault has no password.
+  String? password;
   Uint8List? keyFile;
   String? outerKey;
   Uint8List stored;
@@ -78,7 +79,7 @@ final class FakeStore {
     if (viaComposite)
       'compositeKey': base64.encode(compositeKey)
     else
-      'password': password,
+      'password': ?password,
     if (keyFile != null) 'keyFile': base64.encode(keyFile!),
     'outerKey': ?outerKey,
   };
@@ -455,7 +456,18 @@ final class FakeService implements TomSecretsAdminChannel {
           );
         }
         final bytes = base64.decode(args['bytes']! as String);
+        final rekeyedBefore = rekeyedSaves.length;
         await _takeKeys(s, bytes, args['keys'] as Map?);
+        if (args['recipients'] case final String r) {
+          if (rekeyedSaves.length == rekeyedBefore) {
+            throw TomSecretsAdminException(
+              'malformed',
+              'a recipients file goes with a re-keyed save only',
+              details: {'reason': 'recipients'},
+            );
+          }
+          recipientsFiles[s.location] = base64.decode(r);
+        }
         saves.add({'op': op, ...args});
         s.stored = bytes;
         s.revision = tomSecretsBlobId(s.stored);
@@ -691,13 +703,16 @@ final class FakeService implements TomSecretsAdminChannel {
         }
         final created = FakeStore(
           name,
-          keys['password']! as String,
+          keys['password'] as String?,
           bytes,
           location: location,
           keyFile: keyFile,
           outerKey: outerKey,
         );
         stores.add(created);
+        if (args['recipients'] case final String r) {
+          recipientsFiles[location] = base64.decode(r);
+        }
         // The service lists the new vault in the primary.
         final primary = stores.first;
         final file = await tomSecretsDecodeStored(
@@ -837,7 +852,97 @@ final class FakeService implements TomSecretsAdminChannel {
       case 'reload':
         _unlocked();
         reloads++;
+        // The refresh takes the keys the primary lists for each further
+        // vault (another member re-keyed a shared vault: its new keys).
+        for (final x in stores.skip(1)) {
+          final v = listed[x.name];
+          if (v == null) continue;
+          Future<bool> opens(String? pw, Uint8List? kf, String? outer) async {
+            try {
+              await tomSecretsDecodeStored(
+                x.location,
+                x.stored,
+                tomSecretsVaultCredentials(password: pw, keyFile: kf),
+                outerKey: outer,
+              );
+              return true;
+            } on Object {
+              return false;
+            }
+          }
+
+          final kf = v.keyFile == null ? null : Uint8List.fromList(v.keyFile!);
+          if (await opens(x.password, x.keyFile, x.outerKey) ||
+              !await opens(v.password, kf, v.outerKey)) {
+            continue;
+          }
+          x
+            ..password = v.password
+            ..keyFile = kf
+            ..outerKey = v.outerKey;
+        }
+        // A vault the primary now lists at a place another person's files
+        // are (joining a shared vault): served from then on.
+        for (final v in listed.values) {
+          final at = elsewhere[v.locator];
+          if (at == null || stores.any((x) => x.name == v.name)) continue;
+          stores.add(
+            FakeStore(
+              v.name,
+              v.password,
+              at,
+              location: v.locator,
+              keyFile: v.keyFile == null
+                  ? null
+                  : Uint8List.fromList(v.keyFile!),
+              outerKey: v.outerKey,
+            ),
+          );
+        }
         return {'op': 'ok'};
+      case 'vault.recipients':
+        _unlocked();
+        final name = args['store'] as String?;
+        final location = name == null
+            ? args['location']! as String
+            : [
+                ...stores,
+                ...unserved,
+              ].where((x) => x.name == name).firstOrNull?.location;
+        if (location == null) {
+          throw TomSecretsAdminException('not_found', 'no store $name');
+        }
+        final file = recipientsFiles[location];
+        if (file == null) {
+          throw TomSecretsAdminException(
+            'not_found',
+            'no recipients file',
+            details: {'reason': 'no_recipients'},
+          );
+        }
+        recipientReads.add(args);
+        return {
+          'op': 'recipientsData',
+          'store': ?name,
+          'location': location,
+          'revision': tomSecretsBlobId(file),
+          'bytes': base64.encode(file),
+        };
+      case 'vault.recipients.set':
+        _unlocked();
+        final s = store(args['store']! as String);
+        final now = recipientsFiles[s.location];
+        if ((now == null ? null : tomSecretsBlobId(now)) !=
+            args['baseRevision']) {
+          throw TomSecretsAdminException(
+            'denied',
+            'stale',
+            details: {'reason': 'stale_base'},
+          );
+        }
+        final bytes = base64.decode(args['bytes']! as String);
+        recipientsFiles[s.location] = bytes;
+        return {'op': 'ok', 'revision': tomSecretsBlobId(bytes)};
       case 'settings.get':
         _unlocked();
         return {
@@ -909,7 +1014,7 @@ final class FakeService implements TomSecretsAdminChannel {
       );
       if (file == null) malformed();
       s
-        ..password = newKeys['password']! as String
+        ..password = newKeys['password'] as String?
         ..keyFile = keyFile
         ..outerKey = newKeys['outerKey'] as String?;
       rekeyedSaves.add(s.name);
@@ -923,7 +1028,7 @@ final class FakeService implements TomSecretsAdminChannel {
         file = await open(entry.password, kf, entry.outerKey);
         if (file != null) {
           s
-            ..password = entry.password ?? ''
+            ..password = entry.password
             ..keyFile = kf
             ..outerKey = entry.outerKey;
           rekeyedSaves.add(s.name);
@@ -956,6 +1061,16 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// The `vault.create` requests.
   final List<Map<String, Object?>> creations = [];
+
+  /// **[C]** The recipients files beside the vaults, by vault locator.
+  final Map<String, Uint8List> recipientsFiles = {};
+
+  /// **[C]** The vault files of other people's repositories, by locator: a
+  /// vault the primary comes to list there is served at the next reload.
+  final Map<String, Uint8List> elsewhere = {};
+
+  /// **[C]** The `vault.recipients` requests.
+  final List<Map<String, Object?>> recipientReads = [];
 
   /// The `keys.rotate` requests.
   final List<Map<String, Object?>> pairRotations = [];

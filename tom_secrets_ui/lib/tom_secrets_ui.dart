@@ -33,6 +33,7 @@ export 'src/screens/new_vault_dialog.dart';
 export 'src/screens/overlay_editor.dart';
 export 'src/screens/rewritten_question.dart';
 export 'src/screens/settings_view.dart';
+export 'src/screens/shared_vaults_view.dart';
 export 'src/screens/sharing_view.dart';
 export 'src/screens/status_view.dart';
 export 'src/screens/vault_browser.dart';

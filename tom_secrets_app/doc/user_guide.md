@@ -779,6 +779,35 @@ person" once you have. A key in the list, or your own, is refused.
   (`age-keygen -pq`).
 - The bin icon removes a member (to the primary vault's recycle bin).
 
+**Shared vaults** are vaults several people open, each with their own
+member key. A shared vault has no master password: a key file opens it, and
+its keys sit beside it in a recipients file (`<vault>.keys.age`) encrypted
+to every member's hybrid key. The `age` command line (v1.3.0 or later)
+opens that file too, with a member's key.
+
+- **"New shared vault…"** asks for its name, where it lives (a shared
+  GitHub repository with an optional token for it, beside your primary
+  vault, or a folder on this machine), whether it gets outer encryption, and
+  its members (those under Members with a hybrid key; you are always one).
+  Then grant each member write access to the repository on GitHub.
+- **"Open a shared vault…"** opens a vault someone shared with your member
+  key: paste its location (`github:owner/repository/team.kdbx`), a GitHub
+  token for that repository if your device has none, and optionally the
+  name it gets here. A vault not shared with your key says so.
+- Each shared vault lists its members, read from its recipients file.
+  **"Add a member…"** adds someone from Members (the vault's key stays the
+  same). The remove icon removes a member: the vault gets a new key, which
+  the members left receive through the recipients file. The removed member
+  keeps every value they have seen, and the older versions of the vault in
+  its history stay readable to them; take their GitHub access away yourself.
+  Then the app lists the vault's entries: **"Mark for rotation"** tags the
+  ones you choose `rotate` and lets them expire today, so Health lists them
+  until you have changed them, at their services too.
+- When another member removes someone, your vault no longer opens with the
+  old key: the app reads the recipients file again at the next start and
+  takes up the new key ("New keys taken up from the recipients file").
+
+
 ## Conflicts
 
 When two devices change the same field of an entry differently, the merge

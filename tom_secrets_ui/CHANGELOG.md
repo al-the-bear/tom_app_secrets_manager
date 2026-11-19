@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Shared vaults (part-sharing, phase C): created for chosen members,
+  opened by their location, members added and removed (the vault re-keyed
+  with its recipients file), the rotation offer, new keys taken up after
+  another member re-keyed a vault (`TomSecretsSharedVaultsSection`, the
+  session's shared-vault operations).
 - The Sharing screen (part-sharing, phase C): the member key, a hybrid
   `age` v1.3 key made into the primary vault the first time the screen
   opens, shown as fingerprint, text and QR code, copied or saved as an
