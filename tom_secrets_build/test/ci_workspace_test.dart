@@ -61,6 +61,22 @@ void main() {
       );
       secretsWriteFile(
         root,
+        'app_secrets_manager/tools/c_lib/CMakeLists.txt',
+        'cmake_minimum_required(VERSION 3.16)\nproject(x C)\n'
+            'add_subdirectory(sub)\n',
+      );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/c_lib/sub/CMakeLists.txt',
+        'project(sub C)\n',
+      );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/c_none/CMakeLists.txt',
+        'add_library(y y.c)\n',
+      );
+      secretsWriteFile(
+        root,
         'app_secrets_manager/tools/java_jdk/pom.xml',
         '<project><dependencies><dependency><groupId>org.junit</groupId>'
             '<artifactId>junit</artifactId><scope>test</scope></dependency>'
@@ -155,6 +171,14 @@ void main() {
         'app_secrets_manager/tools/py_deps/pyproject.toml',
         'app_secrets_manager/tools/rs_unlocked/Cargo.toml',
         'app_secrets_manager/tools/with_deps/go.mod',
+      ]);
+      expect(workspace.cmakeProjectDirs(), [
+        p.join(
+          workspace.workspaceRoot,
+          'app_secrets_manager',
+          'tools',
+          'c_lib',
+        ),
       ]);
       expect(workspace.javaPackageDirs(), [
         p.join(

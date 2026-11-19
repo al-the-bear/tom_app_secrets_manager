@@ -407,6 +407,33 @@ class SecretsCiWorkspace {
         manifest,
   ];
 
+  /// The absolute directories of the CMake projects in the checked-out
+  /// repositories, sorted: every directory whose `CMakeLists.txt` declares
+  /// a `project(` and whose parent has none (a subdirectory's list belongs
+  /// to its parent's build). C and C++ have no dependency manifest; the
+  /// stages configure, build and test them.
+  List<String> cmakeProjectDirs() {
+    final found = <String>[];
+    for (final repository in repositories) {
+      final root = repositoryDir(repository);
+      if (!Directory(root).existsSync()) continue;
+      _walk(root, 0, (dir) {
+        final list = File(p.join(dir, 'CMakeLists.txt'));
+        if (!list.existsSync() ||
+            File(p.join(p.dirname(dir), 'CMakeLists.txt')).existsSync() ||
+            !RegExp(
+              r'^\s*project\s*\(',
+              caseSensitive: false,
+              multiLine: true,
+            ).hasMatch(list.readAsStringSync())) {
+          return;
+        }
+        found.add(p.normalize(dir));
+      });
+    }
+    return found..sort();
+  }
+
   /// The absolute directories of the Go modules that require nothing
   /// ([isStandardLibraryGoModule]), sorted: the stages vet and test them.
   List<String> goModuleDirs() => [

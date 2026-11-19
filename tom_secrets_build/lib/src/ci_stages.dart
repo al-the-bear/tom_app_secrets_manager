@@ -34,7 +34,9 @@ const Map<String, String> secretsCiStageDescriptions = {
   'analyze':
       'pub get + analyze (infos fatal) in every package of the three '
       'repositories; npm ci + npm run build in every npm package; '
-      'cargo clippy in every Cargo package; javac (lint, warnings fatal) in '
+      'cargo clippy in every Cargo package; cmake configure and build '
+      '(warnings as errors) in every CMake project; javac (lint, warnings '
+      'fatal) in '
       'every Maven project that links only the JDK; go vet in every Go '
       'module that '
       'requires nothing; compileall in every '
@@ -44,7 +46,8 @@ const Map<String, String> secretsCiStageDescriptions = {
       'every package suite, strictly serial, one full log per package '
       '(the licence-boundary check is :licences\', the integration suites '
       ':integration\'); npm test in every npm package; cargo test in every '
-      'Cargo package; the AllTests of every such Maven project; go test in '
+      'Cargo package; ctest in every CMake project; the AllTests of every '
+      'such Maven project; go test in '
       'every Go '
       'module with tests; unittest in every Python package; on macOS swift '
       'test '
@@ -165,6 +168,27 @@ class SecretsCiStages {
             ], dir),
           ]);
         }
+        for (final dir in workspace.cmakeProjectDirs()) {
+          final name = workspace.relative(dir);
+          // Configured and built with warnings as errors: the compiler is
+          // the analyzer.
+          await run.step(stage, name, 'analyze.${_cmakeLogName(name)}.log', [
+            CiCommand('cmake', [
+              '-S',
+              '.',
+              '-B',
+              _cmakeBuildDir,
+              '-DCMAKE_BUILD_TYPE=Debug',
+              '-DCMAKE_COMPILE_WARNING_AS_ERROR=ON',
+            ], workingDirectory: dir),
+            CiCommand('cmake', const [
+              '--build',
+              _cmakeBuildDir,
+              '--config',
+              'Debug',
+            ], workingDirectory: dir),
+          ]);
+        }
         for (final dir in workspace.javaPackageDirs()) {
           final name = workspace.relative(dir);
           // javac with every lint, warnings fatal, at the release the pom
@@ -228,6 +252,33 @@ class SecretsCiStages {
           final name = workspace.relative(dir);
           await run.step(stage, name, '${_cargoLogName(name)}.log', [
             _cargo(const ['test', '--all-features', '--locked'], dir),
+          ]);
+        }
+        for (final dir in workspace.cmakeProjectDirs()) {
+          final name = workspace.relative(dir);
+          // Built by :analyze; built again here so :test runs on its own.
+          await run.step(stage, name, '${_cmakeLogName(name)}.log', [
+            CiCommand('cmake', [
+              '-S',
+              '.',
+              '-B',
+              _cmakeBuildDir,
+              '-DCMAKE_BUILD_TYPE=Debug',
+              '-DCMAKE_COMPILE_WARNING_AS_ERROR=ON',
+            ], workingDirectory: dir),
+            CiCommand('cmake', const [
+              '--build',
+              _cmakeBuildDir,
+              '--config',
+              'Debug',
+            ], workingDirectory: dir),
+            CiCommand('ctest', const [
+              '--test-dir',
+              _cmakeBuildDir,
+              '-C',
+              'Debug',
+              '--output-on-failure',
+            ], workingDirectory: dir),
           ]);
         }
         for (final dir in workspace.javaPackageDirs()) {
@@ -772,6 +823,11 @@ CiCommand _javac(String dir, List<String> sources, String out) {
     ...files,
   ], workingDirectory: dir);
 }
+
+/// Where a CMake project is built by the stages, below the project.
+const String _cmakeBuildDir = 'build/ci';
+
+String _cmakeLogName(String name) => 'cmake.${name.replaceAll('/', '.')}';
 
 String _javaLogName(String name) => 'java.${name.replaceAll('/', '.')}';
 

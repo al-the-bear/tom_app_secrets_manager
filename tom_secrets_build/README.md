@@ -24,7 +24,8 @@ the npm packages Node.js with npm, the Python packages Python 3.9 or later
 conformance runner Go (`go` on `PATH`; a module asking for a newer Go
 fetches its toolchain), the Cargo packages and the Rust runner Rust with
 `cargo` and `clippy`, the Java projects and the Java runner a JDK 16 or
-later (`javac`, `java`).
+later (`javac`, `java`), the CMake projects (the C client and its runner)
+CMake 3.16 or later with a C99 compiler.
 
 ## Running it
 
@@ -70,23 +71,25 @@ Log and step names are paths relative to the folder that holds all three.
 - `:analyze`: `pub get` and `analyze` (infos fatal for Dart packages) in every
   package; `npm ci` and `npm run build` (`tsc` with the package's strict
   settings) in every npm package; `cargo clippy --all-features --all-targets
-  --locked -- -D warnings` in every Cargo package; `javac --release <the pom's
-  maven.compiler.release, else 16> -Xlint:all -Werror` over `src/main/java` of
-  every Maven project whose dependencies are all test-scoped; `go vet ./...` in
-  every Go module that requires nothing; `python3 -m compileall` in every Python
-  package; on macOS the AutoFill provider's extension target
-  (`tom_secrets_app/macos`, `TomSecretsAutofill`) compiled with `xcodebuild`,
-  unsigned (its entitlements need the team).
+  --locked -- -D warnings` in every Cargo package; `cmake` configure
+  (`-DCMAKE_COMPILE_WARNING_AS_ERROR=ON`) and build into `build/ci` of every
+  CMake project (a `CMakeLists.txt` declaring `project(` whose parent has none);
+  `javac --release <the pom's maven.compiler.release, else 16> -Xlint:all
+  -Werror` over `src/main/java` of every Maven project whose dependencies are
+  all test-scoped; `go vet ./...` in every Go module that requires nothing;
+  `python3 -m compileall` in every Python package; on macOS the AutoFill
+  provider's extension target (`tom_secrets_app/macos`, `TomSecretsAutofill`)
+  compiled with `xcodebuild`, unsigned (its entitlements need the team).
 - `:test`: every package's suite (without the tags `licence-boundary`,
   `integration` and `standalone`), one full log per package; a package without
   `*_test.dart` is reported skipped; `npm ci` and `npm test` in every npm
-  package; `cargo test --all-features --locked` in every Cargo package; in every
-  such Maven project with a `src/test/java/**/AllTests.java`, main and test
-  sources compiled the same way and `AllTests` run with `java`; `go test
-  -count=1 ./...` in every Go module that requires nothing and has `_test.go`
-  files; `python3 -m unittest discover -s tests` (with `PYTHONPATH=src`) in
-  every Python package; on macOS `swift test` of the AutoFill provider's core
-  (`TomSecretsAutofillKit`).
+  package; `cargo test --all-features --locked` in every Cargo package; `ctest`
+  in every CMake project, built the same way; in every such Maven project with a
+  `src/test/java/**/AllTests.java`, main and test sources compiled the same way
+  and `AllTests` run with `java`; `go test -count=1 ./...` in every Go module
+  that requires nothing and has `_test.go` files; `python3 -m unittest discover
+  -s tests` (with `PYTHONPATH=src`) in every Python package; on macOS `swift
+  test` of the AutoFill provider's core (`TomSecretsAutofillKit`).
 - `:integration`: the integration suites against the real service (test tag
   `integration`, left out of `:test`): `tsm`'s builds the service as a binary
   (`dart build cli`), starts it through `tsm start` on demo vaults in a scratch
@@ -107,7 +110,7 @@ Log and step names are paths relative to the folder that holds all three.
   (`conformance/tool/conformance.py all`): the reference table current, the
   coverage gate, every runner against every case table; a runner without its
   toolchain is red here (Python 3 with `jsonschema` needed, and each
-  runner's toolchain: Dart, Node.js, Python, Go, Rust, Java).
+  runner's toolchain: Dart, Node.js, Python, Go, Rust, Java, CMake).
 - `:standalone`: the standalone check (`test/standalone_test.dart`), below.
 - `:all`: the stages above, in that order.
 - `:release`: not part of `:all`: the release for this platform, below.
@@ -116,7 +119,8 @@ Log and step names are paths relative to the folder that holds all three.
 The packages are found, never listed: every directory with a `pubspec.yaml`
 (an npm package: a `package.json` with its `package-lock.json`; a Cargo
 package: a `Cargo.toml` with its `Cargo.lock`; a Java project: a `pom.xml`
-whose dependencies are all test-scoped; a Go module:
+whose dependencies are all test-scoped; a CMake project: a `CMakeLists.txt`
+declaring `project(` whose parent directory has none; a Go module:
 a `go.mod` that requires nothing; a Python package: a `pyproject.toml` that
 requires nothing) up to four
 levels below a repository root, leaving out `example/`, `test/`,
