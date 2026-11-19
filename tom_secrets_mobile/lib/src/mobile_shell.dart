@@ -76,6 +76,71 @@ enum _Tab { vaults, search, generator, settings }
 
 class _ShellState extends State<TomSecretsMobileShell> {
   _Tab _tab = _Tab.vaults;
+  StreamSubscription<TomSecretsBreachRun>? _breachRuns;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Each breach-check run is shown with "Turn off breach check" (DP-39);
+    // a phone has no notification while the app is closed, as the check
+    // runs only while it is open.
+    _breachRuns ??= context.read<TomSecretsHealth>().runs.listen(_showRun);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_breachRuns?.cancel());
+    super.dispose();
+  }
+
+  void _showRun(TomSecretsBreachRun run) {
+    if (!mounted) return;
+    final health = context.read<TomSecretsHealth>();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        key: const Key('tsm-mobile-breach-run'),
+        duration: const Duration(seconds: 8),
+        content: Text('${run.title}. ${run.body}'),
+        action: SnackBarAction(
+          label: 'Turn off breach check',
+          onPressed: () => unawaited(health.setBreachEnabled(false)),
+        ),
+      ),
+    );
+  }
+
+  /// The Health screen; a finding opens its entry.
+  void _openHealth() {
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => Scaffold(
+            appBar: AppBar(title: const Text('Health')),
+            body: TomSecretsHealthView(
+              onOpen: (ref) {
+                final session = context.read<TomSecretsSession>();
+                session.selectedEntry = ref;
+                final title = session.entryOf(ref)?.label ?? '';
+                unawaited(
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: Text(title)),
+                        body: TomSecretsEntryEditor(
+                          ref: ref,
+                          clipboard: widget.clipboard,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -98,6 +163,7 @@ class _ShellState extends State<TomSecretsMobileShell> {
           engine: widget.engine,
           onForget: widget.onForget,
           autofill: widget.autofill,
+          onHealth: _openHealth,
         ),
       };
       final destinations = [

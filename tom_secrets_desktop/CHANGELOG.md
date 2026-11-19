@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- Notification buttons (`TomSecretsNotifier.notify`'s `actions`): macOS
+  categories registered at the start (`actionCategories`), Linux and Windows
+  actions; a button runs its action, a click the notification's.
 - The macOS AutoFill port (`TomSecretsMacAutofill`, channel
   `tom_secrets_desktop/autofill`): the provider's state, the snapshot key
   into the keychain under Touch ID, the snapshot into the App Group

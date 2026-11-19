@@ -41,6 +41,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 import '../host_bridge.dart' show TomSecretsHostPreferenceKeys;
 import '../ports/desktop_ports.dart';
 import '../state/clients.dart';
+import '../state/health.dart';
 import '../state/autofill.dart';
 import '../state/integrations.dart';
 import '../state/os_unlock.dart';
@@ -681,6 +682,21 @@ class _SettingsState extends State<TomSecretsSettingsView> {
                   if (mounted) setState(() {});
                 }
               : null,
+        ),
+        SwitchListTile(
+          key: const Key('tsm-settings-breach-check'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Check passwords against known breaches'),
+          subtitle: const Text(
+            'Have I Been Pwned is asked with the first five characters of '
+            'each password\'s SHA-1 hash; new and changed passwords at '
+            'once, all of them once a week, each run shown as a '
+            'notification.',
+          ),
+          value: context.watch<TomSecretsHealth>().breachEnabled,
+          onChanged: (on) =>
+              context.read<TomSecretsHealth>().setBreachEnabled(on),
         ),
         if (host.loginItem case final login?)
           SwitchListTile(

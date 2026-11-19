@@ -20,6 +20,7 @@ It goes task by task; the labels in quotes are the ones the app shows.
 - [Pairing another device](#pairing-another-device)
 - [Conflicts](#conflicts)
 - [Proposals](#proposals)
+- [Health](#health)
 - [Settings](#settings)
 - [Status](#status)
 - [Troubleshooting](#troubleshooting)
@@ -240,7 +241,8 @@ OS unlock**: the master password is the only way to unlock there.
 
 The rail on the left holds the screens: **Vaults**, **Environments**,
 **Conflicts** (with the number of conflicted entries), **Clients** (with the
-number of approvals waiting), **Keys** (with the number of keys due),
+number of approvals waiting), **Proposals** (with the number of logins
+proposed), **Health**, **Keys** (with the number of keys due),
 **Pairing**, **Import**, **Settings** and **Status**.
 
 The top bar holds:
@@ -721,6 +723,53 @@ Nothing is written until you choose. Proposals live only in the app's
 memory: locking forgets them. While the window is closed, a notification
 "Save a login?" names the site and the user, never the password.
 
+## Health
+
+**Health** in the rail lists what in the open vaults needs attention, under
+a heading per kind; each line names the entry, its vault and why, and a
+click opens the entry:
+
+- **Weak**: passwords guessed quickly. The estimate (zxcvbn) knows common
+  passwords, dictionary words, names, dates, keyboard walks such as
+  `qwertz`, repeats and the entry's own title, user name and site, so a
+  long password can still be weak.
+- **Reused**: passwords two or more logins share, across every open vault.
+- **Old**: passwords unchanged for longer than the age chosen above the
+  list ("Old after": six months, one year (the default), two or three
+  years), read from the entry's history.
+- **Expiring**: entries whose Expires date is within 30 days, or past.
+- **Short keys**: SSH keys below today's guidance: RSA below 3072 bits, an
+  elliptic curve below 256 bits, DSA. They still work and are still served;
+  open the entry to generate an Ed25519 key in their place.
+- **Breached**: passwords found in known data breaches, with how often.
+  "Exclude" keeps a login out of the breach check (the entry editor's
+  "Check the password against known breaches" lets it in again).
+
+Only logins' passwords are checked for strength, reuse, age and breaches;
+API tokens, notes and keys only for their expiry and, keys, their length.
+A dropdown above the list narrows it to one vault.
+
+### The breach check
+
+The breach check is on unless you turn it off. It asks
+[Have I Been Pwned](https://haveibeenpwned.com/Passwords) which passwords
+appear in known breaches, and sends only the first five characters of each
+password's SHA-1 hash, padded so the answer's size says nothing; the
+password and its full hash never leave the device. It checks new and
+changed passwords at once, and every password once a week, while the app
+runs with the vaults unlocked.
+
+Each run shows a notification with the result, for example "Breach check:
+nothing found — All 42 passwords checked", with the button **"Turn off
+breach check"**; a click on the notification opens Health. It names no
+password and no entry. The Health screen shows the check's state, when all
+passwords were last checked, the last result and a failed check's reason;
+**"Check now"** checks every password, and its switch turns the check on or
+off, as Settings › This app does.
+
+The app keeps only whether the check is on, the age setting, and per login
+when its password was checked with the result: never a password or a hash.
+
 ## Settings
 
 Each setting says whose it is.
@@ -748,7 +797,9 @@ on this machine pre-approve clients and make approval tokens without a
 person; it is off by default and switched only here.
 
 **This app** (kept in its preferences): "Keep the window out of screenshots
-and screen sharing" (Linux cannot), "Start the app at login, in the tray"
+and screen sharing" (Linux cannot), "Check passwords against known
+breaches" (the [breach check](#the-breach-check), on by default), "Start
+the app at login, in the tray"
 (macOS: a login item; Windows: the `Run` key of your user; Linux: an
 autostart entry in `~/.config/autostart`),
 and "Stop the service" (programs then get no secrets until it is started and

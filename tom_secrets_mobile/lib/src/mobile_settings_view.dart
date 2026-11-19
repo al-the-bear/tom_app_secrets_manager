@@ -26,6 +26,7 @@ class TomSecretsMobileSettingsView extends StatefulWidget {
     required this.engine,
     this.onForget,
     this.autofill,
+    this.onHealth,
   });
 
   /// The engine.
@@ -34,6 +35,9 @@ class TomSecretsMobileSettingsView extends StatefulWidget {
   /// The Android Autofill service's platform side, or null where there is
   /// none (iOS).
   final TomSecretsAutofillPlatform? autofill;
+
+  /// Opens the Health screen, or null.
+  final void Function()? onHealth;
 
   /// Forgets the setup (back to the setup screen), or null.
   final Future<void> Function()? onForget;
@@ -191,6 +195,30 @@ class _SettingsState extends State<TomSecretsMobileSettingsView> {
           _settings.clipboardSeconds,
           const [15, 30, 60, 120],
           _seconds,
+        ),
+        const Divider(),
+        if (widget.onHealth case final open?)
+          ListTile(
+            key: const Key('tsm-mobile-health'),
+            leading: const Icon(Icons.health_and_safety_outlined),
+            title: const Text('Health'),
+            subtitle: const Text(
+              'Weak, reused, old, expiring and breached passwords, short '
+              'keys.',
+            ),
+            onTap: open,
+          ),
+        SwitchListTile(
+          key: const Key('tsm-mobile-breach-check'),
+          title: const Text('Check passwords against known breaches'),
+          subtitle: const Text(
+            'Have I Been Pwned is asked with the first five characters of '
+            'each password\'s SHA-1 hash: new and changed passwords at '
+            'once, all of them once a week while the app is open.',
+          ),
+          value: context.watch<TomSecretsHealth>().breachEnabled,
+          onChanged: (on) =>
+              context.read<TomSecretsHealth>().setBreachEnabled(on),
         ),
         if (widget.autofill != null && _autofillOn != null) ...[
           const Divider(),

@@ -214,6 +214,7 @@ void main() {
     await tester.pumpAndSettle();
     await wait(tester);
     await tester.ensureVisible(find.byKey(const Key('tsm-integration-ssh')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tsm-integration-ssh')));
     await wait(tester);
     final config = File('${home.path}/.ssh/config');

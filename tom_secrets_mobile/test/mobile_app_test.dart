@@ -16,6 +16,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:tom_basics/utilities.dart'
     show TomClipboardPort, TomClipboardReceipt;
 import 'package:tom_core_storage/settings.dart';
@@ -58,6 +60,7 @@ void main() {
   late _Scanner scanner;
   late _Discovery lan;
   late NetSwitch net;
+  TomSecretsBreachCheck? breach;
   late FakeDocuments documents;
   late TomSecretsPairingPeerKeys giverKeys;
 
@@ -70,6 +73,7 @@ void main() {
   });
 
   setUp(() async {
+    breach = null;
     server = FakeGitHubServer();
     demo = DemoVaults(server);
     await demo.seed();
@@ -128,6 +132,7 @@ void main() {
     documents: documents,
     discovery: lan,
     ownAddresses: () async => [InternetAddress('10.8.0.6')],
+    breachCheck: breach,
   );
 
   Future<void> wait(WidgetTester tester, [int rounds = 4]) async {
@@ -222,6 +227,42 @@ void main() {
     await tester.tap(find.byKey(const Key('tsm-mobile-entry-Api')));
     await tester.pumpAndSettle();
     expect(find.byType(TomSecretsEntryEditor), findsOneWidget);
+  });
+
+  testWidgets('the breach check runs at the unlock and says so with "Turn '
+      'off breach check"; Settings opens Health and has the switch', (
+    tester,
+  ) async {
+    var asked = 0;
+    breach = TomSecretsBreachCheck(
+      client: MockClient((request) async {
+        asked++;
+        expect(request.url.host, 'api.pwnedpasswords.com');
+        expect(request.url.pathSegments.last, hasLength(5));
+        expect(request.headers['Add-Padding'], 'true');
+        return http.Response('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:0', 200);
+      }),
+    );
+    size(tester, const Size(400, 860));
+    await setUpByPairing(tester);
+    await unlock(tester);
+    expect(asked, greaterThan(0));
+    expect(find.byKey(const Key('tsm-mobile-breach-run')), findsOneWidget);
+    expect(find.textContaining('Breach check: nothing found'), findsOneWidget);
+    expect(find.text('Turn off breach check'), findsOneWidget);
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    final toggle = find.byKey(const Key('tsm-mobile-breach-check'));
+    await tester.ensureVisible(toggle);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    await tester.tap(find.byKey(const Key('tsm-mobile-health')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('tsm-health')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tsm-health-breach-switch')));
+    await wait(tester);
+    expect(preferences.read(TomSecretsHealthPreferenceKeys.breachCheck), 'off');
   });
 
   testWidgets('tablet widths: a rail with the list and the entry side by '

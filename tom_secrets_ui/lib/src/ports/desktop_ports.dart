@@ -18,6 +18,8 @@ import 'package:tom_core_storage/settings.dart' show TomGatedSecretStore;
 import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFilePicker;
 import 'package:tom_host_ui/tom_host_ui.dart' show TomFlutterClipboardPort;
+import 'package:tom_secrets_core/tom_secrets_core.dart'
+    show TomSecretsBreachCheck;
 
 import '../state/autofill.dart';
 import '../state/entry_requests.dart';
@@ -89,14 +91,36 @@ abstract interface class TomSecretsWindowHost {
   Future<void> quit();
 }
 
+/// A button of a notification.
+final class TomSecretsNotificationAction {
+  /// The button [label]; [onPressed] runs when it is pressed. [id] names it
+  /// to the system.
+  const TomSecretsNotificationAction({
+    required this.id,
+    required this.label,
+    required this.onPressed,
+  });
+
+  /// The action's identifier (letters, digits and `-`).
+  final String id;
+
+  /// The button's text.
+  final String label;
+
+  /// What it does.
+  final void Function() onPressed;
+}
+
 /// A system notification.
 abstract interface class TomSecretsNotifier {
-  /// Shows [title] with [body]; [onClick] runs when the user clicks it. Never
-  /// carries a value (part-app, Notifications).
+  /// Shows [title] with [body]; [onClick] runs when the user clicks it, an
+  /// action of [actions] when its button is pressed. Never carries a value
+  /// (part-app, Notifications).
   Future<void> notify({
     required String title,
     required String body,
     void Function()? onClick,
+    List<TomSecretsNotificationAction> actions = const [],
   });
 }
 
@@ -287,6 +311,7 @@ final class TomSecretsHost {
     this.unlockFooter,
     this.entryRequests,
     this.autofill,
+    this.breachCheck,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -300,6 +325,11 @@ final class TomSecretsHost {
   /// The system's password AutoFill (macOS: the credential provider's
   /// snapshot and QuickType identities), or null where there is none.
   final TomSecretsAutofillPort? autofill;
+
+  /// The breach check the health report asks (part-password-manager,
+  /// DP-39); null: the Have I Been Pwned range API over a client of the
+  /// app's own.
+  final TomSecretsBreachCheck? breachCheck;
 
   /// The secrets service.
   final TomSecretsServiceHost service;

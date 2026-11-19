@@ -20,6 +20,7 @@ import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
 
 import '../ports/desktop_ports.dart';
 import '../state/entry_requests.dart';
+import '../state/health.dart';
 import '../state/integrations.dart';
 import '../state/reminders.dart';
 import '../state/service_connection.dart';
@@ -31,6 +32,7 @@ import 'conflicts_view.dart';
 import 'import_view.dart';
 import 'keys_view.dart';
 import 'pairing_view.dart';
+import 'health_view.dart';
 import 'proposals_view.dart';
 import 'environments_view.dart';
 import 'settings_view.dart';
@@ -53,6 +55,9 @@ enum TomSecretsDestination {
 
   /// The logins the browser extension and git's helper proposed.
   proposals,
+
+  /// The health report: weak, reused, old, expiring, breached, short keys.
+  health,
 
   /// The keys with their dates, the rotation ages.
   keys,
@@ -91,6 +96,17 @@ class _MainShellState extends State<TomSecretsMainShell> {
   TomSecretsServiceConnection? _connection;
   TomSecretsEntryRequests? _requests;
   TomSecretsSession? _session;
+  TomSecretsHealth? _health;
+  int _healthShown = 0;
+
+  /// A notification of the breach check was clicked: show Health.
+  void _showHealth() {
+    final health = _health;
+    if (health == null || !mounted) return;
+    if (health.showRequests == _healthShown) return;
+    _healthShown = health.showRequests;
+    setState(() => _destination = TomSecretsDestination.health);
+  }
 
   /// An entry asked for from outside (the browser host's `openApp`), shown
   /// in the vault browser once its vault is open.
@@ -116,6 +132,12 @@ class _MainShellState extends State<TomSecretsMainShell> {
       _requests = requests?..addListener(_showRequested);
       _session = session..addListener(_showRequested);
       WidgetsBinding.instance.addPostFrameCallback((_) => _showRequested());
+    }
+    final health = context.read<TomSecretsHealth>();
+    if (!identical(health, _health)) {
+      _health?.removeListener(_showHealth);
+      _health = health..addListener(_showHealth);
+      _healthShown = health.showRequests;
     }
     final c = context.read<TomSecretsServiceConnection>();
     if (!identical(c, _connection)) {
@@ -173,6 +195,7 @@ class _MainShellState extends State<TomSecretsMainShell> {
     _requests?.removeListener(_showRequested);
     _session?.removeListener(_showRequested);
     _connection?.removeListener(_onConnection);
+    _health?.removeListener(_showHealth);
     _search.dispose();
     _query.dispose();
     super.dispose();
@@ -302,6 +325,11 @@ class _MainShellState extends State<TomSecretsMainShell> {
                     ),
                     selectedIcon: const Icon(Icons.add_task_rounded),
                     label: const Text('Proposals'),
+                  ),
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.health_and_safety_outlined),
+                    selectedIcon: Icon(Icons.health_and_safety_rounded),
+                    label: Text('Health'),
                   ),
                   NavigationRailDestination(
                     icon: Badge.count(
@@ -485,6 +513,15 @@ class _MainShellState extends State<TomSecretsMainShell> {
                           const TomSecretsClientsView(),
                         TomSecretsDestination.proposals =>
                           const TomSecretsProposalsView(),
+                        TomSecretsDestination.health => TomSecretsHealthView(
+                          onOpen: (ref) {
+                            setState(
+                              () => _destination = TomSecretsDestination.vaults,
+                            );
+                            context.read<TomSecretsSession>().selectedEntry =
+                                ref;
+                          },
+                        ),
                         TomSecretsDestination.keys =>
                           const TomSecretsKeysView(),
                         TomSecretsDestination.pairing =>

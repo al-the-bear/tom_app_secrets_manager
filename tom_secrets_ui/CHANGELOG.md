@@ -2,6 +2,15 @@
 
 ## 0.1.0
 
+- The Health screen and the breach check (part-password-manager, DP-39,
+  DP-179): `TomSecretsHealthView` in the rail, `TomSecretsHealth` (the report
+  over the open vaults, the breach check on by default: new and changed
+  passwords at once, all once a week, each run on `runs`), the host bridge's
+  notification with "Turn off breach check", the switch in Settings › This
+  app and the entry editor's "Check the password against known breaches";
+  `TomSecretsNotifier.notify` takes `actions`
+  (`TomSecretsNotificationAction`); `TomSecretsHost.breachCheck`;
+  `TomSecretsSession.indexRevision`.
 - Password AutoFill on macOS (DP-50, DP-51): `TomSecretsAutofill` writes the
   sealed snapshot (`TomSecretsAutofillSnapshot`: AES-256-GCM, a key per
   unlock) of the personal and shared vaults' logins after every unlock,

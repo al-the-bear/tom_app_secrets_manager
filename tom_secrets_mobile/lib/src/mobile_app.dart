@@ -16,7 +16,7 @@ import 'package:tom_basics/utilities.dart' show TomClipboardPort;
 import 'package:tom_core_storage/settings.dart'
     show TomGatedSecretStore, TomSecretStore;
 import 'package:tom_secrets_core/tom_secrets_core.dart'
-    show tomSecretsPairingAddresses;
+    show TomSecretsBreachCheck, tomSecretsPairingAddresses;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 import 'mobile_autofill.dart';
@@ -55,6 +55,7 @@ class TomSecretsMobileApp extends StatefulWidget {
     this.autofill,
     this.autofillUnlock,
     this.assetLinks,
+    this.breachCheck,
   });
 
   /// The device preferences.
@@ -114,6 +115,10 @@ class TomSecretsMobileApp extends StatefulWidget {
   /// The Digital Asset Links checker of package matches.
   final TomSecretsAssetLinks? assetLinks;
 
+  /// The breach check of the health report (DP-39); default the Have I Been
+  /// Pwned range API over [httpClient].
+  final TomSecretsBreachCheck? breachCheck;
+
   @override
   State<TomSecretsMobileApp> createState() => _MobileAppState();
 }
@@ -125,6 +130,10 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
   );
   TomSecretsMobileEngine? _engine;
   DateTime? _expiry;
+  // The health report's breach check: the given one, else the range API
+  // over the app's HTTP client (closed with the app when it made its own).
+  late final TomSecretsBreachCheck _breachCheck =
+      widget.breachCheck ?? TomSecretsBreachCheck(client: widget.httpClient);
   late final TomSecretsAssetLinks _links =
       widget.assetLinks ?? TomSecretsAssetLinks(client: widget.httpClient);
 
@@ -242,6 +251,7 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
   void dispose() {
     widget.autofill?.setHandler(null);
     unawaited(_engine?.close());
+    if (widget.breachCheck == null) _breachCheck.close();
     super.dispose();
   }
 
@@ -295,6 +305,7 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
               ? null
               : TomSecretsMobileFiles(widget.documents!),
           attachmentsShare: true,
+          breachCheck: _breachCheck,
           unlockFooter: (context) => autofillUnlock != null
               ? Align(
                   alignment: Alignment.centerLeft,

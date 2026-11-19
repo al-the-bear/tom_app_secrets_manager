@@ -75,6 +75,7 @@ final class _Notifier implements TomSecretsNotifier {
     required String title,
     required String body,
     void Function()? onClick,
+    List<TomSecretsNotificationAction> actions = const [],
   }) async {
     titles.add(title);
     click = onClick;

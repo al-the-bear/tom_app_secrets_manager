@@ -51,7 +51,11 @@ final class TomSecretsPluginTray with TrayListener implements TomSecretsTray {
       final key = 'item-$i';
       if (item.onSelected != null) _actions[key] = item.onSelected!;
       menu.add(
-        MenuItem(key: key, label: item.label, disabled: item.onSelected == null),
+        MenuItem(
+          key: key,
+          label: item.label,
+          disabled: item.onSelected == null,
+        ),
       );
     }
     await trayManager.setContextMenu(Menu(items: menu));
@@ -147,13 +151,23 @@ final class TomSecretsPluginWindow
 
 /// System notifications over `flutter_local_notifications` (macOS
 /// UserNotifications, Windows toasts, Linux through the desktop's
-/// notification service). A click runs the notification's action.
+/// notification service). A click runs the notification's click, a button
+/// its action. macOS needs a button's category registered at the start:
+/// [actionCategories] names every one the app shows.
 final class TomSecretsPluginNotifier implements TomSecretsNotifier {
   TomSecretsPluginNotifier._(this._plugin);
 
   final FlutterLocalNotificationsPlugin _plugin;
   final Map<int, void Function()> _clicks = {};
+  final Map<int, Map<String, void Function()>> _actions = {};
   int _next = 1;
+
+  /// The notification buttons the app shows, by their action id with their
+  /// label: macOS takes only the buttons of a category registered at the
+  /// start, one category per button here.
+  static const actionCategories = {
+    'turn-off-breach-check': 'Turn off breach check',
+  };
 
   /// The Windows app user model id and the toast activator's GUID: the app's
   /// own, fixed, so Windows ties its notifications to it.
@@ -168,7 +182,16 @@ final class TomSecretsPluginNotifier implements TomSecretsNotifier {
     final notifier = TomSecretsPluginNotifier._(plugin);
     await plugin.initialize(
       settings: InitializationSettings(
-        macOS: const DarwinInitializationSettings(),
+        macOS: DarwinInitializationSettings(
+          notificationCategories: [
+            for (final MapEntry(key: id, value: label)
+                in actionCategories.entries)
+              DarwinNotificationCategory(
+                id,
+                actions: [DarwinNotificationAction.plain(id, label)],
+              ),
+          ],
+        ),
         linux: const LinuxInitializationSettings(defaultActionName: 'Open'),
         windows: WindowsInitializationSettings(
           appName: appName,
@@ -178,7 +201,15 @@ final class TomSecretsPluginNotifier implements TomSecretsNotifier {
       ),
       onDidReceiveNotificationResponse: (response) {
         final id = response.id;
-        if (id != null) notifier._clicks.remove(id)?.call();
+        if (id == null) return;
+        final actions = notifier._actions.remove(id);
+        final click = notifier._clicks.remove(id);
+        final action = response.actionId;
+        if (action != null && action.isNotEmpty && actions != null) {
+          actions[action]?.call();
+        } else {
+          click?.call();
+        }
       },
     );
     return notifier;
@@ -189,17 +220,36 @@ final class TomSecretsPluginNotifier implements TomSecretsNotifier {
     required String title,
     required String body,
     void Function()? onClick,
+    List<TomSecretsNotificationAction> actions = const [],
   }) async {
     final id = _next++;
     if (onClick != null) _clicks[id] = onClick;
+    if (actions.isNotEmpty) {
+      _actions[id] = {for (final a in actions) a.id: a.onPressed};
+    }
+    // macOS shows the buttons of one registered category.
+    final category =
+        actions.length == 1 && actionCategories.containsKey(actions.single.id)
+        ? actions.single.id
+        : null;
     await _plugin.show(
       id: id,
       title: title,
       body: body,
-      notificationDetails: const NotificationDetails(
-        macOS: DarwinNotificationDetails(),
-        linux: LinuxNotificationDetails(),
-        windows: WindowsNotificationDetails(),
+      notificationDetails: NotificationDetails(
+        macOS: DarwinNotificationDetails(categoryIdentifier: category),
+        linux: LinuxNotificationDetails(
+          actions: [
+            for (final a in actions)
+              LinuxNotificationAction(key: a.id, label: a.label),
+          ],
+        ),
+        windows: WindowsNotificationDetails(
+          actions: [
+            for (final a in actions)
+              WindowsAction(content: a.label, arguments: a.id),
+          ],
+        ),
       ),
     );
   }

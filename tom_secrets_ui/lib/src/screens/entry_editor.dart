@@ -108,6 +108,7 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
   final TomSecretsRevealController _reveal = TomSecretsRevealController();
   TomSecretsEntryType _type = TomSecretsEntryType.login;
   bool _expires = false;
+  bool _breachExcluded = false;
   DateTime? _expiry;
   bool _dirty = false;
   bool _saving = false;
@@ -144,6 +145,7 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
     _tags.text = tomSecretsTagsOf(entry).join(', ');
     _type = TomSecretsEntryType.of(text(TomSecretsEntryFields.type));
     _expires = entry.times.expires.get() == true;
+    _breachExcluded = tomSecretsBreachCheckExcluded(entry);
     _expiry = entry.times.expiryTime.get();
     for (final c in _urls) {
       c.dispose();
@@ -300,6 +302,11 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
         entry.removeString(TomSecretsEntryFields.key);
       } else {
         entry.setString(TomSecretsEntryFields.key, PlainValue(key));
+      }
+      if (_breachExcluded) {
+        entry.setString(tomSecretsBreachCheckField, PlainValue('off'));
+      } else {
+        entry.removeString(tomSecretsBreachCheckField);
       }
       if (_type == TomSecretsEntryType.login) {
         entry.removeString(TomSecretsEntryFields.type);
@@ -991,6 +998,21 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                   ),
               ],
             ),
+            if (_type == TomSecretsEntryType.login)
+              CheckboxListTile(
+                key: const Key('tsm-breach-check'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: !_breachExcluded,
+                onChanged: readOnly != null
+                    ? null
+                    : (on) => setState(() {
+                        _breachExcluded = on != true;
+                        _dirty = true;
+                      }),
+                title: const Text('Check the password against known breaches'),
+              ),
           ]),
           _section('Attachments', Icons.attach_file_rounded, [
             for (final MapEntry(key: name, value: binary)

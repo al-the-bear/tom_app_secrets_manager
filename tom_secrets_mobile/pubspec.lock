@@ -761,10 +761,10 @@ packages:
     dependency: "direct main"
     description:
       name: tom_secrets_core
-      sha256: "1ad20f0de179f18939224f356660c12a1047c6b8d5585eae98a0d58ef5359ffb"
+      sha256: ab46842ffc60a442d85245c3028d1f5140d787ce911068a4ddb2c1cc6233bf39
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.8"
+    version: "0.2.9"
   tom_secrets_service:
     dependency: "direct main"
     description:
@@ -876,6 +876,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.4"
+  zxcvbn:
+    dependency: transitive
+    description:
+      name: zxcvbn
+      sha256: "5d860ab87c0e7f295902697afd364aa722d89d4e5839e8800ad1b0faf3d63b08"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
 sdks:
   dart: ">=3.13.0 <4.0.0"
   flutter: ">=3.44.0"

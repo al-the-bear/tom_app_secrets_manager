@@ -12,6 +12,7 @@ library;
 import 'dart:async';
 
 import 'ports/desktop_ports.dart';
+import 'state/health.dart';
 import 'state/os_unlock.dart';
 import 'state/proposals.dart';
 import 'state/reminders.dart';
@@ -31,11 +32,12 @@ abstract final class TomSecretsHostPreferenceKeys {
 /// Connects the host's capabilities to the connection's state.
 final class TomSecretsHostBridge {
   /// A bridge for [host] following [connection]; [osUnlock] keeps the OS
-  /// unlock's items.
+  /// unlock's items; [health]'s breach-check runs become notifications.
   TomSecretsHostBridge({
     required this.host,
     required this.connection,
     this.osUnlock,
+    this.health,
   });
 
   /// The host.
@@ -46,6 +48,11 @@ final class TomSecretsHostBridge {
 
   /// The OS unlock, or null.
   final TomSecretsOsUnlock? osUnlock;
+
+  /// The health report, or null.
+  final TomSecretsHealth? health;
+
+  StreamSubscription<TomSecretsBreachRun>? _breachRuns;
 
   StreamSubscription<Map<String, Object?>>? _events;
   StreamSubscription<TomSecretsSessionEvent>? _session;
@@ -66,6 +73,12 @@ final class TomSecretsHostBridge {
     _session = host.sessionEvents?.events.listen(
       (e) => unawaited(onSessionEvent(e)),
     );
+    // A host without notifications (a phone) shows the runs in its shell.
+    if (host.notifier != null) {
+      _breachRuns = health?.runs.listen(
+        (run) => unawaited(notifyBreachRun(run)),
+      );
+    }
     unawaited(applyCaptureSetting());
     unawaited(_initLoginItem());
     // While the app runs, a due key is notified once a day (part-key-
@@ -75,6 +88,31 @@ final class TomSecretsHostBridge {
       (_) => unawaited(remind()),
     );
     _update();
+  }
+
+  /// Shows a run of the breach check as a notification (DP-39), whether the
+  /// window is open or not, with the action "Turn off breach check"; a
+  /// click opens the window at Health. Never a password or a title.
+  Future<void> notifyBreachRun(TomSecretsBreachRun run) async {
+    final notifier = host.notifier;
+    final health = this.health;
+    if (notifier == null || health == null) return;
+    final window = host.window;
+    await notifier.notify(
+      title: run.title,
+      body: run.body,
+      onClick: () {
+        health.requestShow();
+        if (window != null) unawaited(window.show());
+      },
+      actions: [
+        TomSecretsNotificationAction(
+          id: 'turn-off-breach-check',
+          label: 'Turn off breach check',
+          onPressed: () => unawaited(health.setBreachEnabled(false)),
+        ),
+      ],
+    );
   }
 
   /// Notifies the keys due, once a day; a click opens the window.
@@ -310,6 +348,7 @@ final class TomSecretsHostBridge {
   void dispose() {
     connection.removeListener(_update);
     _daily?.cancel();
+    unawaited(_breachRuns?.cancel());
     unawaited(_events?.cancel());
     unawaited(_session?.cancel());
   }

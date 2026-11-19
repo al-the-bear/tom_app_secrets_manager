@@ -115,6 +115,17 @@ offering the import and the pairing.
   logins the browser extension and git's credential helper proposed, each
   updating a login of that site and user, saved as a new login in a vault
   chosen, or dropped; a known password said so.
+- `TomSecretsHealthView` and `TomSecretsHealth`: The Health screen
+  (part-password-manager, DP-39, DP-179): weak (zxcvbn), reused, old (the
+  age chosen, one year by default), expiring and breached passwords and
+  short SSH keys of the open vaults, each opening its entry, a breached one
+  excluded with "Exclude"; the breach check on by default over the Have I
+  Been Pwned range API (`TomSecretsHost.breachCheck`, else the app's own):
+  new and changed passwords at once, all of them once a week, each run on
+  `TomSecretsHealth.runs`, which the host bridge shows as a notification
+  with "Turn off breach check" (a host without notifications, the phone,
+  shows them itself); the device keeps only the setting and, per login, the
+  time of the password checked with its count.
 - `TomSecretsFirstRunWizard`: Opened when the machine is not set up (no service
   runs and the data directory holds no `bootstrap.yaml`). Step 1: create a
   primary vault or open one, on this computer or in a GitHub repository (the
@@ -147,8 +158,8 @@ offering the import and the pairing.
   starting a service that is not running.
 - `TomSecretsMainShell`: The rail (Vaults, Environments, Conflicts with the
   count of conflicted entries, Clients with the count of waiting approvals,
-  Proposals with the count of proposed logins, Keys with the count of keys
-  due, Pairing, Import, Settings, Status); a banner while
+  Proposals with the count of proposed logins, Health, Keys with the count
+  of keys due, Pairing, Import, Settings, Status); a banner while
   a key is due (Snooze until its next reminder step, Open Keys); a new approval
   prompt shown on top at once, one at a time; the top bar (search over every
   vault, tree/list, vault-aware/uniform, the sync status of the GitHub vaults,

@@ -1169,6 +1169,11 @@ class TomSecretsSession extends ChangeNotifier {
   /// was reloaded: the editor shows a banner.
   TomSecretsEntryRef? get changedElsewhere => _changedElsewhere;
 
+  /// Counts the index's rebuilds: it changes whenever the open vaults or
+  /// their entries do (a load, a save, a change elsewhere, the lock).
+  int get indexRevision => _indexRevision;
+  int _indexRevision = 0;
+
   /// Every entry of the open vaults outside the overlay groups and the
   /// recycle bin.
   List<TomSecretsEntryView> get index =>
@@ -1657,6 +1662,7 @@ class TomSecretsSession extends ChangeNotifier {
   }
 
   void _reindex() {
+    _indexRevision++;
     _resolution = null;
     final views = <TomSecretsEntryView>[];
     for (final vault in _vaults.values) {
@@ -1709,6 +1715,7 @@ class TomSecretsSession extends ChangeNotifier {
     _unserved = const [];
     _resolution = null;
     _index = const [];
+    _indexRevision++;
     _selectedEntry = null;
     _selectedGroup = null;
     _selectedStore = null;

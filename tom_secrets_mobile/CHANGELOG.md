@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- The health report and the breach check (DP-39): Settings › Health opens
+  the Health screen, Settings has the breach check's switch, each run shows
+  a snack bar with "Turn off breach check"; `TomSecretsMobileApp.breachCheck`.
 - Android's Autofill service (part-os-integration, DP-175): the locked
   response at once (inline in the keyboard on Android 11+); BiometricPrompt
   and the running app's memory, or the app's own unlock on its own engine

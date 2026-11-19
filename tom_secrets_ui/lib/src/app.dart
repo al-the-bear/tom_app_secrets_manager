@@ -10,6 +10,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_basics/utilities.dart' show TomProtectedClipboard;
+import 'package:tom_secrets_core/tom_secrets_core.dart'
+    show TomSecretsBreachCheck;
 
 import 'host_bridge.dart';
 import 'ports/desktop_ports.dart';
@@ -18,6 +20,7 @@ import 'screens/gate_screens.dart';
 import 'screens/main_shell.dart';
 import 'state/autofill.dart';
 import 'state/first_run_model.dart';
+import 'state/health.dart';
 import 'state/os_unlock.dart';
 import 'state/service_connection.dart';
 import 'state/session_state.dart';
@@ -63,16 +66,27 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
           session: _session,
           preferences: widget.host.preferences,
         );
+  // The host's breach check, else the range API over a client of the app's
+  // own (closed with the app).
+  late final TomSecretsBreachCheck? _ownBreachCheck =
+      widget.host.breachCheck == null ? TomSecretsBreachCheck() : null;
+  late final TomSecretsHealth _health = TomSecretsHealth(
+    session: _session,
+    preferences: widget.host.preferences,
+    check: widget.host.breachCheck ?? _ownBreachCheck!,
+  );
   late final TomSecretsHostBridge _bridge = TomSecretsHostBridge(
     host: widget.host,
     connection: _connection,
     osUnlock: _osUnlock,
+    health: _health,
   );
 
   @override
   void initState() {
     super.initState();
     _bridge.start();
+    _health.start();
     if (widget.connection == null) _connection.connect();
     unawaited(_autofill?.refresh());
   }
@@ -80,6 +94,8 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
   @override
   void dispose() {
     _bridge.dispose();
+    _health.dispose();
+    _ownBreachCheck?.close();
     _autofill?.dispose();
     _osUnlock.dispose();
     _session.dispose();
@@ -94,6 +110,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
       ChangeNotifierProvider.value(value: _connection),
       ChangeNotifierProvider.value(value: _session),
       ChangeNotifierProvider.value(value: _osUnlock),
+      ChangeNotifierProvider.value(value: _health),
       // Null where the host has no AutoFill (watched as nullable).
       ChangeNotifierProvider<TomSecretsAutofill?>.value(value: _autofill),
     ],

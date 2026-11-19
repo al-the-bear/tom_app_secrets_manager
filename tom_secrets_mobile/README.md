@@ -73,6 +73,10 @@ A phone runs no secrets service and keeps no copy of a vault:
   (`onSaveRequest`): the app opens with it under Proposals, saved into a
   personal or shared vault once confirmed. Settings › "Autofill service"
   turns it on.
+- **The health report** (part-password-manager, DP-39): Settings › Health
+  opens `tom_secrets_ui`'s Health screen; the breach check runs while the
+  app is open and unlocked, each run shown as a snack bar with "Turn off
+  breach check"; its switch is in Settings.
 - **iOS has no autofill** from this app: logins are shown and copied from it
   (TD-4).
 

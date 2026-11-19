@@ -17,6 +17,7 @@ shows.
 - [Vaults in Files](#vaults-in-files)
 - [Staying current](#staying-current)
 - [Autofill on Android](#autofill-on-android)
+- [Health](#health)
 - [Settings](#settings)
 - [Troubleshooting](#troubleshooting)
 
@@ -190,6 +191,21 @@ the vaults do not hold, Android asks whether to save it in Tom Secrets: the
 app opens and "A login to save" › "Review" shows it, to save as a new login,
 update the existing one, or drop.
 
+## Health
+
+Settings › **"Health"** lists what in the vaults needs attention, as on the
+desktop (its user guide has the details): weak, reused, old (one year by
+default, "Old after" above the list), expiring and breached passwords, and
+short SSH keys. A line opens its entry.
+
+The **breach check** is on unless you turn it off: it asks Have I Been Pwned
+with only the first five characters of each password's SHA-1 hash, so the
+password never leaves the phone. It checks new and changed passwords at
+once and all of them once a week, while the app is open and unlocked (a
+phone runs no check in the background). Each run shows its result at the
+bottom of the screen with **"Turn off breach check"**. "Exclude" next to a
+breached login keeps it out of the check.
+
 ## Settings
 
 - **"Unlock with Face ID"** (or Touch ID, your fingerprint): on by default.
@@ -200,6 +216,9 @@ update the existing one, or drop.
 - **"Clear the clipboard after"**: 15, 30, 60 or 120 seconds.
 - **"Vaults"**: every vault with where it is (`github:…` or a file), and
   "Add a vault from a file".
+- **"Health"**: the [Health](#health) screen.
+- **"Check passwords against known breaches"**: the breach check, on by
+  default.
 - **"Autofill service"** (Android): whether Tom Secrets fills logins in
   apps and browsers, and "Turn on".
 - **"This device"**: its name and the primary vault.
