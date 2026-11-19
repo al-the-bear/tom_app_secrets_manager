@@ -93,7 +93,7 @@ class _RotateState extends State<TomSecretsRotateDialog> {
 
   bool get _isPrimary => _session.vaults.firstOrNull?.store == widget.store;
 
-  TomSecretsRotation get _rotation => TomSecretsRotation(
+  TomSecretsKeyChanges get _rotation => TomSecretsKeyChanges(
     password: _newPassword ? _password.text : null,
     keyFile: _keyFile,
     newRepositoryKey: _newRepositoryKey,

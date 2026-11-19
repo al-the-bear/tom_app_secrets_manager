@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
+import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
 
 import '../state/clients.dart';
 import '../state/rotation.dart';
@@ -104,10 +105,91 @@ class _KeysState extends State<TomSecretsKeysView> {
 
   Future<void> _rotate(String store) async {
     final c = context.read<TomSecretsServiceConnection>();
+    final session = context.read<TomSecretsSession>();
+    if (session.kindOf(store) == TomSecretsVaultKind.shared) {
+      // A shared vault's key travels in its recipients file: rotated there,
+      // with its migration period (part-key-rotation).
+      await _rotateShared(store);
+      return;
+    }
     // Read again whatever the outcome: a failed rotation leaves a pending
     // one to finish.
     await tomSecretsShowRotateDialog(context, store);
     await c.refreshStatus();
+    await _load();
+  }
+
+  Future<void> _rotateShared(String store) async {
+    final session = context.read<TomSecretsSession>();
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Rotate the key of the shared vault $store?'),
+        content: const Text(
+          'The members take up the new key from the recipients file; a '
+          'device that has not yet reads its copy under the old key, '
+          'read-only, for 14 days. Finish it on the Sharing screen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('tsm-key-rotate-shared-go'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Rotate'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    await tomSecretsGuarded(
+      context,
+      () => session.rotateSharedVaultKeys(store),
+    );
+    await _load();
+  }
+
+  Future<void> _rotateMemberKey() async {
+    final session = context.read<TomSecretsSession>();
+    if (session.memberKeyRotation != null) {
+      tomShowNotice(
+        ScaffoldMessenger.maybeOf(context),
+        kind: 'member-key-rotating',
+        message: 'Your member key is rotating already: see Sharing.',
+      );
+      return;
+    }
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rotate your member key?'),
+        content: const Text(
+          'A new member key is made beside the old one, and your shared '
+          'vaults are written for both until the rotation finishes (14 days, '
+          'or Finish on the Sharing screen). Give the new key to your '
+          'members.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('tsm-key-rotate-member-go'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Rotate'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    try {
+      await session.startMemberKeyRotation();
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
     await _load();
   }
 
@@ -280,6 +362,7 @@ class _KeysState extends State<TomSecretsKeysView> {
       leading: Icon(switch (k.kind) {
         'github_token' => Icons.vpn_key_outlined,
         'vault_keys' => Icons.lock_outline,
+        'member_key' => Icons.badge_outlined,
         _ => Icons.devices_other_outlined,
       }, color: colour),
       title: Text(k.title, style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -307,6 +390,12 @@ class _KeysState extends State<TomSecretsKeysView> {
             TextButton(
               key: Key('tsm-key-renew-${k.key}'),
               onPressed: () => unawaited(_renew(k.key)),
+              child: Text(rotation),
+            )
+          else if (k.kind == 'member_key' && k.own)
+            TextButton(
+              key: Key('tsm-key-rotate-${k.key}'),
+              onPressed: () => unawaited(_rotateMemberKey()),
               child: Text(rotation),
             )
           else if (k.kind == 'vault_keys' && k.vault != null)
@@ -460,6 +549,13 @@ class _KeysState extends State<TomSecretsKeysView> {
         number(
           'keyPairAgeMonths',
           'Rotation age of the approver and approval-link key pairs, months',
+          24,
+          1,
+          120,
+        ),
+        number(
+          'memberKeyAgeMonths',
+          'Rotation age of your member key (shared vaults), months',
           24,
           1,
           120,

@@ -25,13 +25,13 @@ enum TomSecretsKeyFileChange {
 }
 
 /// The changes a rotation of one vault makes.
-final class TomSecretsRotation {
+final class TomSecretsKeyChanges {
   /// A rotation: a new master password ([password], null keeps it), the key
   /// file [keyFile], a new repository key for a `.tsmx` vault and every
   /// file of its repository under the same key ([newRepositoryKey]), and the
   /// outer cipher the re-encrypted `.tsmx` files get ([cipher], null keeps
   /// each file's).
-  const TomSecretsRotation({
+  const TomSecretsKeyChanges({
     this.password,
     this.keyFile = TomSecretsKeyFileChange.keep,
     this.newRepositoryKey = false,

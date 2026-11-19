@@ -65,6 +65,7 @@ final class TomSecretsStoreState {
     this.notPushed = 0,
     this.rewrittenHead,
     this.fetchedBytes,
+    this.keyChanged = false,
   });
 
   /// Read from a `statusReport` store or a `store_state` event.
@@ -78,8 +79,14 @@ final class TomSecretsStoreState {
       notPushed: m['notPushed'] is int ? m['notPushed']! as int : 0,
       rewrittenHead: (m['rewritten'] as Map?)?['head'] as String?,
       fetchedBytes: m['fetchedBytes'] is int ? m['fetchedBytes']! as int : null,
+      keyChanged: m['keyChanged'] == true,
     );
   }
+
+  /// **[C]** Whether it is served read-only from a copy under its old key:
+  /// another device re-keyed it and its new key is not here yet
+  /// (part-key-rotation, the migration period).
+  final bool keyChanged;
 
   /// The store's name.
   final String name;
@@ -121,6 +128,9 @@ final class TomSecretsStoreState {
 
   /// Why it is offline, for the user, or null.
   String? get offlineReason => switch (state) {
+    _ when keyChanged =>
+      'its key changed on another device: take up the new key (it comes '
+          'with the primary, a shared vault\'s recipients file or pairing)',
     'token_expired' => 'the GitHub token expired',
     'offline' => 'GitHub is not reachable',
     _ => source == 'cache' ? 'served from the offline copy' : null,

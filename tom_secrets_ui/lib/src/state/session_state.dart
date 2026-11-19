@@ -518,7 +518,7 @@ class TomSecretsSession extends ChangeNotifier {
   /// them and [finishRotations] makes their re-keyed saves.
   Future<TomSecretsRotated> rotateKeys(
     String store,
-    TomSecretsRotation rotation, {
+    TomSecretsKeyChanges rotation, {
     DateTime? now,
   }) async {
     if (rotation.isEmpty) {
@@ -1744,12 +1744,25 @@ class TomSecretsSession extends ChangeNotifier {
   /// has one.
   TomSecretsEntryRef? get memberKeyEntry {
     final primary = _vaults.values.firstOrNull;
-    final entry = primary == null
-        ? null
-        : tomSecretsMemberKeyEntries(primary.file).firstOrNull;
-    return entry == null
-        ? null
-        : TomSecretsEntryRef(primary!.store, entry.uuid);
+    if (primary == null) return null;
+    final entries = tomSecretsMemberKeyEntries(primary.file);
+    // Why: during a rotation the current key is the one the record does not
+    // name, whatever the creation times say (two keys made in one second).
+    final rotating = TomSecretsRotations(primary.file)
+        .list()
+        .where((r) => r.kind == TomSecretsRotationKind.memberKey)
+        .firstOrNull;
+    final entry = rotating == null
+        ? entries.firstOrNull
+        : entries
+                  .where(
+                    (e) =>
+                        tomSecretsMemberKeyRecipientOf(e)?.fingerprint !=
+                        rotating.target,
+                  )
+                  .firstOrNull ??
+              entries.firstOrNull;
+    return entry == null ? null : TomSecretsEntryRef(primary.store, entry.uuid);
   }
 
   /// The user's member key's public key, read without its identity.
@@ -1851,17 +1864,6 @@ class TomSecretsSession extends ChangeNotifier {
   // Shared vaults (part-sharing, phase C): the recipients file beside each
   // is read and written through the service, opened with the member key.
 
-  /// The user's member key, opened from the primary; the caller disposes
-  /// it. Throws [StateError] before the user has one.
-  Future<TomSecretsMemberKey> _openMemberKey() async {
-    final ref = memberKeyEntry;
-    final entry = ref == null ? null : entryOf(ref);
-    if (entry == null) {
-      throw StateError('make your member key first (open Sharing)');
-    }
-    return tomSecretsMemberKeyOf(entry);
-  }
-
   /// The user as a member of a shared vault: their name and member key.
   TomSecretsSharedVaultMember _self(TomSecretsAgeRecipient own) => (
     name: memberName.trim().isEmpty ? 'Me' : memberName.trim(),
@@ -1890,20 +1892,34 @@ class TomSecretsSession extends ChangeNotifier {
       'location': ?location,
       'githubToken': ?githubToken,
     });
-    final key = await _openMemberKey();
-    try {
-      final keys = await tomSecretsReadRecipientsFile(
-        base64.decode(answer['bytes']! as String),
-        key,
-      );
-      return TomSecretsSharedVaultRead(
-        keys: keys,
-        location: answer['location']! as String,
-        revision: answer['revision']! as String,
-      );
-    } finally {
-      key.dispose();
+    final bytes = base64.decode(answer['bytes']! as String);
+    final primary = _primaryFile;
+    final entries = primary == null
+        ? const <KdbxEntry>[]
+        : tomSecretsMemberKeyEntries(primary);
+    if (entries.isEmpty) {
+      throw StateError('make your member key first (open Sharing)');
     }
+    // During a member key's rotation the file may be for the old or the
+    // new key (part-key-rotation): each is tried, the newest first.
+    TomSecretsSharedVaultException? notMember;
+    for (final entry in entries) {
+      final key = await tomSecretsMemberKeyOf(entry);
+      try {
+        final keys = await tomSecretsReadRecipientsFile(bytes, key);
+        return TomSecretsSharedVaultRead(
+          keys: keys,
+          location: answer['location']! as String,
+          revision: answer['revision']! as String,
+        );
+      } on TomSecretsSharedVaultException catch (e) {
+        if (e.reason != TomSecretsSharedVaultFailure.notAMember) rethrow;
+        notMember = e;
+      } finally {
+        key.dispose();
+      }
+    }
+    throw notMember!;
   }
 
   /// Creates the shared vault [spec] names (its name, place, outer
@@ -2023,42 +2039,330 @@ class TomSecretsSession extends ChangeNotifier {
     final read = await readSharedVault(store: store);
     final next = read.keys.withoutMember(recipient);
     try {
-      final list = TomSecretsPrimaryVaults(primary.file);
-      final listed = list.byName(store);
-      if (listed == null) throw StateError('the primary lists no $store');
-      var opened = false;
-      if (_vaultOf(store) == null) {
-        await openUnserved(store);
-        opened = true;
-      }
-      final device = await _deviceSettings();
-      final at = (now ?? DateTime.now()).toUtc();
-      list.put(
-        TomSecretsVaultKeys(
-          name: listed.name,
-          locator: listed.locator,
-          keyFile: Uint8List.fromList(next.keyFile),
-          outerKey: next.repositoryKey,
-          githubToken: listed.githubToken,
-          githubTokenExpires: listed.githubTokenExpires,
-          expires: tomSecretsAddMonths(at, device.vaultKeyAgeMonths),
-        ),
-      );
-      await save(primary.store);
-      final vault = _vaultOf(store)!;
-      vault.file.credentials = next.credentials;
-      if (next.repositoryKey != null) vault.outerKey = next.repositoryKey;
-      await save(store, recipients: await tomSecretsWriteRecipientsFile(next));
-      final refs = [
-        for (final e in vault.file.body.rootGroup.getAllEntries())
-          if (e.label != tomSecretsMetadataTitle)
-            TomSecretsEntryRef(store, e.uuid),
-      ];
-      if (opened) closeEditOnly(store);
-      return refs;
+      return await _rekeyShared(store, next, now: now);
     } finally {
       read.keys.dispose();
       next.dispose();
+    }
+  }
+
+  /// Re-keys the shared vault [store] to [next] (a member removed, its key
+  /// rotated): the new keys listed in the primary first, then the vault
+  /// saved under them with its recipients file in one commit. [inVault]
+  /// changes the vault's file first (a rotation record, whose lock refuses
+  /// before anything is written). Answers the vault's entries.
+  Future<List<TomSecretsEntryRef>> _rekeyShared(
+    String store,
+    TomSecretsSharedVaultKeys next, {
+    DateTime? now,
+    void Function(KdbxFile file)? inVault,
+  }) async {
+    final primary = _vaults.values.first;
+    final list = TomSecretsPrimaryVaults(primary.file);
+    final listed = list.byName(store);
+    if (listed == null) throw StateError('the primary lists no $store');
+    var opened = false;
+    if (_vaultOf(store) == null) {
+      await openUnserved(store);
+      opened = true;
+    }
+    final vault = _vaultOf(store)!;
+    inVault?.call(vault.file);
+    final device = await _deviceSettings();
+    final at = (now ?? DateTime.now()).toUtc();
+    list.put(
+      TomSecretsVaultKeys(
+        name: listed.name,
+        locator: listed.locator,
+        keyFile: Uint8List.fromList(next.keyFile),
+        outerKey: next.repositoryKey,
+        githubToken: listed.githubToken,
+        githubTokenExpires: listed.githubTokenExpires,
+        expires: tomSecretsAddMonths(at, device.vaultKeyAgeMonths),
+      ),
+    );
+    await save(primary.store);
+    vault.file.credentials = next.credentials;
+    if (next.repositoryKey != null) vault.outerKey = next.repositoryKey;
+    await save(store, recipients: await tomSecretsWriteRecipientsFile(next));
+    final reopened = _vaultOf(store)!;
+    final refs = [
+      for (final e in reopened.file.body.rootGroup.getAllEntries())
+        if (e.label != tomSecretsMetadataTitle)
+          TomSecretsEntryRef(store, e.uuid),
+    ];
+    if (opened) closeEditOnly(store);
+    return refs;
+  }
+
+  // The guided rotation with a migration period (part-key-rotation, phase
+  // C): the member key and the shared vaults' keys.
+
+  /// The running rotation of the user's member key, or null.
+  TomSecretsRotation? get memberKeyRotation {
+    final file = _primaryFile;
+    if (file == null) return null;
+    return TomSecretsRotations(file)
+        .list()
+        .where((r) => r.kind == TomSecretsRotationKind.memberKey)
+        .firstOrNull;
+  }
+
+  /// The running rotation of the shared vault [store]'s keys, or null.
+  TomSecretsRotation? sharedVaultRotation(String store) {
+    final file = _vaultOf(store)?.file;
+    return file == null
+        ? null
+        : TomSecretsRotations(
+            file,
+          ).of(TomSecretsRotationKind.sharedVault, store);
+  }
+
+  /// Writes the recipients file of the shared vault [store] as [change]
+  /// makes it from the file as read (null: nothing to change).
+  Future<void> _changeRecipients(
+    String store,
+    TomSecretsSharedVaultKeys? Function(TomSecretsSharedVaultKeys keys) change,
+  ) async {
+    final read = await readSharedVault(store: store);
+    try {
+      final next = change(read.keys);
+      if (next == null) return;
+      try {
+        await connection.request('vault.recipients.set', {
+          'store': store,
+          'bytes': base64.encode(await tomSecretsWriteRecipientsFile(next)),
+          'baseRevision': read.revision,
+        });
+      } finally {
+        if (!identical(next, read.keys)) next.dispose();
+      }
+    } finally {
+      read.keys.dispose();
+    }
+  }
+
+  /// Rotates the user's member key (part-key-rotation): a new key beside the
+  /// old one in the primary, the rotation record started (its migration
+  /// period, default 14 days), and every shared vault the user is a member
+  /// of written for the old and the new key. The new public key is to be
+  /// passed to the members (Sharing). The old key stays until the finish.
+  /// Answers the new public key. Refused while a rotation runs; a vault
+  /// that cannot be written now stays pending in the record.
+  Future<TomSecretsAgeRecipient> startMemberKeyRotation({DateTime? now}) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final why = sharingReadOnlyReason;
+    if (why != null) throw StateError(why);
+    final old = memberKeyRecipient;
+    if (old == null) throw StateError('you have no member key yet');
+    final running = memberKeyRotation;
+    if (running != null) {
+      throw TomSecretsRotationException(
+        'your member key is rotating already',
+        rotation: running,
+      );
+    }
+    final at = (now ?? DateTime.now()).toUtc();
+    final name = memberName.trim();
+    final pending = <String>[];
+    for (final store in sharedVaults) {
+      try {
+        final read = await readSharedVault(store: store);
+        if (read.keys.hasMember(old)) pending.add(store);
+        read.keys.dispose();
+      } on Object {
+        // A vault it cannot read now is not on this key.
+      }
+    }
+    final key = await TomSecretsMemberKey.generate();
+    final TomSecretsAgeRecipient fresh = key.recipient;
+    try {
+      final entry = tomSecretsAddMemberKey(primary.file, key);
+      if (name.isNotEmpty) {
+        entry.setString(KdbxKeyCommon.USER_NAME, PlainValue(name));
+      }
+    } finally {
+      key.dispose();
+    }
+    final record = TomSecretsRotation(
+      kind: TomSecretsRotationKind.memberKey,
+      target: old.fingerprint,
+      oldKeyId: old.fingerprint.substring(0, 16),
+      newKeyId: fresh.fingerprint.substring(0, 16),
+      started: at,
+      switched: at,
+      endsAt: at.add(tomSecretsRotationPeriod),
+      by: name.isEmpty ? 'me' : name,
+      pending: pending,
+    );
+    TomSecretsRotations(primary.file).start(record);
+    await save(primary.store);
+    final left = <String>[];
+    for (final store in pending) {
+      try {
+        await _changeRecipients(
+          store,
+          (keys) => keys.hasMember(fresh)
+              ? null
+              : keys.withMember((name: _self(fresh).name, recipient: fresh)),
+        );
+      } on Object {
+        left.add(store);
+      }
+    }
+    TomSecretsRotations(
+      _vaults.values.first.file,
+    ).update(record.copyWith(pending: left));
+    await save(_vaults.values.first.store);
+    return fresh;
+  }
+
+  /// Finishes the member key's rotation: the old key dropped from every
+  /// shared vault's recipients file (the new one added where it is
+  /// missing), then the old key and the record removed from the primary.
+  /// Before the migration period is over only with [early] ("finish now").
+  /// Answers the vaults that could not be written; the rotation then stays,
+  /// naming them, and the old key is kept.
+  Future<List<String>> finishMemberKeyRotation({
+    bool early = false,
+    DateTime? now,
+  }) async {
+    final record = memberKeyRotation;
+    if (record == null) {
+      throw StateError('no rotation of your member key runs');
+    }
+    final at = (now ?? DateTime.now()).toUtc();
+    if (!early && !record.isDueAt(at)) {
+      throw StateError(
+        'the migration period ends on '
+        '${record.endsAt.toIso8601String().substring(0, 10)}',
+      );
+    }
+    final fresh = memberKeyRecipient!;
+    TomSecretsAgeRecipient? old;
+    for (final e in tomSecretsMemberKeyEntries(_vaults.values.first.file)) {
+      final r = tomSecretsMemberKeyRecipientOf(e);
+      if (r?.fingerprint == record.target) old = r;
+    }
+    final failed = <String>[];
+    if (old != null && old != fresh) {
+      final gone = old;
+      for (final store in sharedVaults) {
+        try {
+          await _changeRecipients(store, (keys) {
+            if (!keys.hasMember(gone)) return null;
+            final withNew = keys.hasMember(fresh)
+                ? keys
+                : keys.withMember((name: _self(fresh).name, recipient: fresh));
+            final next = withNew.withoutRecipient(gone);
+            if (!identical(withNew, keys)) withNew.dispose();
+            return next;
+          });
+        } on Object {
+          failed.add(store);
+        }
+      }
+    }
+    final file = _vaults.values.first.file;
+    final records = TomSecretsRotations(file);
+    if (failed.isNotEmpty) {
+      records.update(record.copyWith(pending: failed));
+      await save(_vaults.values.first.store);
+      return failed;
+    }
+    final entries = tomSecretsMemberKeyEntries(file);
+    final stale = entries
+        .where(
+          (e) =>
+              tomSecretsMemberKeyRecipientOf(e)?.fingerprint == record.target,
+        )
+        .firstOrNull;
+    if (stale != null && entries.length > 1) {
+      // The old private key leaves the vault for good (no recycle bin).
+      file.deletePermanently(stale);
+    }
+    records.end(TomSecretsRotationKind.memberKey, record.target);
+    await save(_vaults.values.first.store);
+    return const [];
+  }
+
+  /// Rotates the shared vault [store]'s keys without removing anyone
+  /// (part-key-rotation): new keys for the same members, the rotation record
+  /// written into the vault (its lock and migration period), the new keys
+  /// listed in the primary and the vault re-keyed with its recipients file
+  /// in one commit. The members take up the new key at their next load; a
+  /// device that has not yet reads its copy under the old key, read-only.
+  Future<void> rotateSharedVaultKeys(String store, {DateTime? now}) async {
+    final read = await readSharedVault(store: store);
+    final next = read.keys.rotated();
+    final at = (now ?? DateTime.now()).toUtc();
+    final own = memberKeyRecipient;
+    try {
+      await _rekeyShared(
+        store,
+        next,
+        now: now,
+        inVault: (file) => TomSecretsRotations(file).start(
+          TomSecretsRotation(
+            kind: TomSecretsRotationKind.sharedVault,
+            target: store,
+            oldKeyId: read.keys.keyId,
+            newKeyId: next.keyId,
+            started: at,
+            switched: at,
+            endsAt: at.add(tomSecretsRotationPeriod),
+            by: memberName.trim().isEmpty ? 'me' : memberName.trim(),
+            pending: [
+              for (final m in read.keys.members)
+                if (m.recipient != own) m.name,
+            ],
+          ),
+        ),
+      );
+    } finally {
+      read.keys.dispose();
+      next.dispose();
+    }
+  }
+
+  /// Finishes the rotation of the shared vault [store]'s keys: the record
+  /// removed, and the history of its GitHub repository compacted, so no
+  /// commit keeps the vault under the old key. Before the migration period
+  /// is over only with [early]. Answers why the compaction failed, or null.
+  Future<String?> finishSharedVaultRotation(
+    String store, {
+    bool early = false,
+    DateTime? now,
+  }) async {
+    final record = sharedVaultRotation(store);
+    if (record == null) throw StateError('no rotation of $store runs');
+    final at = (now ?? DateTime.now()).toUtc();
+    if (!early && !record.isDueAt(at)) {
+      throw StateError(
+        'the migration period ends on '
+        '${record.endsAt.toIso8601String().substring(0, 10)}',
+      );
+    }
+    TomSecretsRotations(
+      _vaultOf(store)!.file,
+    ).end(TomSecretsRotationKind.sharedVault, store);
+    await save(store);
+    final listed = TomSecretsPrimaryVaults(
+      _vaults.values.first.file,
+    ).byName(store);
+    final slug = listed == null
+        ? null
+        : tomSecretsGitHubRepositoryOf(listed.locator);
+    if (slug == null) return null;
+    try {
+      await connection.request('compact', {
+        'repository': slug,
+        'retentionDays': 0,
+      });
+      return null;
+    } on TomSecretsAdminException catch (e) {
+      return e.message;
     }
   }
 

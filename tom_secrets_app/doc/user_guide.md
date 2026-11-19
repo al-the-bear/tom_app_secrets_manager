@@ -687,6 +687,10 @@ their offline copy only.
 If a re-keyed save failed, a banner says the rotation is not finished;
 "Finish the rotation" completes it.
 
+On a shared vault's key row, "Rotate…" rotates its key with a migration
+period instead (see [Sharing](#sharing)). Your member key has a row too
+("Your member key"); its "Rotate…" starts the member key's rotation.
+
 "Due date…" sets when a vault's keys are due.
 
 ### This device's key pairs
@@ -702,7 +706,8 @@ Some rows show their action as "Not available in this version yet".
 
 "Rotation ages and reminders (this machine)" sets the days before a GitHub
 token or any other key that reminders start, and the rotation ages of the
-key pairs, the primary's keys and the other vaults' keys. "Save" keeps them.
+key pairs, your member key, the primary's keys and the other vaults' keys.
+"Save" keeps them.
 
 ## Pairing another device
 
@@ -806,6 +811,27 @@ opens that file too, with a member's key.
 - When another member removes someone, your vault no longer opens with the
   old key: the app reads the recipients file again at the next start and
   takes up the new key ("New keys taken up from the recipients file").
+
+**Rotations with a migration period.** A key that other people or devices
+use is rotated in two steps, so nothing stops working in between:
+
+- **"Rotate my member key…"** (under your member key, or "Rotate…" on its
+  row on Keys) makes a new member key beside the old one and writes your
+  shared vaults' recipients files for both. Give the new key to your
+  members as you gave the old one; they compare its fingerprint. The
+  section says since when it rotates and what is still to write.
+  **"Finish"** (after 14 days) or **"Finish now"** removes the old key from
+  every recipients file and deletes it from your primary vault for good.
+- **"Rotate the vault's key…"** (on a shared vault, or "Rotate…" on its key
+  row on Keys) gives the vault a new key for the same members. Its
+  members' devices take it up from the recipients file at their next start.
+  The vault shows when it was rotated, by whom, and when the migration
+  period ends; **"Finish"** (after it) or **"Finish now"** ends the
+  rotation and cuts the vault's GitHub history, so no older version under
+  the old key stays.
+
+Only one rotation of a key runs at a time: a second one is refused, naming
+who started the first and when.
 
 
 ## Conflicts
@@ -1097,6 +1123,14 @@ from its last fetched copy and opens read-only; a change cannot be written
 flagged as possibly out of date. When the network is back, "Fetch every
 vault now" on the Status screen; when the token expired, renew it on
 [Keys](#keys).
+
+### A vault says "its key changed on another device"
+
+Someone rotated the vault's key, and this device does not have the new one
+yet. During the migration period the vault is served read-only from the
+copy this device had, so you can still read it; a change cannot be written.
+The new key comes with the primary vault, a shared vault's recipients file
+(read again at the next start) or pairing; then the vault opens as usual.
 
 ### "GitHub refused the token" or "The token does not see the repository"
 

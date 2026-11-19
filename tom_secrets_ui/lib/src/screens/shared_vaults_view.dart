@@ -26,6 +26,7 @@ String _describe(Object e) => switch (e) {
   TomSecretsSharedVaultException(:final message) => message,
   TomSecretsMemberKeyException(:final message) => message,
   TomSecretsAgeException(:final message) => message,
+  TomSecretsRotationException(:final message) => message,
   ArgumentError(:final message) => '$message',
   StateError(:final message) => message,
   _ => '$e',
@@ -206,6 +207,103 @@ class _SharedVaultsState extends State<TomSecretsSharedVaultsSection> {
     await _run(() => session.markForRotation(chosen));
   }
 
+  Future<void> _rotate(String store) async {
+    final session = context.read<TomSecretsSession>();
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Rotate the key of $store?'),
+        content: const SizedBox(
+          width: 460,
+          child: Text(
+            'The vault gets a new key; its members take it up from the '
+            'recipients file at their next start. A device that has not yet '
+            'keeps reading its copy under the old key, read-only, during the '
+            '14-day migration period. The finish compacts the vault\'s '
+            'history, so no older version under the old key stays.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('tsm-shared-rotate-go'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Rotate'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    await _run(() async {
+      await session.rotateSharedVaultKeys(store);
+      await _load(store);
+    });
+  }
+
+  Future<void> _finishRotation(String store, {required bool early}) async {
+    final session = context.read<TomSecretsSession>();
+    await _run(() async {
+      final failed = await session.finishSharedVaultRotation(
+        store,
+        early: early,
+      );
+      if (failed != null && mounted) {
+        setState(
+          () => _error =
+              'The rotation is finished; the history could not be compacted '
+              'now ($failed): compact it on the Keys screen later.',
+        );
+      }
+    });
+  }
+
+  Widget _rotationOf(
+    BuildContext context,
+    String store,
+    TomSecretsRotation r,
+    bool writable,
+  ) {
+    final due = r.isDueAt(DateTime.now());
+    String day(DateTime d) => d.toLocal().toIso8601String().substring(0, 10);
+    return Padding(
+      key: Key('tsm-shared-rotation-$store'),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Its key was rotated on ${day(r.started)} by ${r.by}; the '
+            'migration period '
+            '${due ? 'is over' : 'ends on ${day(r.endsAt)}'}.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Wrap(
+            spacing: 8,
+            children: [
+              FilledButton.tonal(
+                key: Key('tsm-shared-finish-$store'),
+                onPressed: writable && due
+                    ? () => _finishRotation(store, early: false)
+                    : null,
+                child: const Text('Finish'),
+              ),
+              TextButton(
+                key: Key('tsm-shared-finish-now-$store'),
+                onPressed: writable && !due
+                    ? () => _finishRotation(store, early: true)
+                    : null,
+                child: const Text('Finish now'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<TomSecretsSession>();
@@ -324,15 +422,26 @@ class _SharedVaultsState extends State<TomSecretsSharedVaultsSection> {
                       onPressed: () => _removeMember(store, m),
                     ),
             ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: Key('tsm-shared-add-member-$store'),
-              icon: const Icon(Icons.person_add_alt_1_rounded),
-              label: const Text('Add a member…'),
-              onPressed: writable ? () => _addMember(store) : null,
-            ),
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton.icon(
+                key: Key('tsm-shared-add-member-$store'),
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('Add a member…'),
+                onPressed: writable ? () => _addMember(store) : null,
+              ),
+              if (session.sharedVaultRotation(store) == null)
+                TextButton.icon(
+                  key: Key('tsm-shared-rotate-$store'),
+                  icon: const Icon(Icons.autorenew_rounded),
+                  label: const Text('Rotate the vault\'s key…'),
+                  onPressed: writable ? () => _rotate(store) : null,
+                ),
+            ],
           ),
+          if (session.sharedVaultRotation(store) case final r?)
+            _rotationOf(context, store, r, writable),
         ],
       ],
     );

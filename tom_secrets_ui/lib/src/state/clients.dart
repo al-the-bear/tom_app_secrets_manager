@@ -231,6 +231,7 @@ final class TomSecretsKeyInfo {
     'vault_keys' => 'Key file and repository key of $subject',
     'approver_key' => 'Approver key pair of $subject',
     'link_key' => 'Approval-link key pair of $subject',
+    'member_key' => 'Your member key ($subject)',
     _ => key,
   };
 

@@ -33,6 +33,7 @@ String _day(DateTime d) => d.toLocal().toIso8601String().substring(0, 10);
 String _describe(Object e) => switch (e) {
   TomSecretsAdminException() => tomSecretsDescribeAdminError(e),
   TomSecretsMemberKeyException(:final message) => message,
+  TomSecretsRotationException(:final message) => message,
   StateError(:final message) => message,
   _ => '$e',
 };
@@ -409,8 +410,133 @@ class _SharingState extends State<TomSecretsSharingView> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        _rotation(context, session),
       ],
     );
+  }
+
+  /// The member key's rotation: start it, or its migration period and its
+  /// finish (part-key-rotation).
+  Widget _rotation(BuildContext context, TomSecretsSession session) {
+    final theme = Theme.of(context);
+    final record = session.memberKeyRotation;
+    final readOnly = session.sharingReadOnlyReason;
+    if (record == null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: const Key('tsm-member-key-rotate'),
+          icon: const Icon(Icons.autorenew_rounded),
+          label: const Text('Rotate my member key…'),
+          onPressed: readOnly == null ? _rotate : null,
+        ),
+      );
+    }
+    final due = record.isDueAt(DateTime.now());
+    return Column(
+      key: const Key('tsm-member-key-rotation'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Your member key is rotating since ${_day(record.started)}: the key '
+          'above is the new one; give it to your members, who compare its '
+          'fingerprint. Your shared vaults open with the old and the new key '
+          'until the rotation finishes'
+          '${due ? ' — its migration period is over.' : ', at the earliest on ${_day(record.endsAt)}.'}'
+          '${record.pending.isEmpty ? '' : ' Still to write: ${record.pending.join(', ')}.'}',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            FilledButton.tonal(
+              key: const Key('tsm-member-key-finish'),
+              onPressed: readOnly == null && due ? () => _finish(false) : null,
+              child: const Text('Finish'),
+            ),
+            TextButton(
+              key: const Key('tsm-member-key-finish-now'),
+              onPressed: readOnly == null && !due ? () => _finish(true) : null,
+              child: const Text('Finish now'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _rotate() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rotate your member key?'),
+        content: const SizedBox(
+          width: 460,
+          child: Text(
+            'A new member key is made beside the old one. Your shared vaults '
+            'are written for both, so nothing stops working while your '
+            'members take up the new key: give it to them as you gave the '
+            'old one, and they compare its fingerprint. After 14 days, or '
+            'when you finish, the old key is removed.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('tsm-member-key-rotate-go'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Rotate'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    await _run(
+      () => context.read<TomSecretsSession>().startMemberKeyRotation(),
+    );
+  }
+
+  Future<void> _finish(bool early) async {
+    final session = context.read<TomSecretsSession>();
+    if (early) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Finish the rotation now?'),
+          content: const Text(
+            'Your old member key is removed at once. A member who has not '
+            'taken up your new key yet can no longer reach you through it.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('tsm-member-key-finish-now-go'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Finish now'),
+            ),
+          ],
+        ),
+      );
+      if (go != true || !mounted) return;
+    }
+    await _run(() async {
+      final left = await session.finishMemberKeyRotation(early: early);
+      if (left.isNotEmpty && mounted) {
+        setState(
+          () => _error =
+              'Not finished: ${left.join(', ')} could not be written now; '
+              'the old key stays until they are.',
+        );
+      }
+    });
   }
 
   Widget _membersSection(BuildContext context, TomSecretsSession session) {

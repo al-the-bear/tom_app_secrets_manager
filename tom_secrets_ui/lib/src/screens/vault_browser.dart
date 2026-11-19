@@ -183,7 +183,9 @@ class _GroupTree extends StatelessWidget {
     final connection = context.watch<TomSecretsServiceConnection>();
     final host = context.read<TomSecretsHost>();
     final waiting = connection.stores.values
-        .where((s) => s.state == 'needs_unlock')
+        // A store whose key changed on another device is served read-only
+        // from its old copy (its header says so), not waiting for a password.
+        .where((s) => s.state == 'needs_unlock' && !s.keyChanged)
         .toList();
     return ListView(
       key: const Key('tsm-group-tree'),
