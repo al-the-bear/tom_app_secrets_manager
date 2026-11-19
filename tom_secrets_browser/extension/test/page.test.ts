@@ -169,7 +169,7 @@ test('the view: the logins with Fill and Copy code; the states with what to do',
   (root.querySelector('#tsm-frame-site') as HTMLButtonElement).click();
   assert.deepEqual(did.slice(2), ['unlock', 'open', 'frame']);
   renderList(root, { state: 'running', candidates: [], site: 's' }, actions);
-  assert.match(root.querySelector('#tsm-none')!.textContent ?? '', /not approved yet/);
+  assert.match(root.querySelector('#tsm-none')!.textContent ?? '', /approve the browser/);
 });
 
 test('the filter matches title, user name and URL', () => {

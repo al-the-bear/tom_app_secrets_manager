@@ -769,10 +769,10 @@ packages:
     dependency: "direct main"
     description:
       name: tom_secrets_service
-      sha256: "5b33951ac3f8f5adca50312be61d86310cdc6f92536c0df36f0f632e8520a9f8"
+      sha256: "9ce5d5ce5db8d498144ddfd8abf074214b5bed42e8a8a930093c05fb7249e9d5"
       url: "https://pub.dev"
     source: hosted
-    version: "0.15.1"
+    version: "0.16.0"
   tom_secrets_ui:
     dependency: "direct main"
     description:

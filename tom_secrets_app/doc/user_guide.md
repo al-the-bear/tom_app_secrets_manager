@@ -466,6 +466,17 @@ request" while the window is closed). It shows:
 credentials](#gits-credentials)): pick one of the host's logins and answer
 "This time", "Always this login" or "None".
 
+**The browser extension asks for logins** the first time a browser's
+extension looks up a site and nothing of yours allows it (the notification
+reads "The browser extension on … asks for the logins of …"). "The logins
+of <site>" names the page, the browser that started the extension's host
+and the site's logins in your personal and shared vaults. Answer "This
+time" (the extension may list them and fill each once in the next ten
+minutes), "Always in this browser" or "Never". A lasting answer "Covers"
+"These logins", "Their vaults" or "All logins" (preset), and holds for that
+browser only: another browser asks on its own. System vaults are never
+given to a browser.
+
 "Allow" (or "Refuse" for Never) answers; "Later" leaves the request waiting
 under Clients. A program that asked for a client token gets one with an
 "Always" answer and is known by it from then on. "Only when started by …"
@@ -753,12 +764,14 @@ code. Nothing is filled until you pick a login. When the service is locked,
 "Unlock in Tom Secrets Manager" waits until you unlock it in the app. A
 login form in a frame of another site (a payment or sign-in frame) first
 shows nothing, then "Show the logins of `<site>`" lists that site's logins.
-The extension asks the service through the browser host, which lists only
-the logins a grant of yours covers and does not ask for one. Approve it once
-under Clients › Pre-approve: "Who" the executable `tsm-browser-host` in the
-`tsm/bin` folder of the app's distribution, "Secret" `all` (or
-`store <name>` for one vault), "Allow". Until then the list says no login of
-the site is there. The browser is never given the logins of system vaults.
+The first time a browser's extension looks up a site, the app asks you to
+approve that browser ("The browser extension asks for logins", see
+[Approvals](#approvals)); while you answer, the list says it is asking.
+"Always in this browser" approves it for good, for that browser only;
+with the app closed nothing is asked and the list shows no login. A
+browser you refused, or one you want to approve again, is under Clients ›
+Allow list ("Revoke"). The browser is never given the logins or values of
+system vaults.
 
 **Shared by every device**: the configuration kept in the primary vault
 (`tsm.config`): the dimensions in priority order and the files per

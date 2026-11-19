@@ -11,6 +11,9 @@
   another site offered on its own; locked, not running and no host each
   saying what to do. No runtime dependency.
 - `match` takes the extension's `wait` (`false`: `locked` at once).
+- The browser is approved at its first lookup (the service's browser
+  prompt): the list says it is asking meanwhile, and its empty text points
+  to the approval.
 
 - `tsm-browser-host`, the native-messaging host of the Tom Secrets Manager
   browser extension (part-browser): native messaging's framing (32-bit

@@ -45,7 +45,9 @@ service's error kind (`not_running` when no service answers).
 - `match {url, frameUrl?, wait?}`: `candidates` `[{entryId, title,
   userName, matchedUrl, hasTotp}]`, never a value. A locked service is
   waited for (the extension's "Unlock in Tom Secrets Manager"); with `wait:
-  false` the answer is `locked` at once.
+  false` the answer is `locked` at once. When no grant covers a login of
+  the page, the service asks the user in the app first (the browser prompt,
+  protocol.md 5.5), so the answer may take until the user answered.
 - `fill {entryId, url, frameUrl?, totp?}`: the page is matched again and the
   entry must be one of its candidates (else `denied`, reason `not_matched`,
   before any value is read); then `userName`, `password` and, when asked and

@@ -96,8 +96,9 @@ export function renderList(root: HTMLElement, answer: ListAnswer, actions: ViewA
     root.append(
       el(doc, 'p', {
         text:
-          'No login of this site in the vaults, or this browser is not approved yet ' +
-          '(Tom Secrets Manager › Clients › Pre-approve).',
+          'No login of this site that this browser may use. Tom Secrets Manager asks ' +
+          'you to approve the browser when the app is open; a refusal stays under ' +
+          'Clients › Allow list.',
         id: 'tsm-none',
       }),
     );

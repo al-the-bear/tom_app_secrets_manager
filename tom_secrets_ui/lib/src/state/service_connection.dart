@@ -581,6 +581,7 @@ final class TomSecretsApprovalPrompt {
     required this.confirmOnly,
     required this.pick,
     required this.url,
+    required this.browser,
   });
 
   /// The prompt of [event], or null when it names no approval.
@@ -617,6 +618,7 @@ final class TomSecretsApprovalPrompt {
             ]
           : null,
       url: event['url'] as String?,
+      browser: event['browser'] == true,
     );
   }
 
@@ -659,8 +661,19 @@ final class TomSecretsApprovalPrompt {
   >?
   pick;
 
-  /// The page or host a pick prompt's logins match.
+  /// The page or host a pick or browser prompt's logins match.
   final String? url;
+
+  /// A browser prompt (protocol.md 5.5, DP-44): the browser extension asks
+  /// for the logins of the page [url] ([resolved]); a lasting answer holds
+  /// for the browser that started its host ([parentExe]).
+  final bool browser;
+
+  /// The site of [url] (its host), or the address as written.
+  String get site {
+    final host = Uri.tryParse(url ?? '')?.host ?? '';
+    return host.isEmpty ? url ?? '' : host;
+  }
 
   /// The client's executable.
   String get exe => identity['exe'] as String? ?? '';

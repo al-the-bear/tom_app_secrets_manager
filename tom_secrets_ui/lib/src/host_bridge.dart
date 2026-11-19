@@ -271,9 +271,11 @@ final class TomSecretsHostBridge {
       if (prompt == null) return;
       await notifier.notify(
         title: 'Approve a request',
-        body:
-            '${prompt.who} on ${prompt.host} asks for '
-            '${prompt.refs.length == 1 ? 'a secret' : '${prompt.refs.length} secrets'}.',
+        body: prompt.browser
+            ? 'The browser extension on ${prompt.host} asks for the logins '
+                  'of ${prompt.site}.'
+            : '${prompt.who} on ${prompt.host} asks for '
+                  '${prompt.refs.length == 1 ? 'a secret' : '${prompt.refs.length} secrets'}.',
         onClick: window == null ? null : () => unawaited(window.show()),
       );
       return;

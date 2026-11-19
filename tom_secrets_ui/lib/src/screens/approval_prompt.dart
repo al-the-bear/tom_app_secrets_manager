@@ -16,6 +16,11 @@
 /// A helper's pick prompt (git's credential helper, protocol.md 5.5) lists
 /// the logins of the host for the user to pick one: once, or always (the
 /// pick remembered as a grant), or never (nothing given).
+///
+/// A browser prompt (the browser extension's first lookup that no grant
+/// covers, protocol.md 5.5, DP-44) lists the page's logins: once (for ten
+/// minutes), always (for this browser only, the scope these logins, their
+/// vaults or all, preset to all) or never.
 library;
 
 import 'package:flutter/material.dart';
@@ -66,6 +71,7 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
   bool _sending = false;
   String? _error;
   bool _closing = false;
+  bool _browserDefaults = false;
 
   @override
   void dispose() {
@@ -91,7 +97,12 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
         folder: _decision == 'folder' ? _folder!.text.trim() : null,
         pin: lasting ? _pin : null,
         sshHost: lasting && _sshHost && ssh?.hostKeyFingerprint != null,
-        withParent: lasting && _withParent && _decision != 'folder',
+        // A browser prompt's lasting answer names the browser by itself.
+        withParent:
+            lasting &&
+            _withParent &&
+            _decision != 'folder' &&
+            !(prompt?.browser ?? false),
         pick: picking && _decision != 'never' ? _picked : null,
       );
       if (mounted) Navigator.of(context).pop();
@@ -131,6 +142,14 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
       if (_decision == 'folder') _decision = 'once';
       _picked ??= pick.firstOrNull?.entryId;
     }
+    final browser = prompt.browser;
+    if (browser && !_browserDefaults) {
+      // DP-44: one grant per browser for its logins; the host is the
+      // product's own executable, updated with it, so not pinned.
+      _browserDefaults = true;
+      _secret = 'all';
+      _pin = 'off';
+    }
     // `exe-from` names an executable with its parent (not a script).
     final canWithParent = prompt.parentExe != null && prompt.script == null;
     final theme = Theme.of(context);
@@ -166,7 +185,9 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              pick != null
+              browser
+                  ? 'The browser extension asks for logins'
+                  : pick != null
                   ? 'A tool asks for a login'
                   : ssh == null
                   ? 'A program asks for secrets'
@@ -236,6 +257,18 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     ),
                   ],
                 )
+              else if (browser)
+                TomSecretsSection(
+                  key: const Key('tsm-approval-browser'),
+                  title: 'The logins of ${prompt.site}',
+                  icon: Icons.language_rounded,
+                  children: [
+                    line('Page', prompt.url),
+                    line('Browser', prompt.parentExe),
+                    for (final r in prompt.resolved)
+                      line('Login', '${r.store}/${r.path}'),
+                  ],
+                )
               else if (ssh == null)
                 TomSecretsSection(
                   title: 'Which secrets',
@@ -278,7 +311,13 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     runSpacing: 4,
                     children: [
                       for (final (value, text)
-                          in pick != null
+                          in browser
+                              ? const [
+                                  ('once', 'This time'),
+                                  ('always', 'Always in this browser'),
+                                  ('never', 'Never'),
+                                ]
+                              : pick != null
                               ? const [
                                   ('once', 'This time'),
                                   ('always', 'Always this login'),
@@ -322,6 +361,22 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                       key: const Key('tsm-approval-confirm-only'),
                       style: label,
                     ),
+                  if (browser && _decision == 'once')
+                    Text(
+                      'The extension may list these logins and fill each '
+                      'once in the next ten minutes.',
+                      key: const Key('tsm-approval-browser-once'),
+                      style: label,
+                    ),
+                  if (browser && _decision != 'once')
+                    Text(
+                      'This holds for '
+                      '${prompt.parentExe ?? 'this browser'} only; another '
+                      'browser asks on its own. System vaults are never given '
+                      'to a browser.',
+                      key: const Key('tsm-approval-browser-lasting'),
+                      style: label,
+                    ),
                   if (pick != null && _decision == 'always')
                     Text(
                       'The next time this tool asks for this host, it gets '
@@ -341,7 +396,22 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                           style: const ButtonStyle(
                             visualDensity: VisualDensity.compact,
                           ),
-                          segments: ssh == null
+                          segments: browser
+                              ? const [
+                                  ButtonSegment(
+                                    value: 'ref',
+                                    label: Text('These logins'),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'store',
+                                    label: Text('Their vaults'),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'all',
+                                    label: Text('All logins'),
+                                  ),
+                                ]
+                              : ssh == null
                               ? const [
                                   ButtonSegment(
                                     value: 'ref',
@@ -387,7 +457,7 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                           'Only for this host (${ssh!.destinationText})',
                         ),
                       ),
-                    if (canWithParent && _decision != 'folder')
+                    if (canWithParent && _decision != 'folder' && !browser)
                       CheckboxListTile(
                         key: const Key('tsm-approval-with-parent'),
                         dense: true,

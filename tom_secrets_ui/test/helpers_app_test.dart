@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 /// The developer-tool helpers in the app (part-os-integration): the pick
-/// prompt of git's credential helper (protocol.md 5.5), and Settings ›
+/// prompt of git's credential helper and the browser extension's prompt
+/// (protocol.md 5.5), and Settings ›
 /// Integrations writing the ssh and git blocks into a demo home, with the
 /// check at every start that repairs a block naming another agent. Demo
 /// data and a temporary home only.
@@ -154,6 +155,55 @@ void main() {
       'decision': 'always',
       'secret': 'ref',
       'pick': 'team/~02',
+    });
+  });
+
+  testWidgets('the browser prompt: the page\'s logins, "Always in this '
+      'browser" for all logins, unpinned, named by the browser', (
+    tester,
+  ) async {
+    await unlocked(tester);
+    const chrome =
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    service.ask({
+      'approvalId': 'a-2',
+      'host': 'demo-host',
+      'identity': {
+        'kind': 'exe',
+        'exe': '/opt/tsm/bin/tsm-browser-host',
+        'args': ['chrome-extension://lcejninmlbnhfnpedlgjjfeelhbgmach/'],
+        'cwd': '/',
+        'parent': {'exe': chrome},
+      },
+      'refs': ['team/~01'],
+      'resolved': [
+        {'store': 'team', 'path': 'Web/Mail', 'kind': 'login'},
+      ],
+      'url': 'https://mail.example.com/login',
+      'browser': true,
+    });
+    await wait(tester);
+    expect(find.text('The browser extension asks for logins'), findsOneWidget);
+    expect(find.text('The logins of mail.example.com'), findsOneWidget);
+    expect(find.text('team/Web/Mail'), findsOneWidget);
+    expect(find.byKey(const Key('tsm-approval-decision-folder')), findsNothing);
+    expect(find.byKey(const Key('tsm-approval-browser-once')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tsm-approval-decision-always')));
+    await tester.pump();
+    expect(find.text('All logins'), findsOneWidget);
+    expect(find.byKey(const Key('tsm-approval-with-parent')), findsNothing);
+    expect(
+      find.byKey(const Key('tsm-approval-browser-lasting')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('This holds for $chrome only'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tsm-approval-answer')));
+    await wait(tester);
+    expect(service.approvals.single, {
+      'approvalId': 'a-2',
+      'decision': 'always',
+      'secret': 'all',
+      'pin': 'off',
     });
   });
 

@@ -42,10 +42,14 @@ around this folder), which asks the secrets service.
   within 300 ms, it types it once more with key events. The TOTP is filled
   when the form has a one-time-code field. A list's token is spent by its
   fill, and a list lives 10 minutes at most.
-- **Its approval.** The service lists only the logins a grant of the
-  browser host covers and does not ask for one; the user approves
-  `tsm-browser-host` once in the app's Clients › Pre-approve (the app's
-  user guide). System vaults are never served to the browser.
+- **Its approval.** The service lists the logins a grant of the browser
+  host covers. The first lookup that nothing covers asks the user in the
+  app (the browser prompt, DP-44): "This time" (the logins listed and each
+  filled once within ten minutes), "Always in this browser" (a grant for
+  the browser that started the host, so each browser is approved on its
+  own) or "Never". The list says it is asking meanwhile; with the app
+  closed nothing is asked and no login is listed. System vaults are never
+  served to the browser, neither their logins nor their values.
 - **Who may ask.** Only the extension's own list and popup pages may ask for
   a list, a fill or a code, and only for the token of their own list. Every
   other sender is answered `denied`. No value ever reaches the list page; it
@@ -113,8 +117,6 @@ and `npm test` (`:test`), and checks the dependency closure from
 
 - No in-field icons, saving a typed login (proposals) or store packages
   yet: they are the next step.
-- The browser host's grant is made by hand (Clients › Pre-approve); the
-  extension cannot ask for it.
 - The popup fills the tab's top frame only; a login in a frame is filled
   from the list at the field.
 - A page whose permissions policy forbids `clipboard-write` to its frames
