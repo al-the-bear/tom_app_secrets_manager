@@ -59,6 +59,7 @@ class SecretsReleaseInputs {
     required this.app,
     required this.serviceBundle,
     required this.tsm,
+    required this.browserHost,
     required this.licenceFiles,
     this.notices = const {},
     required this.outDir,
@@ -72,6 +73,7 @@ class SecretsReleaseInputs {
         app: json['app']! as String,
         serviceBundle: json['serviceBundle']! as String,
         tsm: json['tsm']! as String,
+        browserHost: json['browserHost']! as String,
         licenceFiles: (json['licenceFiles']! as List).cast<String>(),
         notices: ((json['notices'] as Map?) ?? const {}).cast<String, String>(),
         outDir: json['outDir']! as String,
@@ -93,6 +95,10 @@ class SecretsReleaseInputs {
   /// The `tsm` executable (`dart compile exe`).
   final String tsm;
 
+  /// The browser host `tsm-browser-host` (`dart compile exe`), beside the
+  /// service where it recognises it (protocol.md 5.5).
+  final String browserHost;
+
   /// Files every archive carries (`LICENSE`, `THIRD_PARTY.md`).
   final List<String> licenceFiles;
 
@@ -110,6 +116,7 @@ class SecretsReleaseInputs {
     'app': app,
     'serviceBundle': serviceBundle,
     'tsm': tsm,
+    'browserHost': browserHost,
     'licenceFiles': licenceFiles,
     'notices': notices,
     'outDir': outDir,
@@ -178,7 +185,12 @@ Future<SecretsRelease> secretsAssembleRelease(
     }
     final tsmTarget = p.join(tools, 'bin', 'tsm$exe');
     File(inputs.tsm).copySync(tsmTarget);
-    if (!windows) await _run('chmod', ['755', tsmTarget]);
+    final hostTarget = p.join(tools, 'bin', 'tsm-browser-host$exe');
+    File(inputs.browserHost).copySync(hostTarget);
+    if (!windows) {
+      await _run('chmod', ['755', tsmTarget]);
+      await _run('chmod', ['755', hostTarget]);
+    }
   }
   for (final f in inputs.licenceFiles) {
     File(f).copySync(p.join(docsDir, p.basename(f)));

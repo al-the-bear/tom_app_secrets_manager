@@ -731,6 +731,17 @@ that the folder of `tsm` is not on `PATH`, so git does not find the helper.
 At every start the app checks that the blocks still name this machine's
 agent and helper, rewrites one that does not, and tells you.
 
+Under **Browsers** each browser found for your user (Chrome, Chromium, Edge,
+Brave, Firefox) has a switch: on, the app writes the browser's
+native-messaging manifest `net.tom.secrets.json` (on Windows also its
+registry value), which lets the Tom Secrets Manager browser extension start
+the browser host `tsm-browser-host` that ships beside the service; off
+removes it. A Linux browser installed as a Flatpak or a Snap is named but
+not offered: its sandbox cannot start the host. At every start the app checks
+that each manifest still names its own host (after an update or a move it
+rewrites it and tells you). The extension's "Open in Tom Secrets Manager"
+brings the app to the front at the entry.
+
 **Shared by every device**: the configuration kept in the primary vault
 (`tsm.config`): the dimensions in priority order and the files per
 environment, edited as YAML and saved with "Save in the primary vault". For

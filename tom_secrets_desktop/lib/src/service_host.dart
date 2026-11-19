@@ -112,6 +112,13 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
     return '$dir${Platform.pathSeparator}tsm${Platform.isWindows ? '.exe' : ''}';
   }
 
+  /// The browser host beside the service executable, where the service
+  /// recognises it and the browsers' manifests name it (part-browser).
+  String get browserHostExecutable => tomSecretsBrowserHostBeside(
+    serviceExecutable,
+    operatingSystem: Platform.operatingSystem,
+  );
+
   @override
   Future<TomSecretsAttach> attach() async {
     final rt = runtime;

@@ -43,9 +43,11 @@ const Set<String> secretsKdbxLibraries = {
 const String secretsKdbxFreeRepository = 'secrets_clients';
 
 /// Packages outside [secretsKdbxFreeRepository] that reach no KDBX either:
-/// the relay carries only ciphertext, and the CI is tooling.
+/// the relay carries only ciphertext, the browser host is a client of the
+/// service (part-browser), and the CI is tooling.
 const Set<String> secretsKdbxFreePackages = {
   'tom_secrets_relay',
+  'tom_secrets_browser',
   'tom_secrets_build',
 };
 

@@ -25,10 +25,21 @@ Future<void> main(List<String> args) async {
   final hidden = args.contains(tomSecretsHiddenArgument);
   final data = tomSecretsDataDirectory(environment: Platform.environment);
 
+  // `--show-entry <store>/~<uuid>`: the browser host's openApp (part-browser)
+  // asks for an entry; a running app is told it and comes to the front.
+  final at = args.indexOf(tomSecretsShowEntryArgument);
+  final entry = at >= 0 && at + 1 < args.length ? args[at + 1] : null;
+  final entryRequests = TomSecretsEntryRequests();
+  if (entry != null) entryRequests.request(entry);
+
   TomSecretsWindowHost? shown;
   final instance = await TomSecretsSingleInstance.claim(
     File('$data${Platform.pathSeparator}app.port'),
-    onActivate: () => unawaited(shown?.show()),
+    entry: entry,
+    onActivate: (asked) {
+      unawaited(shown?.show());
+      if (asked != null) entryRequests.request(asked);
+    },
   );
   if (instance == null) exit(0);
 
@@ -96,11 +107,17 @@ Future<void> main(List<String> args) async {
       TomSecretsFirstRunActions.import: tomSecretsShowImport,
       TomSecretsFirstRunActions.pair: tomSecretsShowPairing,
     },
-    // Settings › Integrations writes into this user's tool configuration;
-    // the git helper links to the tsm beside the service.
+    // Settings › Integrations writes into this user's tool and browser
+    // configuration; the git helper links to the tsm beside the service.
     integrationPaths: home == null
         ? null
-        : (home: home, tsmExecutable: serviceHost.tsmExecutable),
+        : (
+            home: home,
+            tsmExecutable: serviceHost.tsmExecutable,
+            // The browsers' manifests name the host beside the service.
+            browserHostExecutable: serviceHost.browserHostExecutable,
+          ),
+    entryRequests: entryRequests,
   );
   runApp(TomSecretsApp(host: host));
 }

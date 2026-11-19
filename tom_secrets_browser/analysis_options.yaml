@@ -1,0 +1,7 @@
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    # A Future is awaited or `unawaited(...)`.
+    - unawaited_futures
+    - discarded_futures

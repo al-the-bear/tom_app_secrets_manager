@@ -19,6 +19,7 @@ import 'package:tom_sync_ui/tom_sync_ui.dart';
 import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
 
 import '../ports/desktop_ports.dart';
+import '../state/entry_requests.dart';
 import '../state/integrations.dart';
 import '../state/reminders.dart';
 import '../state/service_connection.dart';
@@ -84,10 +85,34 @@ class _MainShellState extends State<TomSecretsMainShell> {
   final Set<String> _prompted = {};
   bool _promptOpen = false;
   TomSecretsServiceConnection? _connection;
+  TomSecretsEntryRequests? _requests;
+  TomSecretsSession? _session;
+
+  /// An entry asked for from outside (the browser host's `openApp`), shown
+  /// in the vault browser once its vault is open.
+  void _showRequested() {
+    final requests = _requests;
+    final session = _session;
+    final ref = requests?.pending;
+    if (ref == null || session == null || !mounted) return;
+    if (session.entryOf(ref) == null) return;
+    requests!.take();
+    setState(() => _destination = TomSecretsDestination.vaults);
+    session.selectedEntry = ref;
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final requests = context.read<TomSecretsHost>().entryRequests;
+    final session = context.read<TomSecretsSession>();
+    if (!identical(requests, _requests) || !identical(session, _session)) {
+      _requests?.removeListener(_showRequested);
+      _session?.removeListener(_showRequested);
+      _requests = requests?..addListener(_showRequested);
+      _session = session..addListener(_showRequested);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showRequested());
+    }
     final c = context.read<TomSecretsServiceConnection>();
     if (!identical(c, _connection)) {
       _connection?.removeListener(_onConnection);
@@ -112,19 +137,37 @@ class _MainShellState extends State<TomSecretsMainShell> {
       context.read<TomSecretsHost>(),
       context.read<TomSecretsServiceConnection>(),
     );
-    if (repaired.isEmpty || !mounted) return;
-    tomShowNotice(
-      ScaffoldMessenger.maybeOf(context),
-      kind: 'integrations',
-      message:
-          'Updated the ${repaired.map((i) => i.name).join(' and ')} '
-          'integration to name this machine\'s '
-          '${repaired.length == 1 && repaired.single.name == 'git' ? 'helper' : 'agent'}.',
+    if (!mounted) return;
+    final browsers = await tomSecretsCheckBrowserHosts(
+      context.read<TomSecretsHost>(),
     );
+    if (!mounted) return;
+    if (repaired.isNotEmpty) {
+      tomShowNotice(
+        ScaffoldMessenger.maybeOf(context),
+        kind: 'integrations',
+        message:
+            'Updated the ${repaired.map((i) => i.name).join(' and ')} '
+            'integration to name this machine\'s '
+            '${repaired.length == 1 && repaired.single.name == 'git' ? 'helper' : 'agent'}.',
+      );
+    }
+    if (browsers.isNotEmpty) {
+      tomShowNotice(
+        ScaffoldMessenger.maybeOf(context),
+        kind: 'browser-integration',
+        message:
+            'Updated the browser integration of '
+            '${browsers.map((b) => b.label).join(', ')}: the app moved or '
+            'was updated.',
+      );
+    }
   }
 
   @override
   void dispose() {
+    _requests?.removeListener(_showRequested);
+    _session?.removeListener(_showRequested);
     _connection?.removeListener(_onConnection);
     _search.dispose();
     _query.dispose();

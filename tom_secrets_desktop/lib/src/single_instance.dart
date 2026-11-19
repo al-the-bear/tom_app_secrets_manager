@@ -3,7 +3,9 @@
 
 /// One instance of the app per user (part-app, "Tray and menu bar"): the
 /// first one listens on a localhost port named in `app.port` of the data
-/// directory; a second launch tells it to show its window and ends.
+/// directory; a second launch tells it to show its window, and the entry to
+/// show when it was started with one (`--show-entry`, the browser host's
+/// `openApp`), and ends.
 library;
 
 import 'dart:async';
@@ -21,13 +23,15 @@ final class TomSecretsSingleInstance {
   static const String activate = 'activate';
 
   /// Becomes the one instance, calling [onActivate] whenever a later launch
-  /// asks; or, when another instance answers on the port in [portFile],
-  /// tells it to come to the front and answers null.
+  /// asks (with the entry it names, or null); or, when another instance
+  /// answers on the port in [portFile], tells it to come to the front (and
+  /// show [entry]) and answers null.
   static Future<TomSecretsSingleInstance?> claim(
     File portFile, {
-    required void Function() onActivate,
+    required void Function(String? entry) onActivate,
+    String? entry,
   }) async {
-    if (await _tell(portFile)) return null;
+    if (await _tell(portFile, entry)) return null;
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     await portFile.parent.create(recursive: true);
     await portFile.writeAsString('${server.port}\n');
@@ -38,7 +42,12 @@ final class TomSecretsSingleInstance {
             .transform(utf8.decoder)
             .first
             .then((text) {
-              if (text.trim() == activate) onActivate();
+              final line = text.trim();
+              if (line == activate) {
+                onActivate(null);
+              } else if (line.startsWith('$activate ')) {
+                onActivate(line.substring(activate.length + 1).trim());
+              }
             })
             .catchError((Object _) {})
             .whenComplete(socket.destroy),
@@ -47,7 +56,7 @@ final class TomSecretsSingleInstance {
     return TomSecretsSingleInstance._(server, portFile);
   }
 
-  static Future<bool> _tell(File portFile) async {
+  static Future<bool> _tell(File portFile, String? entry) async {
     final int? port;
     try {
       port = int.tryParse((await portFile.readAsString()).trim());
@@ -61,7 +70,7 @@ final class TomSecretsSingleInstance {
         port,
         timeout: const Duration(seconds: 2),
       );
-      socket.write('$activate\n');
+      socket.write(entry == null ? '$activate\n' : '$activate $entry\n');
       await socket.flush();
       await socket.close();
       return true;

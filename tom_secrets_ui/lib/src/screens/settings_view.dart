@@ -24,6 +24,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -31,6 +32,8 @@ import 'package:tom_ui_support/tom_ui_support.dart' show tomShowNotice;
 import 'package:tom_secrets_client/admin.dart'
     show
         TomSecretsAdminException,
+        TomSecretsBrowser,
+        TomSecretsBrowserHostState,
         TomSecretsIntegration,
         TomSecretsIntegrationState;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
@@ -96,7 +99,33 @@ class _SettingsState extends State<TomSecretsSettingsView> {
     super.dispose();
   }
 
+  List<TomSecretsBrowserHostState>? _browsers;
+
+  Future<void> _loadBrowsers() async {
+    final hosts = tomSecretsBrowserHostsOf(context.read<TomSecretsHost>());
+    if (hosts == null) return;
+    final states = await hosts.states();
+    if (mounted) setState(() => _browsers = states);
+  }
+
+  Future<void> _switchBrowser(TomSecretsBrowser browser, bool on) async {
+    final hosts = tomSecretsBrowserHostsOf(context.read<TomSecretsHost>());
+    if (hosts == null) return;
+    try {
+      if (on) {
+        await hosts.install(browser);
+      } else {
+        await hosts.remove(browser);
+      }
+      if (mounted) setState(() => _integrationError = null);
+    } on Object catch (e) {
+      if (mounted) setState(() => _integrationError = '$e');
+    }
+    await _loadBrowsers();
+  }
+
   Future<void> _loadIntegrations() async {
+    unawaited(_loadBrowsers());
     final integrations = await tomSecretsIntegrationsOf(
       context.read<TomSecretsHost>(),
       context.read<TomSecretsServiceConnection>(),
@@ -786,6 +815,7 @@ class _SettingsState extends State<TomSecretsSettingsView> {
           'credential.helper tsm in ~/.gitconfig and git-credential-tsm '
               'beside tsm: git takes the login of its host from the vaults.',
         ),
+        ..._browserRows(theme),
         if (_integrationError != null)
           Text(
             _integrationError!,
@@ -794,6 +824,68 @@ class _SettingsState extends State<TomSecretsSettingsView> {
           ),
       ],
     );
+  }
+
+  /// The browsers (part-browser): a switch per browser found on this
+  /// machine (or with a manifest installed), writing the native-messaging
+  /// manifest that names the browser host beside the service; a browser in
+  /// a Flatpak or Snap is named, not offered.
+  List<Widget> _browserRows(ThemeData theme) {
+    final browsers = _browsers;
+    if (browsers == null) return const [];
+    final host = context
+        .read<TomSecretsHost>()
+        .integrationPaths
+        ?.browserHostExecutable;
+    final missing = host != null && !File(host).existsSync();
+    final shown = [
+      for (final b in browsers)
+        if (b.present || b.installed || b.sandboxed != null) b,
+    ];
+    return [
+      const SizedBox(height: 8),
+      Text('Browsers', style: theme.textTheme.titleSmall),
+      _whose(
+        'The browser extension reaches the vaults through the browser host, '
+        'which the browser starts by its native-messaging manifest.',
+      ),
+      if (missing)
+        Text(
+          'The browser host is not beside the service ($host): this build '
+          'has none.',
+          key: const Key('tsm-browser-host-missing'),
+          style: TextStyle(color: theme.colorScheme.error),
+        ),
+      if (shown.isEmpty)
+        const Text(
+          'No Chrome, Chromium, Edge, Brave or Firefox found for this user.',
+          key: Key('tsm-browsers-none'),
+        ),
+      for (final b in shown)
+        if (b.sandboxed case final reason?)
+          ListTile(
+            key: Key('tsm-browser-${b.browser.name}'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(b.browser.label),
+            subtitle: Text(reason),
+          )
+        else
+          SwitchListTile(
+            key: Key('tsm-browser-${b.browser.name}'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(b.browser.label),
+            subtitle: Text(
+              '${b.manifest}'
+              '${b.installed && !b.current ? ' — needs repair: ${b.problems.join(', ')}' : ''}',
+            ),
+            value: b.installed,
+            onChanged: missing
+                ? null
+                : (v) => unawaited(_switchBrowser(b.browser, v)),
+          ),
+    ];
   }
 
   Widget _shared(BuildContext context, ThemeData theme) => TomSecretsSection(

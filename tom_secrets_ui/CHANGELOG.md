@@ -2,6 +2,14 @@
 
 ## 0.1.0
 
+- The browser integration (part-browser): Settings › Integrations ›
+  Browsers switches each browser found for the user on and off (its
+  native-messaging manifest naming the browser host,
+  `tom_secrets_client`'s `TomSecretsBrowserHosts`); the start check repairs
+  a manifest naming another host and says so. `TomSecretsHost.integrationPaths`
+  carries `browserHostExecutable`. `TomSecretsEntryRequests`
+  (`TomSecretsHost.entryRequests`, `--show-entry`): an entry asked for from
+  outside is shown in the vault browser once its vault is open.
 - For the mobile app (part-mobile): `TomSecretsStoreState.fetchedBytes` (the
   size of the last fetch, when the host reports it);
   `TomSecretsReminderBanner` (the keys-due banner, public, its open button

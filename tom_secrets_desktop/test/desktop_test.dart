@@ -22,22 +22,32 @@ void main() {
 
   test('a second launch brings the first one to the front and ends', () async {
     final port = File('${dir.path}/app.port');
-    var activated = 0;
+    final activated = <String?>[];
     final first = await TomSecretsSingleInstance.claim(
       port,
-      onActivate: () => activated++,
+      onActivate: activated.add,
     );
     expect(first, isNotNull);
     final second = await TomSecretsSingleInstance.claim(
       port,
-      onActivate: () => fail('the second instance is not the one'),
+      onActivate: (_) => fail('the second instance is not the one'),
     );
     expect(second, isNull);
+    // A launch from the browser host names the entry to show.
+    final third = await TomSecretsSingleInstance.claim(
+      port,
+      onActivate: (_) => fail('the third instance is not the one'),
+      entry: 'team/~0123456789abcdef0123456789abcdef',
+    );
+    expect(third, isNull);
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    expect(activated, 1);
+    expect(activated, [null, 'team/~0123456789abcdef0123456789abcdef']);
     await first!.close();
     expect(port.existsSync(), isFalse);
-    final after = await TomSecretsSingleInstance.claim(port, onActivate: () {});
+    final after = await TomSecretsSingleInstance.claim(
+      port,
+      onActivate: (_) {},
+    );
     expect(after, isNotNull, reason: 'the first one is gone');
     await after!.close();
   });
@@ -46,7 +56,7 @@ void main() {
     final port = File('${dir.path}/app.port')..writeAsStringSync('1\n');
     final instance = await TomSecretsSingleInstance.claim(
       port,
-      onActivate: () {},
+      onActivate: (_) {},
     );
     expect(instance, isNotNull);
     await instance!.close();

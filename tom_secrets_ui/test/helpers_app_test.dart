@@ -9,6 +9,7 @@
 @TestOn('mac-os || linux')
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -43,6 +44,7 @@ void main() {
   late FakeService service;
   late Directory home;
   late String tsm;
+  late String browserHost;
 
   setUp(() async {
     service = FakeService(await demoStores())
@@ -52,14 +54,26 @@ void main() {
     Directory('${home.path}/bin').createSync();
     tsm = '${home.path}/bin/tsm';
     File(tsm).writeAsStringSync('demo');
+    browserHost = '${home.path}/bin/tsm-browser-host';
+    File(browserHost).writeAsStringSync('demo');
   });
+
+  TomSecretsBrowserHosts browsers({String? hostExecutable}) =>
+      TomSecretsBrowserHosts(
+        home: home.path,
+        hostExecutable: hostExecutable ?? browserHost,
+      );
 
   TomSecretsHost host() => TomSecretsHost(
     service: FakeHost(service),
     preferences: TomSecretsMemoryPreferences(),
     clipboard: _Clipboard(),
     window: _Window(),
-    integrationPaths: (home: home.path, tsmExecutable: tsm),
+    integrationPaths: (
+      home: home.path,
+      tsmExecutable: tsm,
+      browserHostExecutable: browserHost,
+    ),
   );
 
   Future<void> wait(WidgetTester tester, [int rounds = 3]) async {
@@ -200,5 +214,49 @@ void main() {
     expect(text, contains('IdentityAgent /run/demo/tsm/agent.sock'));
     expect(text, contains('Host build\n  User demo'));
     expect(find.textContaining('Updated the ssh integration'), findsOneWidget);
+  });
+
+  testWidgets('Settings › Integrations: a browser found on this machine is '
+      'switched on and off, its manifest naming the browser host', (
+    tester,
+  ) async {
+    final hosts = browsers();
+    Directory(
+      hosts.profileFolder(TomSecretsBrowser.firefox),
+    ).createSync(recursive: true);
+    await unlocked(tester);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await wait(tester);
+    // Only the browser found is offered.
+    expect(find.byKey(const Key('tsm-browser-chrome')), findsNothing);
+    final firefox = find.byKey(const Key('tsm-browser-firefox'));
+    await tester.ensureVisible(firefox);
+    await tester.pumpAndSettle();
+    await tester.tap(firefox);
+    await wait(tester);
+    final manifest = File(hosts.manifestPath(TomSecretsBrowser.firefox));
+    final written = jsonDecode(manifest.readAsStringSync()) as Map;
+    expect(written['path'], browserHost);
+    expect(written['allowed_extensions'], [tomSecretsFirefoxExtensionId]);
+    await tester.tap(firefox);
+    await wait(tester);
+    expect(manifest.existsSync(), isFalse);
+  });
+
+  testWidgets('at every start a manifest naming another host is written '
+      'again, and the user is told', (tester) async {
+    final chrome = browsers().profileFolder(TomSecretsBrowser.chrome);
+    Directory(chrome).createSync(recursive: true);
+    await browsers(
+      hostExecutable: '/old/app/tsm/bin/tsm-browser-host',
+    ).install(TomSecretsBrowser.chrome);
+    await unlocked(tester);
+    await wait(tester, 5);
+    expect((await browsers().state(TomSecretsBrowser.chrome)).current, isTrue);
+    expect(
+      find.textContaining('Updated the browser integration of Chrome'),
+      findsOneWidget,
+    );
   });
 }

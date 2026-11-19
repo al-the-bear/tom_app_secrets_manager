@@ -58,7 +58,7 @@ const Map<String, String> secretsCiStageDescriptions = {
       'exceptions on record',
   'release':
       'the release for this platform (not part of :all): the service bundle, '
-      'tsm, the app built with both in its tsm folder, the app and tools-only '
+      'tsm, the browser host, the app built with them in its tsm folder, the app and tools-only '
       'archives with SHA256SUMS in tom_secrets_build/release/<version>/, and '
       'a smoke run of the assembled tsm and service on a demo installation',
   'mobile':
@@ -372,6 +372,22 @@ extension on SecretsCiStages {
       run.tool(tsmPackage, ['compile', 'exe', 'bin/tsm.dart', '-o', tsm]),
     ], produces: tsm);
 
+    final browserPackage = package(
+      p.join(workspace.repoRoot, 'tom_secrets_browser'),
+    );
+    final browserHost = p.join(work, 'browser', 'tsm-browser-host$exe');
+    Directory(p.dirname(browserHost)).createSync(recursive: true);
+    await run.step(stage, 'browser host', 'release.browser_host.log', [
+      run.tool(browserPackage, ['pub', 'get']),
+      run.tool(browserPackage, [
+        'compile',
+        'exe',
+        'bin/tsm_browser_host.dart',
+        '-o',
+        browserHost,
+      ]),
+    ], produces: browserHost);
+
     final app = package(appPackage, flutter: true);
     final built = secretsBuiltApp(appPackage, platform);
     await run.step(
@@ -392,6 +408,7 @@ extension on SecretsCiStages {
       app: built,
       serviceBundle: serviceBundle,
       tsm: tsm,
+      browserHost: browserHost,
       licenceFiles: [
         p.join(workspace.repoRoot, 'LICENSE'),
         p.join(workspace.repoRoot, 'THIRD_PARTY.md'),

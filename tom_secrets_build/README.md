@@ -150,11 +150,12 @@ turns red when one is no longer needed.
 
 1. the service, `dart build cli` (its executable in `bin/`, `tom_pqc`'s
    native library in `lib/`);
-2. `tsm`, `dart compile exe`;
+2. `tsm`, and the browser host `tsm-browser-host` (`tom_secrets_browser`),
+   `dart compile exe`;
 3. the app, `flutter build <platform> --release`;
-4. the release (`bin/assemble_release.dart`): the app with `tsm` and the
-   service in its `tsm` folder (the layout of `tom_secrets_client`'s
-   `distribution.dart`: `Tom Secrets Manager.app/Contents/Resources/tsm` on
+4. the release (`bin/assemble_release.dart`): the app with `tsm`, the
+   browser host and the service in its `tsm` folder (the layout of
+   `tom_secrets_client`'s `distribution.dart`: `Tom Secrets Manager.app/Contents/Resources/tsm` on
    macOS, `<folder>/tsm` elsewhere; on macOS the bundle is signed again,
    ad-hoc), `LICENSE` and `THIRD_PARTY.md` with it, and the tools alone for a
    server; archived as `tom_secrets_manager-<version>-<platform>.zip`

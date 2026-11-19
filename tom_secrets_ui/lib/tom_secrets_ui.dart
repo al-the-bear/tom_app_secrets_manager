@@ -34,6 +34,7 @@ export 'src/screens/vault_browser.dart';
 export 'src/state/clients.dart';
 export 'src/state/conflicts.dart';
 export 'src/state/emergency_sheet.dart';
+export 'src/state/entry_requests.dart';
 export 'src/state/first_run_model.dart';
 export 'src/state/import_model.dart';
 export 'src/state/integrations.dart';

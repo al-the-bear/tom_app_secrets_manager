@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- `TomSecretsSingleInstance` passes the entry a later launch names
+  (`--show-entry`, the browser host's `openApp`) to the running app;
+  `TomSecretsDesktopServiceHost.browserHostExecutable`, the browser host
+  beside the service.
 - The OS unlock: `tomSecretsDesktopOsUnlock()` (Touch ID on macOS, Windows
   Hello on Windows, none on Linux) over `tom_biometric_storage`'s
   `TomBiometricGatedSecretStore`; `TomSecretsAdminClientChannel.unlockWithBundle`.

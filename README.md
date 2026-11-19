@@ -112,7 +112,7 @@ path inside one repository, so a clone of this repository builds on its own;
 | [`tom_secrets_build`](tom_secrets_build/) | A | the manual CI (analyze, test, the licence-boundary and standalone checks over every package of the three repositories) and the release build, started by a person (`ci.sh`, `ci.ps1`, `ci.cmd`) |
 | [`tom_secrets_testkit`](tom_secrets_testkit/) | A | test fixtures more than one package needs (the scratch folder so far); a dev dependency only |
 | [`tom_secrets_mobile`](tom_secrets_mobile/) | B | the mobile app (iOS/iPadOS, Android): the vaults fetched from GitHub into memory, set up by pairing, unlocked with biometrics, system vaults read-only; [user guide](tom_secrets_mobile/doc/user_guide.md) |
-| `tom_secrets_browser` | B | the WebExtension and its native-messaging host |
+| [`tom_secrets_browser`](tom_secrets_browser/) | B | the native-messaging host `tsm-browser-host` (shipped beside the service in the app's `tsm/bin`; the desktop app installs the browsers' manifests) and, next, the WebExtension |
 | `tom_secrets_relay` | C | the optional relay server |
 
 ## Checking it

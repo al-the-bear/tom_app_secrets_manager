@@ -19,6 +19,7 @@ import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFilePicker;
 import 'package:tom_host_ui/tom_host_ui.dart' show TomFlutterClipboardPort;
 
+import '../state/entry_requests.dart';
 import 'service_host.dart';
 
 import 'pairing_discovery.dart';
@@ -283,6 +284,7 @@ final class TomSecretsHost {
     this.scanner,
     this.attachmentsShare = false,
     this.unlockFooter,
+    this.entryRequests,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -351,10 +353,13 @@ final class TomSecretsHost {
   /// available yet.
   final Map<String, TomSecretsFirstRunAction> firstRunActions;
 
-  /// Where the developer-tool integrations write (part-os-integration,
-  /// Settings › Integrations): the user's home folder and `tsm`'s
-  /// executable (the helper link goes beside it); null hides them.
-  final ({String home, String? tsmExecutable})? integrationPaths;
+  /// Where the developer-tool and browser integrations write
+  /// (part-os-integration, part-browser, Settings › Integrations): the
+  /// user's home folder, `tsm`'s executable (the helper link goes beside
+  /// it) and the browser host's (the browsers' manifests name it); null
+  /// hides them.
+  final ({String home, String? tsmExecutable, String? browserHostExecutable})?
+  integrationPaths;
 
   /// The OS unlock (Touch ID, Windows Hello), or null where the platform has
   /// none (Linux, DP-70): then the master password is the only unlock.
@@ -378,6 +383,11 @@ final class TomSecretsHost {
   /// app: an attachment is opened in another app) rather than to a save
   /// dialog.
   final bool attachmentsShare;
+
+  /// Entries asked for from outside (`--show-entry`, the browser host's
+  /// `openApp`): the vault browser shows each once the vaults are open; null:
+  /// none come.
+  final TomSecretsEntryRequests? entryRequests;
 
   /// Shown below the unlock screen's form, or null (the mobile app: setting
   /// the device up again when its GitHub token was refused).

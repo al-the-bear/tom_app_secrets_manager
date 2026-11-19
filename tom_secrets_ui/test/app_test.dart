@@ -124,7 +124,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(TomSecretsApp(host: host));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pump();
   }
 
@@ -143,8 +145,8 @@ void main() {
     }
   }
 
-  Future<void> scrollTo(WidgetTester tester, String key) => tester
-      .scrollUntilVisible(
+  Future<void> scrollTo(WidgetTester tester, String key) =>
+      tester.scrollUntilVisible(
         find.byKey(Key(key)),
         200,
         scrollable: find
@@ -163,7 +165,9 @@ void main() {
     await pumpApp(tester);
     expect(find.text('The service is not running'), findsOneWidget);
     await tester.tap(find.byKey(const Key('tsm-start-service')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pump();
     expect(find.text('Unlock'), findsWidgets);
   });
@@ -177,7 +181,9 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const Key('tsm-unlock')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
     await tester.pump();
     expect(find.text('Wrong master password or key file.'), findsOneWidget);
     await unlock(tester);
@@ -219,9 +225,7 @@ void main() {
     await tester.pump();
     expect(
       tester
-          .widget<TextField>(
-            find.byKey(const Key('tsm-field-password')),
-          )
+          .widget<TextField>(find.byKey(const Key('tsm-field-password')))
           .obscureText,
       isFalse,
     );
@@ -229,22 +233,23 @@ void main() {
     await tester.pump(tomSecretsRevealFor + const Duration(seconds: 1));
     expect(
       tester
-          .widget<TextField>(
-            find.byKey(const Key('tsm-field-password')),
-          )
+          .widget<TextField>(find.byKey(const Key('tsm-field-password')))
           .obscureText,
       isTrue,
     );
     await tester.tap(find.byKey(const Key('tsm-copy-password')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
     await tester.pump();
     expect(clipboard.placed, ['demo-db-pw']);
     expect(find.text('primary/Db/Main'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('tsm-generate')));
     await tester.pumpAndSettle();
-    final generated =
-        tester.widget<SelectableText>(find.byKey(const Key('tsm-generated'))).data!;
+    final generated = tester
+        .widget<SelectableText>(find.byKey(const Key('tsm-generated')))
+        .data!;
     expect(generated, hasLength(20));
     await tester.tap(find.byKey(const Key('tsm-use-generated')));
     await tester.pumpAndSettle();
@@ -344,7 +349,9 @@ void main() {
     expect(find.byKey(const Key('tsm-otp-scan')), findsNothing);
   });
 
-  testWidgets('a key another entry of the vault has is refused', (tester) async {
+  testWidgets('a key another entry of the vault has is refused', (
+    tester,
+  ) async {
     await pumpApp(tester);
     await unlock(tester);
     await tester.tap(find.byKey(const Key('tsm-group-primary-Db')));
@@ -360,14 +367,15 @@ void main() {
     await scrollTo(tester, 'tsm-save-entry');
     await tester.tap(find.byKey(const Key('tsm-save-entry')));
     await tester.pump();
-    expect(find.text('another entry of this vault has this key'), findsOneWidget);
+    expect(
+      find.text('another entry of this vault has this key'),
+      findsOneWidget,
+    );
     expect(service.saves, isEmpty);
   });
 
   testWidgets('TOTP: the code and its countdown', (tester) async {
-    final secret = Uint8List.fromList(
-      List<int>.generate(20, (i) => i + 1),
-    );
+    final secret = Uint8List.fromList(List<int>.generate(20, (i) => i + 1));
     final totp = TomSecretsTotp(secret);
     final at = DateTime.utc(2026, 11, 14, 12, 0, 10);
     await tester.pumpWidget(
@@ -400,7 +408,8 @@ void main() {
       MaterialApp(
         home: Builder(
           builder: (context) => TextButton(
-            onPressed: () async => chosen = await tomSecretsShowGenerator(context),
+            onPressed: () async =>
+                chosen = await tomSecretsShowGenerator(context),
             child: const Text('open'),
           ),
         ),
@@ -415,89 +424,133 @@ void main() {
     }
     await tester.tap(find.byKey(const Key('tsm-class-lower')));
     await tester.pump();
-    final shown =
-        tester.widget<SelectableText>(find.byKey(const Key('tsm-generated'))).data!;
-    expect(shown, matches(RegExp(r'^[a-z]{20}$')),
-        reason: 'the last class cannot be switched off');
+    final shown = tester
+        .widget<SelectableText>(find.byKey(const Key('tsm-generated')))
+        .data!;
+    expect(
+      shown,
+      matches(RegExp(r'^[a-z]{20}$')),
+      reason: 'the last class cannot be switched off',
+    );
     await tester.tap(find.byKey(const Key('tsm-use-generated')));
     await tester.pumpAndSettle();
     expect(chosen, shown);
   });
 
   group('host bridge', () {
-    test('tray, status line, notifications, capture and start at login',
-        () async {
-      final tray = _Tray();
-      final window = _Window();
-      final notifier = _Notifier();
-      final login = _Login();
-      final capture = _Capture();
-      final prefs = TomSecretsMemoryPreferences();
-      final h = TomSecretsHost(
-        service: FakeHost(service),
-        tray: tray,
-        window: window,
-        notifier: notifier,
-        loginItem: login,
-        captureGuard: capture,
-        preferences: prefs,
-      );
-      final connection = TomSecretsServiceConnection(h.service);
-      final bridge = TomSecretsHostBridge(host: h, connection: connection)
-        ..start();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(capture.calls, [true], reason: 'excluded by default (DP-33)');
-      expect(login.enabled, isTrue, reason: 'on at the first start (DP-30)');
-      expect(tray.state, TomSecretsTrayState.locked);
-      expect(bridge.statusLine(), 'service not running');
+    test(
+      'tray, status line, notifications, capture and start at login',
+      () async {
+        final tray = _Tray();
+        final window = _Window();
+        final notifier = _Notifier();
+        final login = _Login();
+        final capture = _Capture();
+        final prefs = TomSecretsMemoryPreferences();
+        final h = TomSecretsHost(
+          service: FakeHost(service),
+          tray: tray,
+          window: window,
+          notifier: notifier,
+          loginItem: login,
+          captureGuard: capture,
+          preferences: prefs,
+        );
+        final connection = TomSecretsServiceConnection(h.service);
+        final bridge = TomSecretsHostBridge(host: h, connection: connection)
+          ..start();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(capture.calls, [true], reason: 'excluded by default (DP-33)');
+        expect(login.enabled, isTrue, reason: 'on at the first start (DP-30)');
+        expect(tray.state, TomSecretsTrayState.locked);
+        expect(bridge.statusLine(), 'service not running');
 
-      await connection.connect();
-      await connection.unlock(demoPassword);
-      expect(tray.state, TomSecretsTrayState.unlocked);
-      expect(bridge.statusLine(), '2 vaults synced');
-      expect(tray.items.map((i) => i.label), contains('Lock'));
-      expect(
-        tray.items.map((i) => i.label),
-        contains('Quit the app (the service keeps running)'),
-      );
+        await connection.connect();
+        await connection.unlock(demoPassword);
+        expect(tray.state, TomSecretsTrayState.unlocked);
+        expect(bridge.statusLine(), '2 vaults synced');
+        expect(tray.items.map((i) => i.label), contains('Lock'));
+        expect(
+          tray.items.map((i) => i.label),
+          contains('Quit the app (the service keeps running)'),
+        );
 
-      service.emit({'op': 'approval_needed', 'approvalId': 'a-9'});
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(tray.state, TomSecretsTrayState.attention);
-      expect(tray.items.map((i) => i.label), contains('1 approvals waiting'));
+        service.emit({'op': 'approval_needed', 'approvalId': 'a-9'});
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(tray.state, TomSecretsTrayState.attention);
+        expect(tray.items.map((i) => i.label), contains('1 approvals waiting'));
 
-      service.emit({
-        'op': 'unlock_needed',
-        'identity': {'exe': '/usr/bin/demo'},
-      });
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      // The prompt above notified too, the window being closed (DP-31).
-      expect(notifier.titles, ['Approve a request', 'Unlock the secrets']);
-      notifier.click!();
-      expect(window.visible, isTrue);
-      service.emit({'op': 'unlock_needed'});
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(notifier.titles, hasLength(2), reason: 'the window is shown');
+        service.emit({
+          'op': 'unlock_needed',
+          'identity': {'exe': '/usr/bin/demo'},
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        // The prompt above notified too, the window being closed (DP-31).
+        expect(notifier.titles, ['Approve a request', 'Unlock the secrets']);
+        notifier.click!();
+        expect(window.visible, isTrue);
+        service.emit({'op': 'unlock_needed'});
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(notifier.titles, hasLength(2), reason: 'the window is shown');
 
-      tray.items
-          .firstWhere((i) => i.label.startsWith('Quit'))
-          .onSelected!();
-      expect(window.quitted, isTrue);
+        tray.items.firstWhere((i) => i.label.startsWith('Quit')).onSelected!();
+        expect(window.quitted, isTrue);
 
-      // A second start leaves the user's choice alone.
-      await login.setEnabled(false);
-      final again = TomSecretsHostBridge(host: h, connection: connection)
-        ..start();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(login.enabled, isFalse);
-      // The capture setting switched off is applied as off.
-      await prefs.write(TomSecretsHostPreferenceKeys.captureExcluded, 'off');
-      expect(await again.applyCaptureSetting(), isTrue);
-      expect(capture.calls.last, isFalse);
-      bridge.dispose();
-      again.dispose();
-      connection.dispose();
-    });
+        // A second start leaves the user's choice alone.
+        await login.setEnabled(false);
+        final again = TomSecretsHostBridge(host: h, connection: connection)
+          ..start();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(login.enabled, isFalse);
+        // The capture setting switched off is applied as off.
+        await prefs.write(TomSecretsHostPreferenceKeys.captureExcluded, 'off');
+        expect(await again.applyCaptureSetting(), isTrue);
+        expect(capture.calls.last, isFalse);
+        bridge.dispose();
+        again.dispose();
+        connection.dispose();
+      },
+    );
+  });
+
+  testWidgets('an entry asked for from outside (the browser host\'s openApp) '
+      'is shown once its vault is open; another text is ignored', (
+    tester,
+  ) async {
+    final requests = TomSecretsEntryRequests();
+    host = TomSecretsHost(
+      service: FakeHost(service),
+      preferences: TomSecretsMemoryPreferences(),
+      clipboard: clipboard,
+      entryRequests: requests,
+    );
+    final stored = await tester.runAsync(
+      () => KdbxFormat().read(
+        service.store('primary').stored,
+        tomSecretsVaultCredentials(password: demoPassword),
+      ),
+    );
+    final main = stored!.body.rootGroup.getAllEntries().firstWhere(
+      (e) => e.label == 'Main' && e.parent?.name.get() == 'Db',
+    );
+    final hex = [
+      for (final b in main.uuid.toBytes()) b.toRadixString(16).padLeft(2, '0'),
+    ].join();
+    requests.request('not a reference');
+    expect(requests.pending, isNull);
+    // Asked for while locked: kept until the vault is open.
+    requests.request('primary/~$hex');
+    await pumpApp(tester);
+    await unlock(tester);
+    await tester.pumpAndSettle();
+    expect(requests.pending, isNull);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('tsm-field-title')))
+          .controller!
+          .text,
+      'Main',
+    );
   });
 }
 
