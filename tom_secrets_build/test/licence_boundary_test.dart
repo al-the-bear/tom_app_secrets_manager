@@ -68,6 +68,20 @@ void main() {
     }
   }
 
+  // A Maven project whose dependencies are all test-scoped has the JDK as
+  // its whole closure: its own licence is checked, and that it still links
+  // nothing.
+  for (final manifest in workspace.foreignManifests()) {
+    if (workspace.isJdkOnlyMavenProject(manifest)) {
+      test(manifest, () {
+        expect(
+          secretsMavenProblems(workspace.repositoryDir(p.dirname(manifest))),
+          isEmpty,
+        );
+      });
+    }
+  }
+
   // A Cargo package with its lock: its own licence and, for every crate it
   // links (not the dev dependencies), the declared SPDX expression and the
   // licence file, from `cargo metadata` (`:licences` fetched the lock).

@@ -24,7 +24,10 @@ import 'package:tom_test_support/licence_audit.dart';
 import 'package:yaml/yaml.dart';
 
 import 'ci_workspace.dart'
-    show secretsPyprojectStrings, secretsPythonRequirements;
+    show
+        secretsMavenRequirements,
+        secretsPyprojectStrings,
+        secretsPythonRequirements;
 
 /// The one package that may depend on [secretsKdbxStore].
 const String secretsKdbxGateway = 'tom_secrets_core';
@@ -407,6 +410,43 @@ List<String> secretsCargoProblemsOf(Map<Object?, Object?> metadata) {
         '$name links $linkedName, which ships no permissive licence file.',
       );
     }
+  }
+  return problems;
+}
+
+/// Every problem of the Maven project whose `pom.xml` is in [packageDir]:
+/// its one declared licence (`<licenses><license><name>`, BSD-3-Clause), its
+/// licence file, and any dependency it links ([secretsMavenRequirements]) —
+/// a project that links none has the JDK as its whole closure; no check
+/// reads a Maven closure yet. Empty when it passes.
+List<String> secretsMavenProblems(String packageDir) {
+  final pom = File(p.join(packageDir, 'pom.xml')).readAsStringSync();
+  final name =
+      RegExp(
+        r'<artifactId>\s*(.*?)\s*</artifactId>',
+      ).firstMatch(pom)?.group(1) ??
+      packageDir;
+  final problems = <String>[];
+  final licences = RegExp(
+    r'<license>.*?<name>\s*(.*?)\s*</name>.*?</license>',
+    dotAll: true,
+  ).allMatches(pom).map((m) => m.group(1)).toList();
+  if (licences.length != 1 || licences.single != secretsNpmLicence) {
+    problems.add(
+      '$name declares licence ${licences.join(', ')}, not $secretsNpmLicence.',
+    );
+  }
+  final own = tomLicenceFileOf(Directory(packageDir));
+  if (own == null ||
+      tomClassifyLicence(own.readAsStringSync()) != TomLicence.bsd3) {
+    problems.add('$name has no BSD-3 licence file.');
+  }
+  final requirements = secretsMavenRequirements(pom);
+  if (requirements.isNotEmpty) {
+    problems.add(
+      '$name links ${requirements.join(', ')}: no check reads a Maven '
+      'closure yet.',
+    );
   }
   return problems;
 }

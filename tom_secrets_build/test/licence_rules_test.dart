@@ -232,6 +232,61 @@ void main() {
     });
   });
 
+  group('secretsMavenRequirements', () {
+    test('test-scoped, managed and plugin dependencies are not linked', () {
+      const pom = '''
+<project>
+  <!-- <dependency><groupId>c</groupId><artifactId>commented</artifactId></dependency> -->
+  <dependencyManagement><dependencies><dependency>
+    <groupId>m</groupId><artifactId>managed</artifactId>
+  </dependency></dependencies></dependencyManagement>
+  <dependencies>
+    <dependency><groupId>org.junit</groupId><artifactId>junit</artifactId>
+      <scope>test</scope></dependency>
+    <dependency><groupId>com.x</groupId><artifactId>linked</artifactId></dependency>
+  </dependencies>
+  <build><plugins><plugin><dependencies><dependency>
+    <groupId>p</groupId><artifactId>plugin-dep</artifactId>
+  </dependency></dependencies></plugin></plugins></build>
+</project>''';
+      expect(secretsMavenRequirements(pom), ['com.x:linked']);
+      expect(secretsMavenRequirements('<project></project>'), isEmpty);
+    });
+  });
+
+  group('secretsMavenProblems', () {
+    late Directory root;
+
+    setUp(() => root = secretsScratchDir('maven'));
+
+    test('a BSD-3 project linking nothing passes', () {
+      secretsWriteFile(
+        root,
+        'java/pom.xml',
+        '<project><artifactId>x</artifactId><licenses><license>'
+            '<name>BSD-3-Clause</name></license></licenses></project>',
+      );
+      secretsWriteFile(root, 'java/LICENSE', _bsd3);
+      expect(secretsMavenProblems(p.join(root.path, 'java')), isEmpty);
+    });
+
+    test('another licence, no licence file and a dependency are red', () {
+      secretsWriteFile(
+        root,
+        'java/pom.xml',
+        '<project><artifactId>x</artifactId><licenses><license><name>MIT'
+            '</name></license></licenses><dependencies><dependency><groupId>a'
+            '</groupId><artifactId>b</artifactId></dependency></dependencies>'
+            '</project>',
+      );
+      expect(secretsMavenProblems(p.join(root.path, 'java')), [
+        contains('declares licence MIT'),
+        contains('no BSD-3 licence file'),
+        contains('links a:b'),
+      ]);
+    });
+  });
+
   group('secretsSpdxAdmitted', () {
     test('permissive ids, OR with one admitted side, AND of admitted ones, '
         'WITH an exception, the old slash', () {

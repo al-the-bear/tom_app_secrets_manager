@@ -34,7 +34,9 @@ const Map<String, String> secretsCiStageDescriptions = {
   'analyze':
       'pub get + analyze (infos fatal) in every package of the three '
       'repositories; npm ci + npm run build in every npm package; '
-      'cargo clippy in every Cargo package; go vet in every Go module that '
+      'cargo clippy in every Cargo package; javac (lint, warnings fatal) in '
+      'every Maven project that links only the JDK; go vet in every Go '
+      'module that '
       'requires nothing; compileall in every '
       'Python package; on macOS '
       'the AutoFill provider\'s extension target compiled (unsigned)',
@@ -42,7 +44,8 @@ const Map<String, String> secretsCiStageDescriptions = {
       'every package suite, strictly serial, one full log per package '
       '(the licence-boundary check is :licences\', the integration suites '
       ':integration\'); npm test in every npm package; cargo test in every '
-      'Cargo package; go test in every Go '
+      'Cargo package; the AllTests of every such Maven project; go test in '
+      'every Go '
       'module with tests; unittest in every Python package; on macOS swift '
       'test '
       'of the AutoFill provider\'s core',
@@ -53,9 +56,8 @@ const Map<String, String> secretsCiStageDescriptions = {
   'licences':
       'pub get in every package, then the licence-boundary check: no '
       'copyleft licence in any closure, KDBX only through tom_secrets_core; '
-      'the npm and Cargo closures from their locks; Python packages that '
-      'require '
-      'nothing; every other non-Dart manifest is '
+      'the npm and Cargo closures from their locks; Maven and Python '
+      'projects that link nothing beyond their platform; every other non-Dart manifest is '
       'red until its closure is checked',
   'conformance':
       'the client conformance suite (tom_secrets_clients/conformance): the '
@@ -163,6 +165,14 @@ class SecretsCiStages {
             ], dir),
           ]);
         }
+        for (final dir in workspace.javaPackageDirs()) {
+          final name = workspace.relative(dir);
+          // javac with every lint, warnings fatal, at the release the pom
+          // names, is the analyzer.
+          await run.step(stage, name, 'analyze.${_javaLogName(name)}.log', [
+            _javac(dir, const ['src/main/java'], 'classes'),
+          ]);
+        }
         for (final dir in workspace.goModuleDirs()) {
           final name = workspace.relative(dir);
           await run.step(stage, name, 'analyze.${_goLogName(name)}.log', [
@@ -218,6 +228,25 @@ class SecretsCiStages {
           final name = workspace.relative(dir);
           await run.step(stage, name, '${_cargoLogName(name)}.log', [
             _cargo(const ['test', '--all-features', '--locked'], dir),
+          ]);
+        }
+        for (final dir in workspace.javaPackageDirs()) {
+          final name = workspace.relative(dir);
+          final main = secretsJavaTestMain(dir);
+          if (main == null) {
+            run.skip(stage, name, '${_javaLogName(name)}.log', 'no AllTests');
+            continue;
+          }
+          await run.step(stage, name, '${_javaLogName(name)}.log', [
+            _javac(dir, const [
+              'src/main/java',
+              'src/test/java',
+            ], 'test-classes'),
+            CiCommand('java', [
+              '-cp',
+              p.join('build', 'ci', 'test-classes'),
+              main,
+            ], workingDirectory: dir),
           ]);
         }
         for (final dir in workspace.goModuleDirs()) {
@@ -287,6 +316,10 @@ class SecretsCiStages {
             p.basename(manifest) == 'package.json'
                 ? 'no package-lock.json beside it: the npm closure check '
                       'reads the lock — run npm install and commit it'
+                : p.basename(manifest) == 'pom.xml'
+                ? 'it links dependencies: only a Maven project whose '
+                      'dependencies are all test-scoped (the JDK its closure) '
+                      'is checked'
                 : p.basename(manifest) == 'Cargo.toml'
                 ? 'no Cargo.lock beside it: the Cargo closure check reads '
                       'the lock — run cargo generate-lockfile and commit it'
@@ -688,6 +721,59 @@ CiCommand _python(
   workingDirectory: dir,
   environment: environment,
 );
+
+/// The class of a Java project's tests: `src/test/java/**/AllTests.java`
+/// as a class name (its tests are a plain main class), or null when it has
+/// none.
+String? secretsJavaTestMain(String projectDir) {
+  final root = Directory(p.join(projectDir, 'src', 'test', 'java'));
+  if (!root.existsSync()) return null;
+  for (final entry in root.listSync(recursive: true)) {
+    if (entry is File && p.basename(entry.path) == 'AllTests.java') {
+      return p
+          .withoutExtension(p.relative(entry.path, from: root.path))
+          .replaceAll(RegExp(r'[/\\]'), '.');
+    }
+  }
+  return null;
+}
+
+/// The release a Maven project compiles for (`maven.compiler.release`),
+/// else 16 (the client's `UnixDomainSocketAddress`).
+String secretsJavaRelease(String projectDir) {
+  final pom = File(p.join(projectDir, 'pom.xml'));
+  final release = pom.existsSync()
+      ? RegExp(
+          r'<maven\.compiler\.release>\s*(\d+)\s*</maven\.compiler\.release>',
+        ).firstMatch(pom.readAsStringSync())?.group(1)
+      : null;
+  return release ?? '16';
+}
+
+/// javac over every `.java` file under [sources] (relative to [dir]) into
+/// `build/ci/<out>`, with every lint and warnings fatal.
+CiCommand _javac(String dir, List<String> sources, String out) {
+  final files = <String>[
+    for (final source in sources)
+      if (Directory(p.join(dir, source)).existsSync())
+        for (final entry in Directory(
+          p.join(dir, source),
+        ).listSync(recursive: true))
+          if (entry is File && entry.path.endsWith('.java'))
+            p.relative(entry.path, from: dir),
+  ]..sort();
+  return CiCommand('javac', [
+    '--release',
+    secretsJavaRelease(dir),
+    '-Xlint:all',
+    '-Werror',
+    '-d',
+    p.join('build', 'ci', out),
+    ...files,
+  ], workingDirectory: dir);
+}
+
+String _javaLogName(String name) => 'java.${name.replaceAll('/', '.')}';
 
 /// A cargo command in [dir].
 CiCommand _cargo(List<String> args, String dir) =>

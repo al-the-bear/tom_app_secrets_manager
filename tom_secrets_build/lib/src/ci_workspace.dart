@@ -70,11 +70,14 @@ const Set<String> secretsCiSkippedDirectories = {
 
 /// Dependency manifests of the languages other than Dart. Each one found is a
 /// closure the licence-boundary check must read, so `:licences` reports it red
-/// rather than passing it unread, except four the check reads: a Go module
+/// rather than passing it unread, except five the check reads: a Go module
 /// that requires nothing ([secretsGoModuleRequirements]), whose closure is the
 /// Go standard library alone (BSD-3), a Python project that requires nothing
 /// ([secretsPythonRequirements]), whose closure is the Python standard
-/// library alone (PSF-2.0, permissive), an npm package with its
+/// library alone (PSF-2.0, permissive), a Maven project whose dependencies
+/// are all test-scoped ([secretsMavenRequirements]), whose closure is the
+/// JDK alone (GPL-2.0 with the Classpath Exception, which binds nothing
+/// linked to it), an npm package with its
 /// `package-lock.json` ([secretsNpmProblems]) and a Cargo package with its
 /// `Cargo.lock` ([secretsCargoProblems]).
 const Map<String, String> secretsCiForeignManifests = {
@@ -189,6 +192,34 @@ List<String> secretsPythonRequirements(String pyproject) {
     ...?strings['project']?['dependencies'],
     for (final extra in (strings['project.optional-dependencies'] ?? {}).values)
       ...extra,
+  ];
+}
+
+/// The dependencies a Maven `pom.xml` links: every `<dependency>` outside
+/// `<dependencyManagement>` and `<build>` (plugins' dependencies are build
+/// tools) whose `<scope>` is not `test`, as `groupId:artifactId`.
+List<String> secretsMavenRequirements(String pom) {
+  final linked = pom
+      .replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '')
+      .replaceAll(
+        RegExp(
+          r'<dependencyManagement>.*?</dependencyManagement>',
+          dotAll: true,
+        ),
+        '',
+      )
+      .replaceAll(RegExp(r'<build>.*?</build>', dotAll: true), '');
+  String? element(String block, String name) => RegExp(
+    '<$name>\\s*(.*?)\\s*</$name>',
+    dotAll: true,
+  ).firstMatch(block)?.group(1);
+  return [
+    for (final m in RegExp(
+      r'<dependency>(.*?)</dependency>',
+      dotAll: true,
+    ).allMatches(linked))
+      if (element(m.group(1)!, 'scope') != 'test')
+        '${element(m.group(1)!, 'groupId')}:${element(m.group(1)!, 'artifactId')}',
   ];
 }
 
@@ -370,6 +401,7 @@ class SecretsCiWorkspace {
     for (final manifest in foreignManifests())
       if (!isStandardLibraryGoModule(manifest) &&
           !isStandardLibraryPythonProject(manifest) &&
+          !isJdkOnlyMavenProject(manifest) &&
           !isLockedNpmManifest(manifest) &&
           !isLockedCargoManifest(manifest))
         manifest,
@@ -380,6 +412,14 @@ class SecretsCiWorkspace {
   List<String> goModuleDirs() => [
     for (final manifest in foreignManifests())
       if (isStandardLibraryGoModule(manifest))
+        p.normalize(p.join(workspaceRoot, p.dirname(manifest))),
+  ];
+
+  /// The absolute directories of the Maven projects that link only the JDK
+  /// ([isJdkOnlyMavenProject]), sorted: the stages compile and test them.
+  List<String> javaPackageDirs() => [
+    for (final manifest in foreignManifests())
+      if (isJdkOnlyMavenProject(manifest))
         p.normalize(p.join(workspaceRoot, p.dirname(manifest))),
   ];
 
@@ -430,6 +470,14 @@ class SecretsCiWorkspace {
   bool isStandardLibraryGoModule(String manifest) =>
       p.basename(manifest) == 'go.mod' &&
       secretsGoModuleRequirements(
+        File(p.join(workspaceRoot, manifest)).readAsStringSync(),
+      ).isEmpty;
+
+  /// Whether the workspace-relative [manifest] is a `pom.xml` whose
+  /// dependencies are all test-scoped ([secretsMavenRequirements]).
+  bool isJdkOnlyMavenProject(String manifest) =>
+      p.basename(manifest) == 'pom.xml' &&
+      secretsMavenRequirements(
         File(p.join(workspaceRoot, manifest)).readAsStringSync(),
       ).isEmpty;
 

@@ -61,6 +61,19 @@ void main() {
       );
       secretsWriteFile(
         root,
+        'app_secrets_manager/tools/java_jdk/pom.xml',
+        '<project><dependencies><dependency><groupId>org.junit</groupId>'
+            '<artifactId>junit</artifactId><scope>test</scope></dependency>'
+            '</dependencies></project>',
+      );
+      secretsWriteFile(
+        root,
+        'app_secrets_manager/tools/java_deps/pom.xml',
+        '<project><dependencies><dependency><groupId>com.x</groupId>'
+            '<artifactId>y</artifactId></dependency></dependencies></project>',
+      );
+      secretsWriteFile(
+        root,
         'app_secrets_manager/tools/rs_locked/Cargo.toml',
         '[package]\nname = "a"\n',
       );
@@ -121,6 +134,8 @@ void main() {
         expect(workspace.foreignManifests(), [
           'app_secrets_manager/tom_secrets_browser/package.json',
           'app_secrets_manager/tom_secrets_npm/package.json',
+          'app_secrets_manager/tools/java_deps/pom.xml',
+          'app_secrets_manager/tools/java_jdk/pom.xml',
           'app_secrets_manager/tools/py_deps/pyproject.toml',
           'app_secrets_manager/tools/py_stdlib/pyproject.toml',
           'app_secrets_manager/tools/rs_locked/Cargo.toml',
@@ -136,9 +151,18 @@ void main() {
         'is not', () {
       expect(workspace.uncheckedForeignManifests(), [
         'app_secrets_manager/tom_secrets_browser/package.json',
+        'app_secrets_manager/tools/java_deps/pom.xml',
         'app_secrets_manager/tools/py_deps/pyproject.toml',
         'app_secrets_manager/tools/rs_unlocked/Cargo.toml',
         'app_secrets_manager/tools/with_deps/go.mod',
+      ]);
+      expect(workspace.javaPackageDirs(), [
+        p.join(
+          workspace.workspaceRoot,
+          'app_secrets_manager',
+          'tools',
+          'java_jdk',
+        ),
       ]);
       expect(workspace.cargoPackageDirs(), [
         p.join(
