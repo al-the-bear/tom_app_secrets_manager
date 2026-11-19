@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Shared vaults (part-sharing): the engine answers `vault.recipients` by
+  store, so the session takes up a shared vault's new keys after another
+  member re-keyed it (`refreshSharedVaultKeys`) and writes them into the
+  primary on GitHub; by location, `vault.recipients.set` and member changes
+  stay the desktop app's.
 - Takes `tom_secrets_service` 0.17.0: the vault openers pass the
   recipients file beside a vault on (`readBeside`, `writeBeside`, the
   re-key's `beside`); a file vault in the phone's Files has none and writes

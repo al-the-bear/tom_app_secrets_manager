@@ -42,6 +42,11 @@ A phone runs no secrets service and keeps no copy of a vault:
   vaults' locators, key files, repository keys and a GitHub token of its
   own; the master password never travels.
 - **System vaults are read-only** on a phone (BP-40).
+- **Shared vaults** (phase C) open like any vault the primary lists. When
+  another member re-keyed one (a member removed), the next unlock reads its
+  recipients file (`vault.recipients`), opens it with the member key from
+  the primary and writes the new keys into the primary on GitHub. Creating,
+  joining and changing members happen in the desktop app (BP-32).
 - **Attachments** are added from the document picker and opened in another
   app through the share sheet (the shared copy is removed when the sheet
   closes on iOS, at the next share or start on Android).

@@ -138,6 +138,12 @@ settle" on the Vaults list.
 
 System vaults are read-only on the phone: change them on a desktop.
 
+Shared vaults (vaults you share with other people) open on the phone like
+your own. When a member is removed from one and the vault gets a new key,
+the phone takes up the new key at its next unlock by itself, with your
+member key. Creating a shared vault, opening someone else's and adding or
+removing members happen in the desktop app.
+
 **Attachments**: "Attach a file" in the entry's Attachments section takes a
 file from Files; the share button beside an attachment hands it to another
 app (to open or save it there). The shared copy is removed when you close

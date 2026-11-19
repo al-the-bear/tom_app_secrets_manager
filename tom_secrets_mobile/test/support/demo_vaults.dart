@@ -70,7 +70,11 @@ final class DemoVaults {
   );
 
   /// Another device writing [file] to [locator].
-  Future<void> put(String locator, KdbxFile file) async {
+  Future<void> put(String locator, KdbxFile file) async =>
+      putBytes(locator, await file.save());
+
+  /// Another device writing [bytes] to [locator].
+  Future<void> putBytes(String locator, Uint8List bytes) async {
     final s = storage();
     try {
       String? head;
@@ -81,7 +85,7 @@ final class DemoVaults {
       }
       await s.commit(
         locator,
-        TomChangeset.singleFile(await file.save()),
+        TomChangeset.singleFile(bytes),
         expectedHead: head,
         message: 'seed',
       );

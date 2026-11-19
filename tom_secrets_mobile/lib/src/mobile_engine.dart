@@ -880,6 +880,50 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
             if (s.name == store) _emit({'op': 'store_state', ..._stateOf(s)});
           }
         }
+      case 'vault.recipients':
+        // A shared vault's recipients file (part-sharing): read so the
+        // session takes up the vault's new keys after another member
+        // re-keyed it. Joining by a location, adding and removing members
+        // are the desktop app's (BP-32).
+        _unlocked();
+        final store = args['store'];
+        if (store is! String || args['location'] != null) {
+          _refuse(
+            'unsupported',
+            'a phone reads the recipients file of a '
+                'vault it lists only; join shared vaults in the desktop app',
+          );
+        }
+        final location = _vaults.locatorOf(store);
+        if (location == null) _refuse('not_found', 'no store $store');
+        final ({Uint8List bytes, String revision})? read;
+        try {
+          read = await _vaults.recipientsAt(location);
+        } on TomSecretsSaveException catch (e) {
+          _refuse(e.kind, e.message, {'reason': ?e.reason});
+        } on Object catch (e) {
+          final failure = tomSecretsFetchFailureOf(e);
+          if (failure == null) rethrow;
+          _refuse(
+            TomSecretsStoreState.offlineFor(failure).wireName,
+            'the recipients file cannot be read now',
+            {
+              'stores': [store],
+            },
+          );
+        }
+        if (read == null) {
+          _refuse('not_found', 'the vault has no recipients file', {
+            'reason': 'no_recipients',
+          });
+        }
+        return {
+          'op': 'recipientsData',
+          'store': store,
+          'location': location,
+          'revision': read.revision,
+          'bytes': base64.encode(read.bytes),
+        };
       case 'reload':
         _unlocked();
         await refresh(force: true);
