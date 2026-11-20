@@ -11,7 +11,9 @@
 /// product only reminds: a rotation is always the user's click — every
 /// vault's master password, key file and repository key are rotated here by
 /// hand (part-key-rotation), and a rotation whose re-keyed save failed is
-/// finished here.
+/// finished here. Certificates and PGP keys stored as typed entries are
+/// listed by their expiry too (BP-33); their row opens the entry, where a
+/// new one is generated or chosen.
 library;
 
 import 'dart:async';
@@ -36,8 +38,12 @@ import 'vault_browser.dart' show tomSecretsGuarded;
 
 /// The Keys screen.
 class TomSecretsKeysView extends StatefulWidget {
-  /// The screen.
-  const TomSecretsKeysView({super.key});
+  /// The screen; [onOpen] shows an entry (a certificate's or PGP key's;
+  /// default: selects it).
+  const TomSecretsKeysView({super.key, this.onOpen});
+
+  /// Shows the entry of a certificate or PGP key row.
+  final void Function(TomSecretsEntryRef ref)? onOpen;
 
   @override
   State<TomSecretsKeysView> createState() => _KeysState();
@@ -343,6 +349,31 @@ class _KeysState extends State<TomSecretsKeysView> {
     );
   }
 
+  /// The entry of a certificate or PGP key row (`certificate:<store>/<title>`,
+  /// `pgp-key:<store>/<title>`), or null when it is not open here.
+  TomSecretsEntryRef? _typedEntry(TomSecretsKeyInfo k) {
+    final subject = k.subject;
+    final slash = subject.indexOf('/');
+    if (slash < 0) return null;
+    final store = subject.substring(0, slash);
+    final title = subject.substring(slash + 1);
+    final type = k.kind == 'certificate'
+        ? TomSecretsEntryType.certificate
+        : TomSecretsEntryType.pgpKey;
+    final vault = context.read<TomSecretsSession>().vault(store);
+    if (vault == null) return null;
+    for (final e in vault.file.body.rootGroup.getAllEntries()) {
+      if (e.label == title &&
+          TomSecretsEntryType.of(
+                e.getString(TomSecretsEntryFields.type)?.getText(),
+              ) ==
+              type) {
+        return TomSecretsEntryRef(store, e.uuid);
+      }
+    }
+    return null;
+  }
+
   Widget _keyRow(BuildContext context, TomSecretsKeyInfo k) {
     final theme = Theme.of(context);
     final colour = k.expired
@@ -357,6 +388,7 @@ class _KeysState extends State<TomSecretsKeysView> {
         : '${k.daysLeft} days left';
     final rotation = switch (k.kind) {
       'github_token' => 'Renew…',
+      'certificate' || 'pgp_key' => 'Open the entry',
       _ => 'Rotate…',
     };
     return ListTile(
@@ -367,6 +399,8 @@ class _KeysState extends State<TomSecretsKeysView> {
         'github_token' => Icons.vpn_key_outlined,
         'vault_keys' => Icons.lock_outline,
         'member_key' => Icons.badge_outlined,
+        'certificate' => Icons.verified_outlined,
+        'pgp_key' => Icons.key_outlined,
         _ => Icons.devices_other_outlined,
       }, color: colour),
       title: Text(k.title, style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -400,6 +434,19 @@ class _KeysState extends State<TomSecretsKeysView> {
             TextButton(
               key: Key('tsm-key-rotate-${k.key}'),
               onPressed: () => unawaited(_rotateMemberKey()),
+              child: Text(rotation),
+            )
+          else if ((k.kind == 'certificate' || k.kind == 'pgp_key') &&
+              _typedEntry(k) != null)
+            TextButton(
+              key: Key('tsm-key-open-${k.key}'),
+              onPressed: () {
+                final ref = _typedEntry(k)!;
+                (widget.onOpen ??
+                    (r) => context.read<TomSecretsSession>().selectedEntry = r)(
+                  ref,
+                );
+              },
               child: Text(rotation),
             )
           else if (k.kind == 'vault_keys' && k.vault != null)

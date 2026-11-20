@@ -2,6 +2,12 @@
 
 ## 0.1.0
 
+- Typed certificates and PGP keys (BP-33, DP-179): the entry editor's
+  "Certificate" and "PGP key" types and sections — what the key says,
+  generating one (ECDSA P-384, RSA 4096 where a tool needs RSA; a
+  certificate's CSR to copy), taking a PEM, PKCS#12 or armoured file,
+  copying the public part; the form takes over the passphrase and expiry
+  the key wrote. The Keys screen lists their expiry with "Open the entry".
 - The guided rotation of the own vaults (part-key-rotation): prepare (a
   new key file and/or repository key beside the old one in the primary,
   the record started), switch (the vaults re-keyed, a repository key

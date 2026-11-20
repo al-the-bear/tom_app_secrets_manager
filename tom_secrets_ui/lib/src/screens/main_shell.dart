@@ -564,8 +564,15 @@ class _MainShellState extends State<TomSecretsMainShell> {
                                 ref;
                           },
                         ),
-                        TomSecretsDestination.keys =>
-                          const TomSecretsKeysView(),
+                        TomSecretsDestination.keys => TomSecretsKeysView(
+                          onOpen: (ref) {
+                            setState(
+                              () => _destination = TomSecretsDestination.vaults,
+                            );
+                            context.read<TomSecretsSession>().selectedEntry =
+                                ref;
+                          },
+                        ),
                         TomSecretsDestination.pairing =>
                           const TomSecretsPairingView(),
                         TomSecretsDestination.sharing =>

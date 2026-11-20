@@ -194,15 +194,19 @@ offering the import and the pairing.
   grants of every host), a personal or shared vault's entry its login, URL and
   TOTP; the uniform view shows each of them the entry has
   (`tomSecretsEntryDetails`).
-- `TomSecretsEntryEditor`: Login, API token, secure note and SSH key: title,
-  user name, the password with the generator, URLs, TOTP with its countdown (the
+- `TomSecretsEntryEditor`: Login, API token, secure note, SSH key, certificate
+  and PGP key: title, user name, the password with the generator, URLs, TOTP with its countdown (the
   secret pasted, or its QR code scanned where the host has a camera), notes,
   custom fields (protected or not), tags, expiry, attachments, "How clients name
   it" (the path reference and the `tsm.key`, checked for uniqueness in the
   vault), "Overlays…" opening the overlay editor, the history with Restore; for
   an SSH key its type, fingerprint and public key, a key generated (Ed25519, or
   RSA 4096) or taken from a file, whether the ssh-agent serves it and why not,
-  and confirming each of its signatures. Protected values are masked, revealed
+  and confirming each of its signatures; for a certificate or PGP key what it
+  says (validity, key, fingerprint, expiry), one generated (ECDSA P-384, or
+  RSA 4096) or taken from a file, and its public part copied
+  (`TomSecretsCertificateSection`, `TomSecretsPgpKeySection`). Protected
+  values are masked, revealed
   one at a time for 30 seconds and copied through the protected clipboard
   (cleared after 30 seconds). A vault served from its offline copy opens
   read-only.

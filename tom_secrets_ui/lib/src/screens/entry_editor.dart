@@ -32,6 +32,7 @@ import '../widgets/totp_view.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 import 'overlay_editor.dart' show tomSecretsShowOverlayEditor;
 import 'share_dialogs.dart' show tomSecretsShowShareDialog;
+import 'typed_keys_section.dart';
 
 /// The fields the editor shows in their own places; every other non-reserved
 /// string field is a custom field.
@@ -563,6 +564,33 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
     ];
   }
 
+  /// Whether the entry is a note or a typed key: no user name, no URLs.
+  bool get _typedKey => switch (_type) {
+    TomSecretsEntryType.note ||
+    TomSecretsEntryType.sshKey ||
+    TomSecretsEntryType.certificate ||
+    TomSecretsEntryType.pgpKey => true,
+    _ => false,
+  };
+
+  /// Takes over what writing a certificate or PGP key changed in the saved
+  /// entry (its type, the passphrase in Password, Expires), so a later save
+  /// of the form keeps it.
+  void _takeTypedKey() {
+    final entry = _session.entryOf(widget.ref);
+    if (entry == null || !mounted) return;
+    final dirty = _dirty;
+    setState(() {
+      _type = TomSecretsEntryType.of(
+        entry.getString(TomSecretsEntryFields.type)?.getText(),
+      );
+      _password.text = entry.getString(KdbxKeyCommon.PASSWORD)?.getText() ?? '';
+      _expires = entry.times.expires.get() == true;
+      _expiry = entry.times.expiryTime.get();
+      _dirty = dirty;
+    });
+  }
+
   Widget _sshSection(BuildContext context, KdbxEntry entry, bool readOnly) {
     final theme = Theme.of(context);
     final key = tomSecretsSshKeyOf(entry);
@@ -916,6 +944,8 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                       TomSecretsEntryType.apiToken,
                       TomSecretsEntryType.note,
                       TomSecretsEntryType.sshKey,
+                      TomSecretsEntryType.certificate,
+                      TomSecretsEntryType.pgpKey,
                     ])
                       DropdownMenuItem(
                         value: t,
@@ -923,6 +953,8 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                           TomSecretsEntryType.apiToken => 'API token',
                           TomSecretsEntryType.note => 'Secure note',
                           TomSecretsEntryType.sshKey => 'SSH key',
+                          TomSecretsEntryType.certificate => 'Certificate',
+                          TomSecretsEntryType.pgpKey => 'PGP key',
                           _ => 'Login',
                         }),
                       ),
@@ -939,17 +971,30 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
           ),
           if (_type == TomSecretsEntryType.sshKey)
             _sshSection(context, entry, readOnly != null),
+          if (_type == TomSecretsEntryType.certificate)
+            TomSecretsCertificateSection(
+              entryRef: widget.ref,
+              readOnly: readOnly != null,
+              onWritten: _takeTypedKey,
+            ),
+          if (_type == TomSecretsEntryType.pgpKey)
+            TomSecretsPgpKeySection(
+              entryRef: widget.ref,
+              readOnly: readOnly != null,
+              onWritten: _takeTypedKey,
+            ),
           _section(
             switch (_type) {
               TomSecretsEntryType.apiToken => 'Token',
               TomSecretsEntryType.note => 'Secret',
-              TomSecretsEntryType.sshKey => 'Passphrase',
+              TomSecretsEntryType.sshKey ||
+              TomSecretsEntryType.certificate ||
+              TomSecretsEntryType.pgpKey => 'Passphrase',
               _ => 'Sign-in',
             },
             Icons.password_rounded,
             [
-              if (_type != TomSecretsEntryType.note &&
-                  _type != TomSecretsEntryType.sshKey)
+              if (!_typedKey)
                 TextField(
                   key: const Key('tsm-field-user'),
                   controller: _user,
@@ -963,8 +1008,10 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                 name: 'password',
                 label: switch (_type) {
                   TomSecretsEntryType.apiToken => 'Token',
-                  TomSecretsEntryType.sshKey =>
+                  TomSecretsEntryType.sshKey ||
+                  TomSecretsEntryType.certificate =>
                     'Passphrase (only when the key is encrypted)',
+                  TomSecretsEntryType.pgpKey => 'Passphrase of the secret key',
                   _ => 'Password',
                 },
                 controller: _password,
@@ -993,8 +1040,7 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
               ),
             ],
           ),
-          if (_type != TomSecretsEntryType.note &&
-              _type != TomSecretsEntryType.sshKey)
+          if (!_typedKey)
             _section('URLs', Icons.link_rounded, [
               for (var i = 0; i < _urls.length; i++)
                 TextField(

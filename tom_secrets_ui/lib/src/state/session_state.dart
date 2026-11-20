@@ -8,6 +8,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
@@ -1413,6 +1414,152 @@ class TomSecretsSession extends ChangeNotifier {
     );
     key.privateKey.fillRange(0, key.privateKey.length, 0);
     return key.info;
+  }
+
+  /// **[C]** Generates a certificate into the entry [ref] (DP-179): a key on
+  /// ECDSA P-384, or RSA 4096 with [algorithm] `rsa`, a self-signed
+  /// certificate for [commonName] (and [subjectAlternativeNames]) valid for
+  /// [days], typed `certificate` with Expires its notAfter, and saves; a
+  /// certificate there before goes to the entry's history. Generated in
+  /// another isolate (RSA takes seconds). Answers it, with its CSR.
+  Future<TomSecretsGeneratedCertificate> generateCertificate(
+    TomSecretsEntryRef ref, {
+    required String commonName,
+    List<String> subjectAlternativeNames = const [],
+    int days = 365,
+    TomSecretsCertificateAlgorithm algorithm =
+        TomSecretsCertificateAlgorithm.ecdsaP384,
+    int rsaBits = 4096,
+  }) async {
+    if (entryOf(ref) == null) throw StateError('$ref is not open');
+    final generated = await Isolate.run(
+      () => tomSecretsGenerateCertificate(
+        commonName: commonName,
+        subjectAlternativeNames: subjectAlternativeNames,
+        days: days,
+        algorithm: algorithm,
+        rsaBits: rsaBits,
+      ),
+    );
+    await updateEntry(
+      ref,
+      (e) => tomSecretsWriteCertificate(
+        e,
+        certificatePem: generated.certificatePem,
+        privateKeyPem: generated.privateKeyPem,
+      ),
+    );
+    return generated;
+  }
+
+  /// **[C]** Takes a certificate file into the entry [ref]: a PEM holding
+  /// the certificate (with its chain) and, when there, its private key, or
+  /// a PKCS#12 bundle with its [passphrase]; typed `certificate`, Expires
+  /// its notAfter (a bundle's is set by hand), and saves. Throws
+  /// `TomSecretsCertificateException` for a file that holds no certificate.
+  Future<TomSecretsCertificateInfo?> setCertificateFile(
+    TomSecretsEntryRef ref,
+    Uint8List bytes, {
+    String? passphrase,
+  }) async {
+    if (entryOf(ref) == null) throw StateError('$ref is not open');
+    if (tomSecretsIsPkcs12(bytes)) {
+      TomSecretsCertificateInfo? info;
+      await updateEntry(
+        ref,
+        (e) => info = tomSecretsWriteCertificate(
+          e,
+          pkcs12: bytes,
+          passphrase: passphrase,
+        ),
+      );
+      return info;
+    }
+    final text = utf8.decode(bytes, allowMalformed: true);
+    final key = RegExp(
+      '-----BEGIN (?:ENCRYPTED |EC |RSA )?PRIVATE KEY-----[\\s\\S]*?'
+      '-----END (?:ENCRYPTED |EC |RSA )?PRIVATE KEY-----',
+    ).firstMatch(text)?.group(0);
+    final certificates = [
+      for (final m in RegExp(
+        '-----BEGIN CERTIFICATE-----[\\s\\S]*?-----END CERTIFICATE-----',
+      ).allMatches(text))
+        m.group(0)!,
+    ].join('\n');
+    // Read before anything is written: a file without a certificate is
+    // refused and the entry stays as it was.
+    TomSecretsCertificateInfo.parse(certificates);
+    TomSecretsCertificateInfo? info;
+    await updateEntry(
+      ref,
+      (e) => info = tomSecretsWriteCertificate(
+        e,
+        certificatePem: certificates,
+        privateKeyPem: key,
+        passphrase: passphrase,
+      ),
+    );
+    return info;
+  }
+
+  /// **[C]** Generates an OpenPGP key into the entry [ref] (DP-179): ECDSA
+  /// P-384 with an ECDH subkey, or RSA 4096 with [algorithm] `rsa`, for
+  /// [userId], expiring after [expiresAfter] (null: never); its secret key
+  /// locked with a generated passphrase kept in `Password`; typed
+  /// `pgp-key`, and saves. Generated in another isolate.
+  Future<TomSecretsPgpKeyInfo> generatePgpKey(
+    TomSecretsEntryRef ref, {
+    required String userId,
+    TomSecretsPgpKeyAlgorithm algorithm = TomSecretsPgpKeyAlgorithm.ecdsaP384,
+    Duration? expiresAfter,
+  }) async {
+    if (entryOf(ref) == null) throw StateError('$ref is not open');
+    final generated = await Isolate.run(
+      () => tomSecretsGeneratePgpKey(
+        userId: userId,
+        algorithm: algorithm,
+        expiresAfter: expiresAfter,
+      ),
+    );
+    await updateEntry(
+      ref,
+      (e) => tomSecretsWritePgpKey(
+        e,
+        privateArmored: generated.privateArmored,
+        publicArmored: generated.publicArmored,
+        passphrase: generated.passphrase,
+      ),
+    );
+    return generated.info;
+  }
+
+  /// **[C]** Takes an armoured OpenPGP key into the entry [ref]: a secret
+  /// key block (its passphrase in [passphrase]) or someone's public key;
+  /// typed `pgp-key`, Expires the key's expiry, and saves. A key the
+  /// library does not read is kept without its information. Throws
+  /// [FormatException] for text that is no OpenPGP key block.
+  Future<TomSecretsPgpKeyInfo?> setPgpKeyFile(
+    TomSecretsEntryRef ref,
+    Uint8List bytes, {
+    String? passphrase,
+  }) async {
+    if (entryOf(ref) == null) throw StateError('$ref is not open');
+    final text = utf8.decode(bytes, allowMalformed: true);
+    final isPrivate = text.contains('BEGIN PGP PRIVATE KEY BLOCK');
+    if (!isPrivate && !text.contains('BEGIN PGP PUBLIC KEY BLOCK')) {
+      throw const FormatException('the file holds no armoured OpenPGP key');
+    }
+    TomSecretsPgpKeyInfo? info;
+    await updateEntry(
+      ref,
+      (e) => info = tomSecretsWritePgpKey(
+        e,
+        privateArmored: isPrivate ? text : null,
+        publicArmored: isPrivate ? null : text,
+        passphrase: passphrase,
+      ),
+    );
+    return info;
   }
 
   /// Sets whether the ssh-agent confirms every signature with the key of

@@ -232,6 +232,8 @@ final class TomSecretsKeyInfo {
     'approver_key' => 'Approver key pair of $subject',
     'link_key' => 'Approval-link key pair of $subject',
     'member_key' => 'Your member key ($subject)',
+    'certificate' => 'Certificate $subject',
+    'pgp_key' => 'PGP key $subject',
     _ => key,
   };
 

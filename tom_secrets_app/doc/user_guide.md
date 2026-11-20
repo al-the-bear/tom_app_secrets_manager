@@ -366,6 +366,55 @@ notes. When the app loads a vault it can write, it turns every note (or
 KeePassXC entry) whose attachment is a private key into an "SSH key" entry
 and saves the vault; the note as it was stays in the entry's history.
 
+### Certificates and PGP keys
+
+A "Certificate" entry holds an X.509 certificate: the certificate (with its
+chain) as the attachment `certificate.pem`, its private key as
+`private-key.pem`, or both together as a PKCS#12 bundle
+`certificate.p12`; the "Passphrase" field holds the key's passphrase when
+it has one. Its "Certificate" section shows the subject, the key (e.g.
+`ECDSA P-384`), the issuer or "self-signed", the validity (red within 30
+days of its end), the other names and the SHA-256 fingerprint, and offers:
+
+- "Generate a certificate…": a common name (the entry's title to start
+  with), other names, the days it is valid, and "RSA 4096 (for a tool that
+  needs RSA)"; otherwise the key is ECDSA on P-384. The certificate is
+  self-signed; "Copy the request for a CA" then copies its certificate
+  signing request, for a CA to sign.
+- "Choose a certificate file…": a PEM file (certificate, chain and private
+  key), or a PKCS#12 bundle, whose passphrase you are asked for. A file
+  without a certificate is refused. A bundle's validity is not read: set
+  its expiry by hand.
+- "Copy the certificate": the public certificate, to hand on.
+
+A "PGP key" entry holds an OpenPGP key: the secret key as
+`private-key.asc`, the public key as `public-key.asc`, the secret key's
+passphrase in "Passphrase of the secret key". Its "PGP key" section shows
+the user ids, the key, whether it is a secret key or someone's public key,
+when it was made and when it expires, and the fingerprint, and offers:
+
+- "Generate a key…": the user id (`Name <mail>`; the title and a mail
+  address in the user name to start with), the years until it expires (0:
+  never) and "RSA 4096 (for a tool that needs RSA)"; otherwise ECDSA on
+  P-384 with an ECDH subkey. The secret key is locked with a generated
+  passphrase, kept in the entry.
+- "Choose a key file…": an armoured secret key (its passphrase asked) or
+  someone's public key.
+- "Copy the public key".
+
+For both, a key there is replaced only after you confirm; the old one stays
+in the entry's history. Generating again is how such a key is rotated. The
+entry's expiry is set from the certificate's end or the PGP key's own
+expiry, and the key appears on the Keys screen with a reminder from 30 days
+before. A short key (RSA below 3072 bits, a curve below 256 bits) is kept
+and served, and Health lists it.
+
+A program gets the key material as a file: `tsm run --file
+TLS_KEY=vault/Certs/Web -- ./server` writes the certificate's private key
+(a PGP key's secret key) to a temporary file only you can read, puts its
+path in `TLS_KEY`, and deletes it when the command ends (the `tsm` user
+guide has the details).
+
 ### The ssh-agent
 
 The secrets service is an ssh-agent: `ssh`, `git`, `scp` and `rsync` sign
@@ -618,8 +667,11 @@ recycle bin are never exported. Enpass is served by the CSV for now.
 ## Keys
 
 **Keys** lists every key with a date, soonest first: the GitHub tokens, the
-vaults' key files and repository keys, and this device's approver and
-approval-link key pairs, each with its use, date and time left. The app only
+vaults' key files and repository keys, this device's approver and
+approval-link key pairs, and the certificates and PGP keys stored in the
+vaults, each with its use, date and time left (a certificate's or PGP
+key's "Open the entry" shows it in the vault browser, where a new one is
+generated or chosen). The app only
 reminds; a key is never rotated by itself. Reminders start some days before
 a key is due (see "Rotation ages and reminders" below), then 7 days and 1
 day before, and once a day once it is due; a notification comes once a day
@@ -947,9 +999,10 @@ click opens the entry:
   list ("Old after": six months, one year (the default), two or three
   years), read from the entry's history.
 - **Expiring**: entries whose Expires date is within 30 days, or past.
-- **Short keys**: SSH keys below today's guidance: RSA below 3072 bits, an
-  elliptic curve below 256 bits, DSA. They still work and are still served;
-  open the entry to generate an Ed25519 key in their place.
+- **Short keys**: SSH keys, certificates and PGP keys below today's
+  guidance: RSA below 3072 bits, an elliptic curve below 256 bits, DSA.
+  They still work and are still served; open the entry to generate a new
+  key in their place.
 - **Breached**: passwords found in known data breaches, with how often.
   "Exclude" keeps a login out of the breach check (the entry editor's
   "Check the password against known breaches" lets it in again).
