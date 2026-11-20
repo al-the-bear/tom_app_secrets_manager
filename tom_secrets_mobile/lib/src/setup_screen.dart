@@ -185,6 +185,18 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
     if (text == null || !mounted) return;
     try {
       final invitation = TomSecretsPairingInvitation.parse(text);
+      if (invitation.addresses.isEmpty) {
+        // A pairing on a relay alone (part-relay): a phone pairs on the
+        // same network or over the VPN.
+        setState(
+          () => _error =
+              'That desktop pairs through the relay '
+              '${invitation.relay?.text} only. Open a pairing there that '
+              'listens on the network too, and pair on the same network or '
+              'over the VPN.',
+        );
+        return;
+      }
       final address = invitation.addressFor(await widget.ownAddresses());
       if (!mounted) return;
       setState(() {

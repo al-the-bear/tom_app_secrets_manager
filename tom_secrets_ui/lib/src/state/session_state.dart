@@ -1596,6 +1596,34 @@ class TomSecretsSession extends ChangeNotifier {
     await save(store);
   }
 
+  /// **[C]** The relay whose mailbox the shared vault [store]'s members
+  /// use (`tsm.mailbox-relay`, part-relay), or null: the vault's own
+  /// repository's inbox folders.
+  TomSecretsRelayId? mailboxRelayOf(String store) {
+    final vault = _vaults[store];
+    if (vault == null) return null;
+    try {
+      return TomSecretsMetadata.read(vault.file).mailboxRelay;
+    } on TomSecretsMetadataException {
+      return null;
+    }
+  }
+
+  /// **[C]** Sets the shared vault [store]'s mailbox relay (null: its own
+  /// repository's inbox folders) in its metadata and saves it, so every
+  /// member's app reads the same one.
+  Future<void> setVaultMailboxRelay(
+    String store,
+    TomSecretsRelayId? relay,
+  ) async {
+    final vault = _vaults[store];
+    if (vault == null) throw StateError('$store is not open');
+    TomSecretsMetadata.read(vault.file)
+        .copyWith(mailboxRelay: relay, clearMailboxRelay: relay == null)
+        .writeTo(vault.file);
+    await save(store);
+  }
+
   /// Takes the private key file [bytes] named [name] into the entry [ref]
   /// as its SSH key and saves it. Throws [FormatException] when the file
   /// holds no private key.

@@ -224,6 +224,90 @@ void main() {
     expect(marked.expires, isNotNull);
   });
 
+  testWidgets('the Relays section: a relay added with its services, the '
+      'pairing default; a shared vault\'s mailbox relay kept in its metadata '
+      '(part-relay)', (tester) async {
+    final session = await sharing(tester);
+    await tap(tester, find.byKey(const Key('tsm-shared-new')));
+    await wait(tester, 2);
+    await tester.enterText(
+      find.byKey(const Key('tsm-shared-new-name')),
+      'crew',
+    );
+    await tap(tester, find.byKey(const Key('tsm-shared-new-place')));
+    await wait(tester, 2);
+    await tap(tester, find.text('Beside my primary vault').last);
+    await wait(tester, 2);
+    await tap(tester, find.byKey(const Key('tsm-shared-new-go')));
+    await wait(tester, 15);
+    expect(session.sharedVaults, ['crew']);
+
+    // Relays: a wrong id said; a GitHub repository and a relay server.
+    await tester.enterText(
+      find.byKey(const Key('tsm-relay-add-text')),
+      'ftp:nothing',
+    );
+    await tap(tester, find.byKey(const Key('tsm-relay-add')));
+    await wait(tester, 2);
+    expect(find.byKey(const Key('tsm-relay-error')), findsOneWidget);
+    for (final r in [
+      'github:al-the-bear/demo-vaults',
+      'tsm:https://relay.example',
+    ]) {
+      await tester.enterText(find.byKey(const Key('tsm-relay-add-text')), r);
+      await tap(tester, find.byKey(const Key('tsm-relay-add')));
+      await wait(tester, 2);
+    }
+    expect(find.byKey(const Key('tsm-relay-error')), findsNothing);
+    expect(
+      find.byKey(const Key('tsm-relay-github:al-the-bear/demo-vaults')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('pairing, mailbox · a GitHub'), findsOneWidget);
+    expect(find.textContaining('the default for pairing'), findsOneWidget);
+    final settings = TomSecretsRelaySettings(host.preferences);
+    expect(settings.pairingRelay?.text, 'github:al-the-bear/demo-vaults');
+    await tap(
+      tester,
+      find.byKey(const Key('tsm-relay-default-tsm:https://relay.example')),
+    );
+    await wait(tester, 2);
+    expect(settings.pairingRelay?.text, 'tsm:https://relay.example');
+
+    // The vault's mailbox relay: its own repository first, a relay server
+    // chosen, kept in the metadata (and saved).
+    await tap(tester, find.byKey(const Key('tsm-shared-crew')));
+    await wait(tester, 10);
+    await tester.pump(const Duration(seconds: 1));
+    expect(session.mailboxRelayOf('crew'), isNull);
+    expect(find.text('This vault\'s repository'), findsOneWidget);
+    final saves = service.saves.length;
+    await tap(tester, find.byKey(const Key('tsm-shared-mailbox-crew')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('tsm:https://relay.example').last);
+    await wait(tester, 10);
+    expect(session.mailboxRelayOf('crew')?.text, 'tsm:https://relay.example');
+    expect(service.saves.length, greaterThan(saves));
+    expect(
+      find.byKey(const Key('tsm-shared-mailbox-note-crew')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('read once the relay server'), findsOneWidget);
+    // A GitHub repository is not offered as another vault's mailbox.
+    await tap(tester, find.byKey(const Key('tsm-shared-mailbox-crew')));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(DropdownMenuItem<String>),
+        matching: find.text('github:al-the-bear/demo-vaults'),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.text('This vault\'s repository').last);
+    await wait(tester, 10);
+    expect(session.mailboxRelayOf('crew'), isNull);
+  });
+
   testWidgets('another person\'s vault joined by its location; the new keys '
       'taken up after another member re-keyed it', (tester) async {
     final session = await sharing(tester);

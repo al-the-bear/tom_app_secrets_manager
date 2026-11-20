@@ -948,6 +948,78 @@ final class FakeService implements TomSecretsAdminChannel {
         final bytes = base64.decode(args['bytes']! as String);
         recipientsFiles[s.location] = bytes;
         return {'op': 'ok', 'revision': tomSecretsBlobId(bytes)};
+      case 'relay.revision' ||
+          'relay.list' ||
+          'relay.read' ||
+          'relay.create' ||
+          'relay.deleteFolder' ||
+          'relay.deleteFile':
+        _unlocked();
+        final name = args['store']! as String;
+        if (!(store(name).location.startsWith('github:'))) {
+          throw TomSecretsAdminException(
+            'denied',
+            'not in a GitHub repository',
+            details: {'reason': 'not_github'},
+          );
+        }
+        relayRequests.add('$op $name');
+        Map<String, Uint8List> under(String folder) => {
+          for (final e in relayFiles.entries)
+            if (e.key.startsWith('$folder/'))
+              e.key.substring(folder.length + 1): e.value,
+        };
+        switch (op) {
+          case 'relay.revision':
+            final files = under(args['folder']! as String);
+            final keys = files.keys.toList()..sort();
+            return {
+              'op': 'relayRevision',
+              'revision': files.isEmpty
+                  ? null
+                  : tomSecretsBlobId(
+                      Uint8List.fromList(
+                        utf8.encode(
+                          [
+                            for (final k in keys) '$k ${files[k]!.length}',
+                          ].join(';'),
+                        ),
+                      ),
+                    ),
+            };
+          case 'relay.list':
+            return {
+              'op': 'relayFiles',
+              'files': {
+                for (final e in under(args['folder']! as String).entries)
+                  e.key: tomSecretsBlobId(e.value),
+              },
+            };
+          case 'relay.read':
+            final bytes = relayFiles[args['path']! as String];
+            return {
+              'op': 'relayFile',
+              'bytes': bytes == null ? null : base64.encode(bytes),
+            };
+          case 'relay.create':
+            final path = args['path']! as String;
+            if (relayFiles.containsKey(path)) {
+              throw TomSecretsAdminException(
+                'denied',
+                'the file is there already',
+                details: {'reason': 'exists'},
+              );
+            }
+            relayFiles[path] = base64.decode(args['bytes']! as String);
+            return {'op': 'ok'};
+          case 'relay.deleteFolder':
+            final folder = args['folder']! as String;
+            relayFiles.removeWhere((k, _) => k.startsWith('$folder/'));
+            return {'op': 'ok'};
+          default:
+            relayFiles.remove(args['path']! as String);
+            return {'op': 'ok'};
+        }
       case 'inbox.list':
         _unlocked();
         final name = args['store']! as String;
@@ -1161,6 +1233,13 @@ final class FakeService implements TomSecretsAdminChannel {
   /// **[C]** The inbox folders beside the shared vaults: by store, the
   /// packages by `<member>/<name>`.
   final Map<String, Map<String, Uint8List>> inboxes = {};
+
+  /// The files below `relay/` of the GitHub repository `relay.*` reaches
+  /// (one repository; path → bytes), and the requests that came.
+  final Map<String, Uint8List> relayFiles = {};
+
+  /// The `relay.*` requests that came, with their store.
+  final List<String> relayRequests = [];
 
   /// **[C]** The vault files of other people's repositories, by locator: a
   /// vault the primary comes to list there is served at the next reload.

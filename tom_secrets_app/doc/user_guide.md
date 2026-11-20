@@ -169,6 +169,14 @@ the wizard's first step, choose "Pair with another desktop" and give:
   The other machine is told it and answers this one's approval prompts over
   the link at once. Left empty, this machine has no approval link.
 - **"This machine's name"**.
+- **"The relay it names (optional)"**: when the other machine's Pairing
+  screen also names a relay, `github:<owner>/<repo>`, and this machine is
+  neither on its network nor on the VPN. The pairing then goes through that
+  GitHub repository; with an address typed too, the address is tried first.
+  It needs **"This machine's GitHub token for that repository"**, a
+  fine-grained token with contents read and write: the repository must be
+  reachable before the pairing starts. The same token opens the primary
+  when the primary lives in that repository.
 
 Choose "Pair". While it says "Waiting for the other machine…", confirm on the
 other machine what this one gets. The wizard then lists what it was given
@@ -802,6 +810,21 @@ On the same network it is announced, so the other machine needs the code
 only; over a VPN it needs the address too. The first time, macOS or Windows
 Defender Firewall asks whether the app may accept connections: allow it.
 
+**Through a relay.** "Also through a relay" above the button picks a relay
+from the [Relays](#relays) list (the default for pairing is preselected;
+"None" pairs on the network and the VPN only). With a GitHub repository as
+the relay, the pairing also waits there, for a machine that reaches neither
+this network nor the VPN but reaches the repository with its own token. The
+code's number is then the pairing's number in the repository, and the
+screen and the QR code name the relay. The pairing's messages travel as
+files under `relay/pair/<number>/` in the repository, polled every two
+seconds, through a vault this machine serves from that repository; they
+hold nothing secret and are deleted when both sides are done (an abandoned
+one after an hour). Whichever comes first, the network or the relay, takes
+the code. A relay that cannot carry the pairing is said in red ("The relay
+… cannot host: …"); the window then waits on the network and the VPN only,
+and the app never switches to another relay by itself.
+
 On the other machine, use the First run wizard's "Pair with another desktop"
 ([Setting up by pairing](#setting-up-by-pairing)); a phone or tablet uses the
 mobile app's "Pair with a desktop", scanning the QR code ([mobile user
@@ -950,7 +973,29 @@ icon gets a badge, and the Shares section lists each package ("1 entry from
 Bob"). **"Open…"** shows it: **"Import into…"** imports it and deletes it
 from the folder, **"Decline"** deletes it. Packages older than 30 days are
 deleted by whichever member's app syncs next. The folder names show who
-receives shares and when, never what.
+receives shares and when, never what. A shared vault's row shows its
+**"Mailbox"**: "This vault's repository" (its inbox folders), or a relay
+server from the Relays list. The choice is kept in the vault, so every
+member's app reads the same one; this version reads the inbox folders
+either way.
+
+### Relays
+
+A relay carries a pairing, or a share, where two machines do not reach each
+other over the network or the VPN. It sees only encrypted bytes and is not
+trusted: a pairing it tampers with fails. **Relays** lists the relays this
+machine knows, in order of preference, each with what it offers:
+
+- **A GitHub repository**, `github:<owner>/<repo>`: pairing with a machine
+  that reaches the repository with its own token, and the mailbox of a
+  shared vault in it (its inbox folders). This machine must serve a vault
+  from that repository.
+- **A relay server**, `tsm:https://…`, and **a magic-wormhole server**,
+  `wormhole:wss://…`: listed, but not usable in this version.
+
+Type a relay's id and choose **"Add"**; the arrows change the order, the
+bin removes it. The star makes a relay **the default for pairing** (the
+first relay added that pairs becomes it); the filled star clears it.
 
 
 ## Conflicts

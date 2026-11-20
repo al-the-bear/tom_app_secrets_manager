@@ -17,6 +17,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
 import '../state/pairing_model.dart';
+import '../state/relay_settings.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../widgets/qr_code.dart';
@@ -46,7 +47,11 @@ class TomSecretsPairingView extends StatefulWidget {
 
 class _PairingState extends State<TomSecretsPairingView> {
   late final TomSecretsPairingModel _model;
+  late final TomSecretsRelaySettings _relays;
   String? _error;
+
+  /// The relay chosen for the next window ('' none), null: the default.
+  String? _relayChoice;
 
   @override
   void initState() {
@@ -58,6 +63,7 @@ class _PairingState extends State<TomSecretsPairingView> {
       allowLoopback: host.pairingAllowsLoopback,
       discovery: host.pairingDiscovery,
     )..addListener(_changed);
+    _relays = TomSecretsRelaySettings(host.preferences);
     unawaited(_loadDevices());
   }
 
@@ -76,6 +82,12 @@ class _PairingState extends State<TomSecretsPairingView> {
   Future<void> _open() async {
     setState(() => _error = null);
     _model.configYaml = null;
+    final choice = _relayChoice;
+    _model.pairingRelay = choice == null
+        ? _relays.pairingRelay
+        : choice.isEmpty
+        ? null
+        : TomSecretsRelayId.parse(choice);
     try {
       final config = context.read<TomSecretsSession>().sharedConfigYaml;
       await _model.open();
@@ -126,10 +138,15 @@ class _PairingState extends State<TomSecretsPairingView> {
           'Brings another of your machines into your fleet: it gets the '
           'vaults you choose with their keys, and the two approve for each '
           'other. The other machine connects over the same network or the '
-          'VPN and types the code; you then choose what it gets.',
+          'VPN and types the code; you then choose what it gets. A relay '
+          'carries the pairing to a machine that reaches neither.',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
+        if (m.stage == TomSecretsPairingStage.idle ||
+            m.stage == TomSecretsPairingStage.paired ||
+            m.stage == TomSecretsPairingStage.failed)
+          _relayChooser(context),
         if (m.stage == TomSecretsPairingStage.idle ||
             m.stage == TomSecretsPairingStage.paired ||
             m.stage == TomSecretsPairingStage.failed)
@@ -169,6 +186,39 @@ class _PairingState extends State<TomSecretsPairingView> {
     );
   }
 
+  Widget _relayChooser(BuildContext context) {
+    final relays = _relays.offering(TomSecretsRelayService.pairing);
+    final current = _relayChoice ?? _relays.pairingRelay?.text ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        children: [
+          const Text('Also through a relay: '),
+          DropdownButton<String>(
+            key: const Key('tsm-pair-relay'),
+            value: relays.any((r) => r.text == current) ? current : '',
+            items: [
+              const DropdownMenuItem(
+                value: '',
+                child: Text('None (the LAN and the VPN)'),
+              ),
+              for (final r in relays)
+                DropdownMenuItem(value: r.text, child: Text(r.text)),
+            ],
+            onChanged: (v) => setState(() => _relayChoice = v ?? ''),
+          ),
+          if (relays.isEmpty)
+            Text(
+              'Add relays on the Sharing screen.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _waiting(BuildContext context) {
     final theme = Theme.of(context);
     final m = _model;
@@ -191,10 +241,26 @@ class _PairingState extends State<TomSecretsPairingView> {
             ),
           ),
         ),
-        Text(
-          'and connect to ${m.listening.join(' or ')}.',
-          key: const Key('tsm-pair-addresses'),
-        ),
+        if (m.listening.isNotEmpty)
+          Text(
+            'and connect to ${m.listening.join(' or ')}.',
+            key: const Key('tsm-pair-addresses'),
+          ),
+        if (m.relay != null && m.relayProblem == null)
+          Text(
+            m.listening.isEmpty
+                ? 'and pair through the relay ${m.relay!.text}.'
+                : 'Or, where it reaches neither, through the relay '
+                      '${m.relay!.text}.',
+            key: const Key('tsm-pair-relay-line'),
+          ),
+        if (m.relayProblem != null)
+          Text(
+            '${m.relayProblem!}. '
+            '${m.listening.isEmpty ? '' : 'The pairing waits on the LAN and the VPN only.'}',
+            key: const Key('tsm-pair-relay-problem'),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
         if (m.invitation case final invitation?)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -211,7 +277,7 @@ class _PairingState extends State<TomSecretsPairingView> {
                   child: Text(
                     'A phone or tablet scans this code instead: its setup '
                     'screen › "Scan the desktop\'s code". It holds the '
-                    'addresses and the code.',
+                    'addresses, the code and the relay.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),

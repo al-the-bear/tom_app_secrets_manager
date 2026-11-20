@@ -2,6 +2,15 @@
 
 ## 0.1.0
 
+- Relays (part-relay): the relay settings on the Sharing screen (the relays
+  in order with their services, the default for pairing,
+  `TomSecretsRelaySettings`, `TomSecretsRelaysSection`); a shared vault's
+  mailbox relay in its metadata; the Pairing screen's window also waiting on
+  a GitHub repository through the service's `relay.*` requests
+  (`tomSecretsAppRelay`, `TomSecretsAdminRelayFolder`), its code built from
+  the nameplate, the QR code naming the relay, a relay that cannot host said;
+  the First run receiving through the relay with this machine's own token,
+  after the LAN.
 - Typed certificates and PGP keys (BP-33, DP-179): the entry editor's
   "Certificate" and "PGP key" types and sections — what the key says,
   generating one (ECDSA P-384, RSA 4096 where a tool needs RSA; a

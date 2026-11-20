@@ -8,12 +8,16 @@
 /// offer to rotate its entries.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
+import '../ports/desktop_ports.dart';
 import '../state/new_vault.dart';
+import '../state/relay_settings.dart';
 import '../state/session_state.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
@@ -442,8 +446,77 @@ class _SharedVaultsState extends State<TomSecretsSharedVaultsSection> {
           ),
           if (session.sharedVaultRotation(store) case final r?)
             _rotationOf(context, store, r, writable),
+          _mailboxRelay(context, store, writable),
         ],
       ],
+    );
+  }
+
+  /// The vault's mailbox relay (part-relay): its own repository's inbox
+  /// folders, or a relay of the settings that offers a mailbox; kept in the
+  /// vault's metadata, so every member's app reads the same one.
+  Widget _mailboxRelay(BuildContext context, String store, bool writable) {
+    final session = context.read<TomSecretsSession>();
+    final theme = Theme.of(context);
+    final current = session.mailboxRelayOf(store);
+    final relays = TomSecretsRelaySettings(
+      context.read<TomSecretsHost>().preferences,
+    ).offering(TomSecretsRelayService.mailbox);
+    // GitHub's mailbox is the vault's own repository: other repositories
+    // are not offered, only relays with a mailbox of their own.
+    final options = {
+      for (final r in relays)
+        if (r.kind != TomSecretsRelayKind.github) r.text,
+      ?current?.text,
+    }.toList();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              const Text('Mailbox: '),
+              DropdownButton<String>(
+                key: Key('tsm-shared-mailbox-$store'),
+                value: current?.text ?? '',
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('This vault\'s repository'),
+                  ),
+                  for (final o in options)
+                    DropdownMenuItem(value: o, child: Text(o)),
+                ],
+                onChanged: !writable
+                    ? null
+                    : (v) => unawaited(
+                        _run(
+                          () => session.setVaultMailboxRelay(
+                            store,
+                            v == null || v.isEmpty
+                                ? null
+                                : TomSecretsRelayId.parse(v),
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          Text(
+            current == null
+                ? 'Shares to its members wait in the inbox folders beside '
+                      'the vault.'
+                : 'Recorded for every member. This version reads the inbox '
+                      'folders beside the vault; ${current.text} is read once '
+                      'the relay server is supported.',
+            key: Key('tsm-shared-mailbox-note-$store'),
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
     );
   }
 }

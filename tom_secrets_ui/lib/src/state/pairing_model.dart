@@ -6,7 +6,11 @@
 /// its code, the bundle the user chooses once the other device proved the
 /// code (the vaults with their keys, the shared configuration, tokens pasted
 /// for that device), and what the service keeps afterwards (`pair.record`);
-/// the device records (`pair.list`, `pair.revoke`).
+/// the device records (`pair.list`, `pair.revoke`). With a relay chosen
+/// (part-relay), the window also waits there under the code's number — the
+/// LAN and the VPN first, the relay for a machine that reaches neither —
+/// and the QR code names it; a relay that fails is said, never replaced by
+/// another silently.
 library;
 
 import 'dart:async';
@@ -18,6 +22,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/pairing_discovery.dart';
 import 'pairing_invitation.dart';
+import 'relay_settings.dart';
 import 'service_connection.dart';
 
 /// Where a pairing stands.
@@ -76,7 +81,50 @@ class TomSecretsPairingModel extends ChangeNotifier {
     this.allowLoopback = false,
     this.window = tomSecretsPairingWindow,
     this.discovery,
-  }) : _addresses = addresses ?? tomSecretsPairingAddresses;
+    TomSecretsRelay Function(
+      TomSecretsRelayId id,
+      List<(String, String)> stores,
+      String device,
+    )?
+    relayFor,
+  }) : _addresses = addresses ?? tomSecretsPairingAddresses,
+       _relayFor =
+           relayFor ??
+           ((id, stores, device) => tomSecretsAppRelay(
+             id,
+             connection,
+             stores: stores,
+             device: device,
+           ));
+
+  final TomSecretsRelay Function(
+    TomSecretsRelayId id,
+    List<(String, String)> stores,
+    String device,
+  )
+  _relayFor;
+
+  /// The relay the next window also waits on (the default relay for
+  /// pairing, or the one chosen on the Pairing screen); null: the LAN and
+  /// the VPN only.
+  TomSecretsRelayId? pairingRelay;
+
+  TomSecretsRelayId? _relay;
+  String? _relayFailure;
+
+  /// The relay the open window also waits on, or null.
+  TomSecretsRelayId? get relay => _relay;
+
+  /// Why the relay is not used (it could not host, or failed before anyone
+  /// came; the window stays open on the LAN), or null.
+  String? get relayProblem {
+    if (_relayFailure != null) return _relayFailure;
+    final error = _window?.relayError;
+    if (error == null) return null;
+    return error is TomSecretsRelayException
+        ? 'The relay ${error.relay} failed: ${error.message}'
+        : 'The relay failed: $error';
+  }
 
   /// mDNS for announcing the window on the LAN, or null.
   final TomSecretsPairingDiscovery? discovery;
@@ -131,17 +179,21 @@ class TomSecretsPairingModel extends ChangeNotifier {
   /// The port the window listens on, or null.
   int? get port => _window?.port;
 
-  /// The open window as its QR code tells it (DP-56), or null.
+  /// The open window as its QR code tells it (DP-56, part-relay), or null.
   TomSecretsPairingInvitation? get invitation {
     final window = _window;
     final code = _code;
-    if (window == null || code == null || window.addresses.isEmpty) {
+    final relay = window?.relayError == null ? _relay : null;
+    if (window == null ||
+        code == null ||
+        (window.addresses.isEmpty && relay == null)) {
       return null;
     }
     return TomSecretsPairingInvitation(
       addresses: [for (final a in window.addresses) a.address],
       port: window.port,
       code: code,
+      relay: relay,
     );
   }
 
@@ -223,19 +275,48 @@ class TomSecretsPairingModel extends ChangeNotifier {
     final device = identity['device']! as String;
     await _readChoices();
     final addresses = await _addresses();
-    if (addresses.isEmpty) {
-      _fail('This machine has no LAN or VPN address to listen on.');
+    _relay = null;
+    _relayFailure = null;
+    TomSecretsPairingChannel? channel;
+    final chosen = pairingRelay;
+    if (chosen != null) {
+      try {
+        channel = await _relayFor(chosen, [
+          for (final c in _choices) (c.vault.name, c.vault.locator),
+        ], device).host();
+        _relay = chosen;
+      } on TomSecretsRelayException catch (e) {
+        _relayFailure = 'The relay ${e.relay} cannot host: ${e.message}';
+      }
+    }
+    if (addresses.isEmpty && channel == null) {
+      _fail(
+        _relayFailure == null
+            ? 'This machine has no LAN or VPN address to listen on.'
+            : '${_relayFailure!}; and this machine has no LAN or VPN address '
+                  'to listen on.',
+      );
       return;
     }
-    final code = _code = TomSecretsPairingCode.generate();
-    final opened = _window = await TomSecretsPairingWindow.open(
-      addresses: addresses,
-      allowLoopback: allowLoopback,
-      code: code,
-      device: device,
-      bundleFor: _bundleFor,
-      window: window,
-    );
+    final random = TomSecretsPairingCode.generate();
+    final code = _code = channel == null
+        ? random
+        : TomSecretsPairingCode(int.parse(channel.nameplate), random.words);
+    final TomSecretsPairingWindow opened;
+    try {
+      opened = _window = await TomSecretsPairingWindow.open(
+        addresses: addresses,
+        allowLoopback: allowLoopback,
+        code: code,
+        device: device,
+        bundleFor: _bundleFor,
+        window: window,
+        relayChannel: channel,
+      );
+    } on Object {
+      await channel?.close();
+      rethrow;
+    }
     _closesAt = DateTime.now().add(window);
     _stage = TomSecretsPairingStage.waiting;
     await _announce(opened, device, code);
@@ -253,7 +334,7 @@ class TomSecretsPairingModel extends ChangeNotifier {
     TomSecretsPairingCode code,
   ) async {
     final d = discovery;
-    if (d == null) return;
+    if (d == null || opened.addresses.isEmpty) return;
     try {
       final advertising = await d.advertise(
         TomSecretsPairingAdvert(
@@ -380,6 +461,12 @@ class TomSecretsPairingModel extends ChangeNotifier {
         TomSecretsPairingFailure.refused => 'Not paired: ${e.message}.',
         _ => 'The pairing failed: ${e.message}',
       });
+    } on TomSecretsRelayException catch (e) {
+      if (_window != opened) return;
+      _fail(
+        'The relay ${e.relay} failed: ${e.message}. Open a new pairing, on '
+        'another relay or on the same network.',
+      );
     } finally {
       if (_window == opened) await _stop();
     }

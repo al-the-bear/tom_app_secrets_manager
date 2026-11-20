@@ -67,7 +67,13 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
     required this.connection,
     this.discovery,
     Future<List<InternetAddress>> Function()? ownAddresses,
+    TomSecretsRelay Function(TomSecretsRelayId id, String token, String host)?
+    relayFor,
   }) : _ownAddresses = ownAddresses ?? tomSecretsPairingAddresses,
+       _relayFor =
+           relayFor ??
+           ((id, token, host) =>
+               TomSecretsGitHubRelay.withToken(id, token, device: host)),
        localPath = _join(
          _join(firstRun.dataDirectory, 'vaults'),
          'primary.kdbx',
@@ -85,6 +91,15 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   final TomSecretsPairingDiscovery? discovery;
 
   final Future<List<InternetAddress>> Function() _ownAddresses;
+
+  /// The relay a pairing goes through: GitHub reached with this machine's
+  /// own token (part-relay).
+  final TomSecretsRelay Function(
+    TomSecretsRelayId id,
+    String token,
+    String host,
+  )
+  _relayFor;
 
   static String _join(String a, String b) =>
       '$a${Platform.isWindows ? r'\' : '/'}$b';
@@ -115,6 +130,21 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
 
   /// The code its Pairing screen shows.
   String pairCode = '';
+
+  /// The relay its Pairing screen names (`github:<owner>/<repo>`), when it
+  /// pairs through one too; empty: none (part-relay). Tried after the
+  /// address, or alone when no address is given.
+  String pairRelay = '';
+
+  /// This machine's own GitHub token for the relay's repository (a
+  /// pairing through GitHub needs the repository reachable before it
+  /// starts); it also opens the primary when that is in the repository.
+  String pairRelayToken = '';
+
+  String? _pairedThrough;
+
+  /// How the pairing went: the address, or the relay's id.
+  String? get pairedThrough => _pairedThrough;
 
   /// Where this machine's approval link listens (`address:port`, the
   /// device setting `approvalLink`); empty: no link. The giving machine is
@@ -150,29 +180,86 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
       fail(linkProblem);
       return;
     }
-    _update(() {
-      _receiving = true;
-      _receipt = null;
-    });
-    try {
-      final (String, int)? at;
+    TomSecretsRelayId? relayId;
+    if (pairRelay.trim().isNotEmpty) {
       try {
-        at = pairAddress.trim().isEmpty
-            ? await _find(code.number)
-            : tomSecretsParsePairingAddress(pairAddress);
+        relayId = TomSecretsRelayId.parse(pairRelay);
       } on FormatException catch (e) {
         fail(e.message);
         return;
       }
-      if (at == null) return;
+      if (relayId.kind != TomSecretsRelayKind.github) {
+        fail(
+          'Pairing through ${relayId.text} is not available in this version: '
+          'pair through a GitHub repository, on the same network or over the '
+          'VPN.',
+        );
+        return;
+      }
+      if (pairRelayToken.trim().isEmpty) {
+        fail(
+          'A pairing through GitHub needs this machine to reach '
+          '${relayId.address} first: paste a token for it (contents read and '
+          'write).',
+        );
+        return;
+      }
+    }
+    _update(() {
+      _receiving = true;
+      _receipt = null;
+      _pairedThrough = null;
+    });
+    try {
+      if (pairAddress.trim().isNotEmpty || relayId == null) {
+        final (String, int)? at;
+        try {
+          at = pairAddress.trim().isEmpty
+              ? await _find(code.number)
+              : tomSecretsParsePairingAddress(pairAddress);
+        } on FormatException catch (e) {
+          fail(e.message);
+          return;
+        }
+        if (at == null) return;
+        try {
+          final receipt = await tomSecretsReceivePairingForSetup(
+            address: at.$1,
+            port: at.$2,
+            code: code,
+            device: host,
+            linkAddress: link,
+          );
+          _update(() {
+            _receipt = receipt;
+            _pairedThrough = pairAddress.trim();
+          });
+          return;
+        } on TomSecretsPairingException catch (e) {
+          // Not reachable on the LAN or the VPN: the relay next, when the
+          // other machine named one (part-relay: the LAN first).
+          if (relayId == null || e.failure != TomSecretsPairingFailure.closed) {
+            rethrow;
+          }
+        }
+      }
+      final token = pairRelayToken.trim();
       final receipt = await tomSecretsReceivePairingForSetup(
-        address: at.$1,
-        port: at.$2,
+        relay: _relayFor(relayId, token, host),
+        ownTokens: {relayId.address: token},
         code: code,
         device: host,
         linkAddress: link,
       );
-      _update(() => _receipt = receipt);
+      _update(() {
+        _receipt = receipt;
+        _pairedThrough = relayId!.text;
+      });
+    } on TomSecretsRelayException catch (e) {
+      fail(
+        'The relay ${e.relay} failed: ${e.message}. Pair on the same network '
+        'or over the VPN, or open a pairing on another relay there.',
+      );
     } on TomSecretsPairingException catch (e) {
       fail(switch (e.failure) {
         TomSecretsPairingFailure.wrongCode =>

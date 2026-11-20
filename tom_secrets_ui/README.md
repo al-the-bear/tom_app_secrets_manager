@@ -165,7 +165,10 @@ offering the import and the pairing.
   written as the device setting `approvalLink`) and this machine's name,
   receives the pairing (`tomSecretsReceivePairingForSetup`: fresh approval keys,
   nothing stored; with the address left empty the window is found on the LAN by
-  the code's number, `tomSecretsFindPairingWindow`), shows what it gave and
+  the code's number, `tomSecretsFindPairingWindow`; with the relay the giving
+  machine names, `TomSecretsFirstRunModel.pairRelay`, and this machine's own
+  token for its repository, `pairRelayToken`, through that GitHub repository,
+  after the address when one is typed, part-relay), shows what it gave and
   takes the master password; step 2 is left out, and the setup is
   `TomSecretsFirstRun.runPaired` (the keys and tokens in the keychain, the
   giving device recorded as approver and host in the trust material).
@@ -315,7 +318,11 @@ offering the import and the pairing.
   (`TomSecretsSharedVaultsSection`): a new shared vault for chosen members
   (`TomSecretsSession.createSharedVault`, a key file alone, the recipients
   file beside it), another person's vault opened by its location
-  (`joinSharedVault`), per vault its members from the recipients file
+  (`joinSharedVault`), per vault its mailbox relay
+  (`TomSecretsSession.setVaultMailboxRelay`, `tsm.mailbox-relay` in the
+  vault's metadata), the relay settings (`TomSecretsRelaysSection` over
+  `TomSecretsRelaySettings`: the relays in order with their services, the
+  default for pairing), and per vault its members from the recipients file
   (`readSharedVault`), a member added (`addSharedVaultMember`) or removed
   (`removeSharedVaultMember`: new keys listed in the primary, the vault
   re-keyed with its recipients file in one commit) with the offer to rotate
@@ -352,7 +359,12 @@ offering the import and the pairing.
   this machine's LAN and VPN addresses (`tomSecretsPairingAddresses`, or the
   host's `pairingAddresses`) for five minutes and shows the code, the addresses
   and port, the window as a QR code for a phone to scan
-  (`TomSecretsPairingInvitation`, drawn by `TomSecretsQrCode`), the countdown
+  (`TomSecretsPairingInvitation`, drawn by `TomSecretsQrCode`; with a relay it
+  names it), the window also waiting on the relay chosen above the button
+  (part-relay: `TomSecretsPairingModel.pairingRelay`, a GitHub repository
+  reached through the service's `relay.*` requests by `tomSecretsAppRelay` and
+  `TomSecretsAdminRelayFolder`; the code's number is the relay's nameplate; a
+  relay that cannot host or fails is said, `relayProblem`), the countdown
   and that macOS and Windows Defender Firewall ask once whether the app may
   accept connections; with the host's `pairingDiscovery` it announces the window
   on the LAN as `_tsm-pair._tcp` with the code's number and addresses, until the

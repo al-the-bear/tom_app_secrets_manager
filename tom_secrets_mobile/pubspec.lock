@@ -809,18 +809,18 @@ packages:
     dependency: "direct main"
     description:
       name: tom_secrets_core
-      sha256: "706332b413b97e239f2c244e3eb61878e2d8e940dfb5430af1cf613700ddd17a"
+      sha256: "8b6b2b90d947c15fb5a149f43434f2bd465a3fe563d866f0723e5db8f345d38f"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.20"
+    version: "0.2.21"
   tom_secrets_service:
     dependency: "direct main"
     description:
       name: tom_secrets_service
-      sha256: e36fb4ba95f60257f115feeb360e2d262252bb05a824466a1f7a637ce406f22d
+      sha256: e8824ce738def7b54c944da21f47159035c7f69fcc124c9f3be0a68e2f5b5037
       url: "https://pub.dev"
     source: hosted
-    version: "0.21.0"
+    version: "0.22.0"
   tom_secrets_ui:
     dependency: "direct main"
     description:

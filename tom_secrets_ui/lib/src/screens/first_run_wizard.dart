@@ -44,6 +44,8 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
   final _pairAddress = TextEditingController();
   final _pairCode = TextEditingController();
   final _pairLink = TextEditingController();
+  final _pairRelay = TextEditingController();
+  final _pairRelayToken = TextEditingController();
   final _pairPassword = TextEditingController();
   final _repeat = TextEditingController();
   final _openKey = TomKeyStepController();
@@ -74,6 +76,8 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
       _pairAddress,
       _pairCode,
       _pairLink,
+      _pairRelay,
+      _pairRelayToken,
       _pairPassword,
       _path,
       _owner,
@@ -339,6 +343,47 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
         ),
         const SizedBox(height: 8),
         TextField(
+          key: const Key('tsm-fr-pair-relay'),
+          controller: _pairRelay,
+          enabled: receipt == null && !m.receiving,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'The relay it names (optional, e.g. github:owner/repo)',
+            helperText:
+                'When the other machine is not on this network or the VPN: '
+                'the pairing goes through that GitHub repository instead '
+                '(tried after the address).',
+            prefixIcon: Icon(Icons.hub_outlined),
+          ),
+          onChanged: (v) {
+            m.pairRelay = v;
+            m.changed();
+          },
+        ),
+        if (_pairRelay.text.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          TextField(
+            key: const Key('tsm-fr-pair-relay-token'),
+            controller: _pairRelayToken,
+            enabled: receipt == null && !m.receiving,
+            obscureText: true,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              labelText: 'This machine\'s GitHub token for that repository',
+              helperText:
+                  'A fine-grained token with contents read and write: the '
+                  'pairing needs the repository before it starts. It also '
+                  'opens the primary when that lives there.',
+              prefixIcon: Icon(Icons.key_outlined),
+            ),
+            onChanged: (v) {
+              m.pairRelayToken = v;
+              m.changed();
+            },
+          ),
+        ],
+        const SizedBox(height: 8),
+        TextField(
           key: const Key('tsm-fr-pair-link'),
           controller: _pairLink,
           enabled: receipt == null && !m.receiving,
@@ -397,7 +442,8 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Paired with ${receipt.giver} (${m.pairAddress}). It gave:',
+                  'Paired with ${receipt.giver} '
+                  '(${m.pairedThrough ?? m.pairAddress}). It gave:',
                   style: theme.textTheme.titleSmall,
                 ),
                 for (final v in receipt.bundle.vaults)

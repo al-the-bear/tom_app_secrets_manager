@@ -6,7 +6,8 @@
 /// made the first time the screen opens — shown as text, QR code and
 /// fingerprint, copied or saved as a file; and the directory of members,
 /// the public keys received from other people, added by pasting, opening a
-/// file or scanning a QR code, with the date each fingerprint was compared.
+/// file or scanning a QR code, with the date each fingerprint was compared;
+/// the shared vaults, and the relay settings (part-relay).
 library;
 
 import 'dart:async';
@@ -25,6 +26,7 @@ import '../widgets/qr_code.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 import 'share_dialogs.dart';
+import 'relays_section.dart';
 import 'shared_vaults_view.dart';
 
 /// What a date is shown as on this screen.
@@ -265,6 +267,7 @@ class _SharingState extends State<TomSecretsSharingView> {
                 const TomSecretsSharesSection(),
                 _membersSection(context, session),
                 const TomSecretsSharedVaultsSection(),
+                const TomSecretsRelaysSection(),
               ],
             ),
           ),
