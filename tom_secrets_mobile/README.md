@@ -53,6 +53,17 @@ A phone runs no secrets service and keeps no copy of a vault:
   packages in the user's inbox folders of shared vaults are found at each
   unlock and refresh (a banner names them), imported and deleted, and
   packages older than 30 days deleted; `inbox.put` is refused.
+- **Guided rotations** (phase C, part-key-rotation): the phone is a device
+  like the desktops. At each unlock, refresh and save of the primary its
+  engine takes the next keys a guided rotation wrote into the primary: the
+  primary's own next keys into the keychain beside its keys
+  (`<handle>.next`), the ids of the keys it holds into its device record
+  (`tomSecretsTakeNextKeys`), so the desktop's Keys screen stops listing it
+  as missing; until it unlocks once, it is listed. After the desktop
+  switched the primary, the refresh and the unlock open it with those next
+  keys and keep them; a repository key rotated alone is taken up once the
+  file has its slot and the old one dropped after the finish. Starting,
+  switching and finishing a rotation is the desktop app's.
 - **Attachments** are added from the document picker and opened in another
   app through the share sheet (the shared copy is removed when the sheet
   closes on iOS, at the next share or start on Android).

@@ -2,6 +2,12 @@
 
 ## 0.1.0
 
+- Guided rotations (part-key-rotation): the engine takes the next keys at
+  each unlock, refresh and save of the primary (the primary's own into the
+  keychain as `<handle>.next`, the key ids into the phone's device record),
+  opens a primary another device switched with them at the refresh and the
+  unlock, and takes a repository key rotated alone up from its two-slot
+  file; tom_secrets_service 0.20.1.
 - Shares (part-sharing): the phone receives them (no Share action,
   `sendsShares: false`): Settings › "Shares" with "Import a share…" and the
   inbox, a banner for the packages found; the engine answers `inbox.list`,

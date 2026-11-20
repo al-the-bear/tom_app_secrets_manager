@@ -177,6 +177,13 @@ minutes (15 by default), when you come back to it, and when you pull a list
 down or tap the sync button at the top. Nothing happens while the app is
 closed.
 
+When the desktop app runs a **guided rotation** of a vault's keys, the phone
+takes the new key the next time it unlocks or refreshes, and the desktop's
+Keys screen stops listing it as missing: open and unlock the app once while
+the rotation is prepared. After the desktop switched, the phone opens the
+vaults with the new key by itself. A phone that never took it opens no
+vault re-keyed under it: set it up again by pairing.
+
 ## Autofill on Android
 
 Turn it on under Settings › "Autofill service" › "Turn on" (the system's

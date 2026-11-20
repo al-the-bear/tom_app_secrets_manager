@@ -23,7 +23,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-import 'package:tom_core_storage/settings.dart' show TomSecretStore;
+import 'package:tom_core_storage/settings.dart'
+    show TomSecretStore, TomSecretStoreException;
 import 'package:tom_core_storage/tom_core_storage.dart'
     show TomKeyRequiredException;
 import 'package:tom_crypto/protected_value.dart';
@@ -180,7 +181,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         limit: kdfMemoryLimit,
       ),
       clock: _clock,
-    );
+    )..onPrimaryKeysChanged = _keepPrimaryKeys;
   }
 
   /// The memory a vault's key derivation may take when the device's is not
@@ -416,7 +417,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   Future<void> _unlock(TomSecretsHeldKeys given, {bool bundle = false}) async {
     final keys = await _withKeychainKeys(given);
     try {
-      await _vaults.openPrimary(primaryLocator, keys);
+      await _openPrimary(keys);
       await _vaults.openStores(
         machine: TomSecretsMachine(host: device, platform: platform),
       );
@@ -463,8 +464,157 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     }
     _retry?.cancel();
     _retry = null;
+    await _takeNextKeys();
     await _recordSizes();
     _emit({'op': 'unlocked'});
+  }
+
+  /// Opens the primary with [keys]; when they no longer open it because
+  /// another device switched a guided rotation of its keys
+  /// (part-key-rotation), with the next keys this phone took into its
+  /// keychain before (`<handle>.next`), which are its keys from then on.
+  Future<void> _openPrimary(TomSecretsHeldKeys keys) async {
+    try {
+      await _vaults.openPrimary(primaryLocator, keys);
+    } on Object catch (e) {
+      if (e is! KdbxInvalidKeyException && e is! TomKeyRequiredException) {
+        rethrow;
+      }
+      final next = await _withNextKeychainKeys(keys);
+      if (next == null) rethrow;
+      try {
+        await _vaults.openPrimary(primaryLocator, next);
+      } on Object {
+        next.dispose();
+        rethrow;
+      }
+      keys.dispose();
+      await _keepPrimaryKeys(next);
+    }
+  }
+
+  /// The phone taking the keys of the guided rotations running in the
+  /// primary (part-key-rotation, step 1), at every unlock, refresh and save
+  /// of the primary, as a desktop service does: the primary's own next keys
+  /// into the keychain beside its keys (`<handle>.next`), where the unlock
+  /// and the refresh find them after another device switched; the ids of
+  /// the keys it holds into its device record, so the desktop's Keys screen
+  /// stops listing it as missing. A finished rotation's next keys leave the
+  /// keychain. A primary GitHub cannot take now is written at the next
+  /// refresh.
+  Future<void> _takeNextKeys() async {
+    final primary = _vaults.primary;
+    if (primary == null) return;
+    final next = TomSecretsPrimaryNextKeys.of(primary.file);
+    _vaults.primaryNextKeys = next;
+    final ids = <String>[];
+    final locator = TomSecretsVaultLocator.parse(primaryLocator);
+    try {
+      if (next != null) {
+        if (next.keyFile != null) {
+          await keychain.write(
+            '${locator.keyFileHandle}.next',
+            base64.encode(next.keyFile!),
+          );
+        }
+        if (next.outerKey != null) {
+          await keychain.write(
+            '${locator.repositoryKeyHandle}.next',
+            next.outerKey!,
+          );
+        }
+        // Recorded only once the keychain holds them.
+        ids.addAll(
+          tomSecretsVaultKeyIds(keyFile: next.keyFile, outerKey: next.outerKey),
+        );
+      } else {
+        await keychain.delete('${locator.keyFileHandle}.next');
+        await keychain.delete('${locator.repositoryKeyHandle}.next');
+      }
+    } on TomSecretStoreException {
+      // Without the keychain the phone does not claim the primary's keys.
+      ids.clear();
+    }
+    await _vaults.adoptPrimaryNext();
+    if (tomSecretsTakeNextKeys(
+      primary.file,
+      device: device,
+      now: _clock().toUtc(),
+      primaryKeyIds: ids,
+    )) {
+      try {
+        await _vaults.writePrimary();
+      } on Object {
+        // Out of reach: the edit waits in the held copy
+        // (primaryWritePending) and the next refresh writes it.
+      }
+    }
+  }
+
+  /// Keeps the primary's [keys] in the keychain, where the unlock takes
+  /// them: its key file and a `.tsmx` primary's newest repository key.
+  Future<void> _keepPrimaryKeys(TomSecretsHeldKeys keys) async {
+    final locator = TomSecretsVaultLocator.parse(primaryLocator);
+    try {
+      final keyFile = keys.keyFile;
+      if (keyFile == null) {
+        await keychain.delete(locator.keyFileHandle);
+      } else {
+        await keychain.write(
+          locator.keyFileHandle,
+          keyFile.withRevealed(base64.encode),
+        );
+      }
+      final outer = keys.newestOuterKey;
+      if (outer != null && locator.fileName.endsWith(tomSecretsOuterSuffix)) {
+        await keychain.write(locator.repositoryKeyHandle, outer);
+      }
+    } on TomSecretStoreException {
+      // Held until the lock; the next unlock asks again.
+    }
+  }
+
+  /// The primary's keys [held] with the next keys this phone took into its
+  /// keychain, or null when it holds none (or an OS unlock's composite key
+  /// binds the old key file).
+  Future<TomSecretsHeldKeys?> _withNextKeychainKeys(
+    TomSecretsHeldKeys held,
+  ) async {
+    final locator = TomSecretsVaultLocator.parse(primaryLocator);
+    final String? keyFile;
+    final String? outerKey;
+    try {
+      keyFile = await keychain.read('${locator.keyFileHandle}.next');
+      outerKey = await keychain.read('${locator.repositoryKeyHandle}.next');
+    } on TomSecretStoreException {
+      return null;
+    }
+    final hasKeyFile = keyFile != null && keyFile.isNotEmpty;
+    final hasOuter = outerKey != null && outerKey.isNotEmpty;
+    if (!hasKeyFile && !hasOuter) return null;
+    if (hasKeyFile && held.compositeKey != null) return null;
+    return TomSecretsHeldKeys(
+      password: held.password == null
+          ? null
+          : TomProtectedValue.of(held.password!.reveal()),
+      keyFile: hasKeyFile
+          ? TomProtectedValue.fromBytes(base64.decode(keyFile))
+          : (held.keyFile == null
+                ? null
+                : TomProtectedValue.fromBytes(
+                    held.keyFile!.withRevealed(Uint8List.fromList),
+                  )),
+      outerKey: hasOuter
+          ? TomProtectedValue.of(outerKey)
+          : (held.outerKey == null
+                ? null
+                : TomProtectedValue.of(held.outerKey!.reveal())),
+      compositeKey: held.compositeKey == null
+          ? null
+          : TomProtectedValue.fromBytes(
+              held.compositeKey!.withRevealed(Uint8List.fromList),
+            ),
+    );
   }
 
   /// Closes every vault: nothing of them stays on the device.
@@ -486,6 +636,10 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
       _vaults.refreshInterval = Duration(minutes: settings.refreshMinutes);
       final waiting = _pending.keys.toSet();
       final report = await _vaults.refresh(force: force || waiting.isNotEmpty);
+      if (report.reopened.contains(_vaults.primaryName) ||
+          _vaults.primaryWritePending) {
+        await _takeNextKeys();
+      }
       final written = await _writePending();
       final changed = {...report.reopened, ...written};
       if (changed.isNotEmpty) await _recordSizes();
@@ -850,9 +1004,15 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         }
         final stored = base64.decode(bytes);
         try {
-          final result = await _serial(
-            () => _vaults.save(store, stored, baseRevision: base as String?),
-          );
+          final result = await _serial(() async {
+            final saved = await _vaults.save(
+              store,
+              stored,
+              baseRevision: base as String?,
+            );
+            if (store == _vaults.primaryName) await _takeNextKeys();
+            return saved;
+          });
           _pending.remove(store);
           _emit({
             'op': 'store_changed',
