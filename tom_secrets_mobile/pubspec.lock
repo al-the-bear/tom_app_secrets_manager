@@ -809,10 +809,10 @@ packages:
     dependency: "direct main"
     description:
       name: tom_secrets_core
-      sha256: "92ed25f78f54c94869bf9e7d5f4e982107d8b08112c90c9831c4e6b8eb9a9907"
+      sha256: ccbf5a4d64bbdb1c1614f91fe12ebaffa1401953e218178e432defccde7d9abc
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.18"
+    version: "0.2.19"
   tom_secrets_service:
     dependency: "direct main"
     description:
