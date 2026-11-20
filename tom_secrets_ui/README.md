@@ -95,7 +95,11 @@ offering the import and the pairing.
   from elsewhere read again; key rotation by hand (`rotateKeys`: the new keys
   into the primary, each affected vault saved re-keyed, the GitHub history cut
   with `compact` retention 0; `pendingRotations` / `finishRotations` for a
-  re-keyed save that failed); a proposed login saved as a new login
+  re-keyed save that failed; the state's rotation spec is
+  `TomSecretsKeyChanges`); the guided rotations with a migration period
+  (`startMemberKeyRotation` / `finishMemberKeyRotation`,
+  `rotateSharedVaultKeys` / `finishSharedVaultRotation`, the running
+  records `memberKeyRotation` and `sharedVaultRotation`); a proposed login saved as a new login
   (`saveProposalAsNew` into one of `proposalVaults`) or written into the
   login of that site and user (`proposalMatches`, `applyProposal`: the old
   password to the history); everything dropped on `locked`.
@@ -283,7 +287,9 @@ offering the import and the pairing.
   finishes a rotation whose re-keyed save failed, Renew… on each GitHub token,
   and Rotate… on this device's own approver and approval-link key pairs
   (`keys.rotate`: both together, the result naming the hosts reached over the
-  approval link and those that take the key change from the vault).; at the top
+  approval link and those that take the key change from the vault), the
+  member key's row (Rotate… starts its rotation) and a shared vault's key row
+  (Rotate… rotates it with a migration period); at the top
   "GitHub sign-in (this machine)" (`TomSecretsGitHubSignInSection`): the GitHub
   App named once, the device flow's code, signed in or a pasted token instead
 - `TomSecretsSharingView`: The Sharing screen (part-sharing, phase C; desktop
@@ -304,7 +310,32 @@ offering the import and the pairing.
   re-keyed with its recipients file in one commit) with the offer to rotate
   its entries (`markForRotation`: the tag `rotate`, expiring today); a vault
   another member re-keyed takes up its new keys at the next load
-  (`refreshSharedVaultKeys`).
+  (`refreshSharedVaultKeys`); the rotations with a migration period: the
+  member key ("Rotate my member key…": a new key beside the old one, the
+  recipients files written for both, Finish or Finish now dropping the old
+  one) and a shared vault's key ("Rotate the vault's key…": new keys for
+  the same members, the record in the vault, Finish compacting its
+  history); the Shares section (`TomSecretsSharesSection`, single-entry
+  exports): "Import a share…" and the packages of the user's inbox folders
+  (`TomSecretsSession.inbox`, read at each load by `checkInbox`, which also
+  deletes every package older than 30 days). A store whose key changed on
+  another device is served read-only from its old copy
+  (`TomSecretsStoreState.keyChanged`).
+- `tomSecretsShowShareDialog`, `tomSecretsShowImportShareDialog`:
+  Single-entry exports (part-sharing, BP-34). Share (from the marked
+  entries' bar and the entry editor, where the host `sendsShares`; a phone
+  only receives): the entries written as one `age` package for chosen
+  members' hybrid keys, under a passphrase, or for one classical key
+  (`TomSecretsSession.writeShare`), shown as armoured text to copy, a QR
+  code while it fits (`tomSecretsShareFitsQr`, level L), a `.tsmshare` file,
+  or put into the inbox of a shared vault every recipient is a member of
+  (`inboxVaultsFor`, `putIntoInbox`, `inbox.put`). Import a share: pasted,
+  opened, scanned or from the inbox (`TomSecretsInboxPackage`), the
+  passphrase asked when it has one (`readShare`), its sender named as a
+  member when the fingerprint matches, its entries imported as new entries
+  into a picked group (`importShare`, `tomSecretsPickGroup`), an inbox
+  package deleted after (`acceptInboxPackage`) or declined
+  (`declineInboxPackage`).
 - `TomSecretsPairingView`: The giving side of a pairing (part-sharing), over
   `TomSecretsPairingModel`: "Pair a device" opens a `TomSecretsPairingWindow` on
   this machine's LAN and VPN addresses (`tomSecretsPairingAddresses`, or the
@@ -471,8 +502,8 @@ states), `pdf` (the emergency sheet), `provider`; all from pub.dev.
 Version 0.1.0 (phase A of the product). The suite covers the First run wizard
 (set up here and by pairing), the shell, the vault browser and entry editor,
 overlays and their resolution, conflicts, clients and approvals, proposals,
-keys, rotation, token renewal, the import, pairing and the force-push
-question; it runs with `flutter test` and needs no service, network or GitHub.
+keys, rotation (by hand and with a migration period), token renewal, the
+import, pairing, sharing, shares and the inbox, and the force-push question; it runs with `flutter test` and needs no service, network or GitHub.
 
 ## Licence
 

@@ -186,7 +186,26 @@ class _ShellState extends State<TomSecretsMobileShell> {
           .watch<TomSecretsServiceConnection>()
           .proposals
           .length;
+      final inbox = context.watch<TomSecretsSession>().inbox;
       final banners = <Widget>[
+        // Shares in the user's inbox folders (part-sharing).
+        if (inbox.isNotEmpty)
+          MaterialBanner(
+            key: const Key('tsm-mobile-inbox'),
+            leading: const Icon(Icons.move_to_inbox_outlined),
+            content: Text(
+              inbox.length == 1
+                  ? inbox.single.title
+                  : '${inbox.length} shares in your inbox',
+            ),
+            actions: [
+              TextButton(
+                key: const Key('tsm-mobile-inbox-open'),
+                onPressed: () => unawaited(tomSecretsOpenMobileShares(context)),
+                child: const Text('Open'),
+              ),
+            ],
+          ),
         // Logins the Autofill service saw submitted (onSaveRequest).
         if (proposals > 0)
           MaterialBanner(

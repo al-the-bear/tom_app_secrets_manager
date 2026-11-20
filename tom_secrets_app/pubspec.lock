@@ -953,10 +953,10 @@ packages:
     dependency: transitive
     description:
       name: tom_secrets_core
-      sha256: c8038872e2d4b58e623787e4f1fdf1ef13957275e44387eb4af84bdcbe203f8d
+      sha256: "4aef86e368e0943078a5ff2a38a9f1a61a668ae967f01194d110f1443352d681"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.15"
+    version: "0.2.16"
   tom_secrets_desktop:
     dependency: "direct main"
     description:

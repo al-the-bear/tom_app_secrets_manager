@@ -6,8 +6,10 @@
 /// primary lists no longer open it; the phone's session reads the
 /// recipients file through the engine (`vault.recipients`), opens it with
 /// the member key from the primary, lists the new keys in the primary and
-/// writes it to GitHub; the next unlock opens the vault at once. Joining and
-/// managing members stay the desktop app's. Demo keys only.
+/// writes it to GitHub; the next unlock opens the vault at once. A share in
+/// the phone's inbox folder is found at the unlock, imported and deleted
+/// with an expired one. Joining, managing members and sending shares stay
+/// the desktop app's. Demo keys only.
 library;
 
 import 'dart:convert';
@@ -195,4 +197,63 @@ void main() {
       expect(listed.keyFile, keys.keyFile);
     },
   );
+
+  test('the inbox: a share for the phone found at the unlock ("1 entry from '
+      'Bob"), imported and deleted, an expired package deleted; sending is '
+      'refused', () async {
+    final share = await tomSecretsWriteShare(
+      TomSecretsShare(
+        created: DateTime.utc(2026, 11, 20),
+        from: (name: 'Bob', fingerprint: bob.recipient.fingerprint),
+        entries: const [
+          TomSecretsSharedEntry(
+            fields: {
+              'Title': (value: 'Door code', protected: false),
+              'Password': (value: 'demo-4711', protected: true),
+            },
+          ),
+        ],
+      ),
+      recipients: [phone.recipient],
+    );
+    final name = tomSecretsNewInboxName();
+    const old = '2026-01-02-00112233aabbccdd.age';
+    final mine = phone.recipient.fingerprint;
+    await demo.putBytes('github:$demoRepo/shared/inbox/$mine/$name', share);
+    await demo.putBytes(
+      'github:$demoRepo/shared/inbox/${carol.recipient.fingerprint}/$old',
+      share,
+    );
+
+    final (engine, session) = await unlock();
+    final inbox = session.inbox.single;
+    expect(inbox.title, '1 entry from Bob');
+    expect(
+      server.bytesAt(
+        demoRepo,
+        'shared/inbox/${carol.recipient.fingerprint}/$old',
+      ),
+      isNull,
+    );
+
+    await session.acceptInboxPackage(inbox, 'crew', null);
+    expect(holds(session, 'crew', 'Door code'), isTrue);
+    expect(session.inbox, isEmpty);
+    expect(server.bytesAt(demoRepo, 'shared/inbox/$mine/$name'), isNull);
+
+    await expectLater(
+      engine.request('inbox.put', {
+        'store': 'crew',
+        'members': [mine],
+        'bytes': base64.encode(share),
+      }),
+      throwsA(
+        isA<TomSecretsAdminException>().having(
+          (e) => e.kind,
+          'kind',
+          'unsupported',
+        ),
+      ),
+    );
+  });
 }

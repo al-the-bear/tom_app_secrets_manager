@@ -24,6 +24,7 @@ import '../state/session_state.dart';
 import '../widgets/qr_code.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
+import 'share_dialogs.dart';
 import 'shared_vaults_view.dart';
 
 /// What a date is shown as on this screen.
@@ -261,6 +262,7 @@ class _SharingState extends State<TomSecretsSharingView> {
                     ),
                   ),
                 _keySection(context, session),
+                const TomSecretsSharesSection(),
                 _membersSection(context, session),
                 const TomSecretsSharedVaultsSection(),
               ],

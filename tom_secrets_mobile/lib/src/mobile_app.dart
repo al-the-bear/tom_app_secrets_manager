@@ -300,6 +300,7 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
               TomSecretsMobileClipboardPort(clearAfter: clearAfter),
           clipboardClearAfter: clearAfter,
           systemVaultsReadOnly: true,
+          sendsShares: false,
           scanner: widget.scanner,
           files: widget.documents == null
               ? null

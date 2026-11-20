@@ -358,6 +358,14 @@ final class TomSecretsDocumentOpener implements TomSecretsVaultOpener {
   }) async => _desktopOnly();
 
   @override
+  Future<Map<String, String>> listBeside(String locator, String folder) async =>
+      const {};
+
+  @override
+  Future<void> deleteBeside(String locator, List<String> paths) async =>
+      _desktopOnly();
+
+  @override
   Future<TomSecretsOpenedVault> move(
     String from,
     String to,

@@ -22,6 +22,7 @@ import 'overlays.dart';
 import 'proposals.dart';
 import 'rotation.dart';
 import 'service_connection.dart';
+import 'shares.dart';
 
 /// A vault open in the app's memory.
 final class TomSecretsOpenVault {
@@ -1335,6 +1336,7 @@ class TomSecretsSession extends ChangeNotifier {
         _refreshingSharedKeys = false;
       }
     }
+    await checkInbox();
   }
 
   bool _refreshingSharedKeys = false;
@@ -2473,6 +2475,299 @@ class TomSecretsSession extends ChangeNotifier {
     await connection.reload();
     await load();
     return updated;
+  }
+
+  // Single-entry exports and the inbox folders (part-sharing, phase C,
+  // BP-34): a share written in the desktop app, read wherever the member key
+  // is, carried as text, QR code, file or through a shared vault's inbox.
+
+  /// Runs [use] with every member key of the primary opened as an `age`
+  /// identity (the old one too during its rotation), disposed after.
+  Future<T> _withMemberKeys<T>(
+    Future<T> Function(List<TomSecretsAgeIdentity> identities) use,
+  ) async {
+    final file = _primaryFile;
+    final keys = <TomSecretsMemberKey>[
+      if (file != null)
+        for (final e in tomSecretsMemberKeyEntries(file))
+          await tomSecretsMemberKeyOf(e),
+    ];
+    try {
+      return await use([for (final k in keys) TomSecretsAgeHybridIdentity(k)]);
+    } finally {
+      for (final k in keys) {
+        k.dispose();
+      }
+    }
+  }
+
+  /// The share of [refs] as an `age` file: to [recipients] (members' hybrid
+  /// keys, or classical keys alone) or under [passphrase]; it names the
+  /// user (their member name and key's fingerprint) as its sender.
+  Future<Uint8List> writeShare(
+    List<TomSecretsEntryRef> refs, {
+    List<TomSecretsAgeRecipient>? recipients,
+    String? passphrase,
+    int workFactor = tomSecretsAgeDefaultWorkFactor,
+    DateTime? now,
+  }) {
+    final entries = [
+      for (final r in refs)
+        entryOf(r) ?? (throw StateError('no entry ${r.uuid} in ${r.store}')),
+    ];
+    final own = memberKeyRecipient;
+    final name = memberName.trim();
+    return tomSecretsWriteShare(
+      tomSecretsShareOf(
+        entries,
+        from: own == null
+            ? null
+            : (
+                name: name.isEmpty ? 'Unnamed' : name,
+                fingerprint: own.fingerprint,
+              ),
+        now: now,
+      ),
+      recipients: recipients,
+      passphrase: passphrase,
+      workFactor: workFactor,
+    );
+  }
+
+  /// The share in [bytes] (a `.tsmshare` file, a pasted or scanned armoured
+  /// text), opened with the user's member keys or [passphrase]. Throws
+  /// `TomSecretsAgeException` (`noMatch` when neither opens it) and
+  /// `TomSecretsShareException`.
+  Future<TomSecretsShare> readShare(List<int> bytes, {String? passphrase}) =>
+      _withMemberKeys(
+        (ids) => tomSecretsReadShare(bytes, [
+          ...ids,
+          if (passphrase != null) TomSecretsAgePassphraseIdentity(passphrase),
+        ]),
+      );
+
+  /// Imports [share] into [group] of [store] (its root when null) as new
+  /// entries and saves the vault. Answers them.
+  Future<List<TomSecretsEntryRef>> importShare(
+    TomSecretsShare share,
+    String store,
+    KdbxUuid? group,
+  ) async {
+    final file = _vaultOf(store)?.file;
+    if (file == null) throw StateError('$store is not open');
+    final why = readOnlyReason(store);
+    if (why != null) throw StateError('$store is $why');
+    final target = group == null
+        ? file.body.rootGroup
+        : _groupOf(file, group) ?? file.body.rootGroup;
+    final added = tomSecretsImportShare(file, target, share);
+    await _saveImported(store);
+    return [for (final e in added) TomSecretsEntryRef(store, e.uuid)];
+  }
+
+  /// The shared vaults whose members include every one of [recipients]:
+  /// where a share for them can go through the inbox.
+  Future<List<String>> inboxVaultsFor(
+    List<TomSecretsAgeRecipient> recipients,
+  ) async {
+    final out = <String>[];
+    for (final store in sharedVaults) {
+      if (readOnlyReason(store) != null) continue;
+      try {
+        final read = await readSharedVault(store: store);
+        try {
+          if (recipients.every(read.keys.hasMember)) out.add(store);
+        } finally {
+          read.keys.dispose();
+        }
+      } on Object {
+        // A vault it cannot read now offers no inbox.
+      }
+    }
+    return out;
+  }
+
+  /// Puts the share [bytes] into the inbox folder of each of [recipients]
+  /// beside the shared vault [store]. Answers the package's name.
+  Future<String> putIntoInbox(
+    String store,
+    List<TomSecretsAgeRecipient> recipients,
+    Uint8List bytes,
+  ) async {
+    final answer = await connection.request('inbox.put', {
+      'store': store,
+      'members': [for (final r in recipients) r.fingerprint],
+      'bytes': base64.encode(bytes),
+    });
+    return answer['name']! as String;
+  }
+
+  List<TomSecretsInboxPackage> _inbox = const [];
+
+  /// The packages in the user's inbox folders, the newest first.
+  List<TomSecretsInboxPackage> get inbox => _inbox;
+
+  bool _checkingInbox = false;
+
+  /// Reads the inbox folders beside every shared vault (at each load, the
+  /// sync): the packages in the user's own folders (each member key's
+  /// fingerprint) opened with the member key, and every package of any
+  /// folder more than 30 days old deleted. A vault it cannot reach now,
+  /// or a service that has no inbox (a phone), is left for the next load.
+  Future<void> checkInbox({DateTime? now}) async {
+    final file = _primaryFile;
+    if (_checkingInbox || file == null) return;
+    _checkingInbox = true;
+    try {
+      final at = (now ?? DateTime.now()).toUtc();
+      final own = {
+        for (final e in tomSecretsMemberKeyEntries(file))
+          ?tomSecretsMemberKeyRecipientOf(e)?.fingerprint,
+      };
+      final known = {
+        for (final p in _inbox) '${p.store}/${p.member}/${p.name}',
+      };
+      final found = <TomSecretsInboxPackage>[];
+      for (final store in sharedVaults) {
+        final List<Map<Object?, Object?>> files;
+        try {
+          final answer = await connection.request('inbox.list', {
+            'store': store,
+          });
+          files = (answer['files'] as List? ?? const []).cast();
+        } on Object {
+          continue;
+        }
+        final expired = [
+          for (final f in files)
+            if (tomSecretsInboxExpired(f['name']! as String, at))
+              {'member': f['member'], 'name': f['name']},
+        ];
+        if (expired.isNotEmpty && readOnlyReason(store) == null) {
+          try {
+            await connection.request('inbox.delete', {
+              'store': store,
+              'files': expired,
+            });
+          } on Object {
+            // Deleted by the next member's sync.
+          }
+        }
+        for (final f in files) {
+          final member = f['member']! as String;
+          final name = f['name']! as String;
+          if (!own.contains(member) ||
+              !tomSecretsIsInboxName(name) ||
+              tomSecretsInboxExpired(name, at)) {
+            continue;
+          }
+          final key = '$store/$member/$name';
+          if (known.contains(key)) {
+            found.add(
+              _inbox.firstWhere(
+                (p) => '${p.store}/${p.member}/${p.name}' == key,
+              ),
+            );
+            continue;
+          }
+          found.add(await _readInboxPackage(store, member, name));
+        }
+      }
+      found.sort((a, b) => b.name.compareTo(a.name));
+      _inbox = found;
+      notifyListeners();
+    } finally {
+      _checkingInbox = false;
+    }
+  }
+
+  Future<TomSecretsInboxPackage> _readInboxPackage(
+    String store,
+    String member,
+    String name,
+  ) async {
+    final Uint8List bytes;
+    try {
+      final read = await connection.request('inbox.read', {
+        'store': store,
+        'member': member,
+        'name': name,
+      });
+      bytes = base64.decode(read['bytes']! as String);
+    } on Object catch (e) {
+      return TomSecretsInboxPackage(
+        store: store,
+        member: member,
+        name: name,
+        bytes: Uint8List(0),
+        problem: 'it cannot be read now (${_describe(e)})',
+      );
+    }
+    if (tomSecretsAgeIsPassphrase(bytes)) {
+      return TomSecretsInboxPackage(
+        store: store,
+        member: member,
+        name: name,
+        bytes: bytes,
+        passphrase: true,
+      );
+    }
+    try {
+      return TomSecretsInboxPackage(
+        store: store,
+        member: member,
+        name: name,
+        bytes: bytes,
+        share: await readShare(bytes),
+      );
+    } on TomSecretsAgeException catch (e) {
+      return TomSecretsInboxPackage(
+        store: store,
+        member: member,
+        name: name,
+        bytes: bytes,
+        problem: e.message,
+      );
+    } on TomSecretsShareException catch (e) {
+      return TomSecretsInboxPackage(
+        store: store,
+        member: member,
+        name: name,
+        bytes: bytes,
+        problem: e.message,
+      );
+    }
+  }
+
+  /// Imports the inbox [package] into [group] of [store] ([passphrase] for
+  /// one written under a passphrase), then deletes it from the folder.
+  /// Answers the entries imported.
+  Future<List<TomSecretsEntryRef>> acceptInboxPackage(
+    TomSecretsInboxPackage package,
+    String store,
+    KdbxUuid? group, {
+    String? passphrase,
+  }) async {
+    final share =
+        package.share ?? await readShare(package.bytes, passphrase: passphrase);
+    final refs = await importShare(share, store, group);
+    await declineInboxPackage(package);
+    return refs;
+  }
+
+  /// Deletes the inbox [package] from its folder without importing it.
+  Future<void> declineInboxPackage(TomSecretsInboxPackage package) async {
+    await connection.request('inbox.delete', {
+      'store': package.store,
+      'files': [
+        {'member': package.member, 'name': package.name},
+      ],
+    });
+    _inbox = [
+      for (final p in _inbox)
+        if (!identical(p, package)) p,
+    ];
+    notifyListeners();
   }
 
   /// Marks [refs] for rotation after a member was removed: each gets the

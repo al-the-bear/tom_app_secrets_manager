@@ -18,6 +18,7 @@ shows.
 - [Staying current](#staying-current)
 - [Autofill on Android](#autofill-on-android)
 - [Health](#health)
+- [Shares](#shares)
 - [Settings](#settings)
 - [Troubleshooting](#troubleshooting)
 
@@ -212,6 +213,21 @@ phone runs no check in the background). Each run shows its result at the
 bottom of the screen with **"Turn off breach check"**. "Exclude" next to a
 breached login keeps it out of the check.
 
+## Shares
+
+Someone can share entries with you as an encrypted package (shares are sent
+from the desktop app; its user guide has the details). Settings ›
+**"Shares"** › **"Import a share…"**: paste the text, open the file, or
+**"Scan QR code"** with the camera; a share under a passphrase asks for it.
+The dialog says who sent it, and **"Import into…"** puts its entries into
+the vault and group you pick.
+
+Shares put into your inbox in a shared vault are found when the phone
+unlocks or refreshes: a banner names them ("1 entry from Bob") with
+**"Open"**, and the Shares page lists them. **"Open…"** › **"Import
+into…"** imports one and deletes it from the inbox; **"Decline"** deletes
+it. Packages older than 30 days are deleted on their own.
+
 ## Settings
 
 - **"Unlock with Face ID"** (or Touch ID, your fingerprint): on by default.
@@ -225,6 +241,7 @@ breached login keeps it out of the check.
 - **"Health"**: the [Health](#health) screen.
 - **"Check passwords against known breaches"**: the breach check, on by
   default.
+- **"Shares"**: importing a share, and your inbox ([Shares](#shares)).
 - **"Autofill service"** (Android): whether Tom Secrets fills logins in
   apps and browsers, and "Turn on".
 - **"This device"**: its name and the primary vault.

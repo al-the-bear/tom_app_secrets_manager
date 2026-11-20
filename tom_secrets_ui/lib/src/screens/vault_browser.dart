@@ -29,6 +29,7 @@ import 'entry_editor.dart';
 import 'gate_screens.dart';
 import 'new_vault_dialog.dart';
 import 'rewritten_question.dart';
+import 'share_dialogs.dart';
 
 /// The browser in the view the session has chosen.
 class TomSecretsVaultBrowser extends StatelessWidget {
@@ -149,6 +150,35 @@ Future<_GroupChoice?> _pickGroup(
       children: [
         for (final c in choices)
           SimpleDialogOption(
+            onPressed: () => Navigator.of(dialog).pop(c),
+            child: Text(c.path),
+          ),
+      ],
+    ),
+  );
+}
+
+/// **[C]** Lets the user pick a group of a vault that can be written now
+/// (a share imported into it, part-sharing): its store, the group (null:
+/// the vault's root) and its path; null when cancelled.
+Future<({String store, KdbxUuid? group, String path})?> tomSecretsPickGroup(
+  BuildContext context,
+  String title,
+) {
+  final session = context.read<TomSecretsSession>();
+  final choices = [
+    for (final c in _groupsOf(session))
+      if (session.readOnlyReason(c.store) == null) c,
+  ];
+  return showDialog<_GroupChoice>(
+    context: context,
+    builder: (dialog) => SimpleDialog(
+      key: const Key('tsm-pick-group'),
+      title: Text(title),
+      children: [
+        for (final c in choices)
+          SimpleDialogOption(
+            key: Key('tsm-pick-group-${c.path}'),
             onPressed: () => Navigator.of(dialog).pop(c),
             child: Text(c.path),
           ),
@@ -612,8 +642,12 @@ class _EntryList extends StatelessWidget {
               : Row(
                   key: const Key('tsm-marked-actions'),
                   children: [
-                    Text('${marked.length} marked'),
-                    const Spacer(),
+                    Expanded(
+                      child: Text(
+                        '${marked.length} marked',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     IconButton(
                       key: const Key('tsm-move-marked'),
                       tooltip: 'Move…',
@@ -631,6 +665,15 @@ class _EntryList extends StatelessWidget {
                         );
                       },
                     ),
+                    if (context.read<TomSecretsHost>().sendsShares)
+                      IconButton(
+                        key: const Key('tsm-share-marked'),
+                        tooltip: 'Share…',
+                        icon: const Icon(Icons.ios_share_rounded),
+                        onPressed: () => unawaited(
+                          tomSecretsShowShareDialog(context, marked.toList()),
+                        ),
+                      ),
                     IconButton(
                       key: const Key('tsm-tag-marked'),
                       tooltip: 'Tag…',

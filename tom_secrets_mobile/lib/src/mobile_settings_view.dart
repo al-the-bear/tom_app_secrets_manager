@@ -220,6 +220,17 @@ class _SettingsState extends State<TomSecretsMobileSettingsView> {
           onChanged: (on) =>
               context.read<TomSecretsHealth>().setBreachEnabled(on),
         ),
+        const Divider(),
+        ListTile(
+          key: const Key('tsm-mobile-shares'),
+          leading: const Icon(Icons.move_to_inbox_outlined),
+          title: const Text('Shares'),
+          subtitle: const Text(
+            'Import entries someone shared with you: pasted, scanned, from a '
+            'file or your inbox.',
+          ),
+          onTap: () => unawaited(tomSecretsOpenMobileShares(context)),
+        ),
         if (widget.autofill != null && _autofillOn != null) ...[
           const Divider(),
           ListTile(
@@ -386,3 +397,20 @@ class _AddFileVaultDialogState extends State<_AddFileVaultDialog> {
     ],
   );
 }
+
+/// **[C]** Opens the phone's Shares page (part-sharing): the Shares section
+/// of the desktop, "Import a share…" and the inbox; a phone receives shares
+/// only (BP-32).
+Future<void> tomSecretsOpenMobileShares(BuildContext context) =>
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          key: const Key('tsm-mobile-shares-page'),
+          appBar: AppBar(title: const Text('Shares')),
+          body: ListView(
+            padding: const EdgeInsets.all(12),
+            children: const [TomSecretsSharesSection()],
+          ),
+        ),
+      ),
+    );

@@ -31,6 +31,7 @@ import '../widgets/style.dart';
 import '../widgets/totp_view.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 import 'overlay_editor.dart' show tomSecretsShowOverlayEditor;
+import 'share_dialogs.dart' show tomSecretsShowShareDialog;
 
 /// The fields the editor shows in their own places; every other non-reserved
 /// string field is a custom field.
@@ -894,6 +895,17 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                     decoration: const InputDecoration(labelText: 'Title'),
                   ),
                 ),
+                if (context.read<TomSecretsHost>().sendsShares) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    key: const Key('tsm-entry-share'),
+                    tooltip: 'Share…',
+                    icon: const Icon(Icons.ios_share_rounded),
+                    onPressed: () => unawaited(
+                      tomSecretsShowShareDialog(context, [widget.ref]),
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 12),
                 DropdownButton<TomSecretsEntryType>(
                   key: const Key('tsm-entry-type'),

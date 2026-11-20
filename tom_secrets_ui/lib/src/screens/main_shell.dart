@@ -378,10 +378,15 @@ class _MainShellState extends State<TomSecretsMainShell> {
                     selectedIcon: Icon(Icons.devices_other_rounded),
                     label: Text('Pairing'),
                   ),
-                  const NavigationRailDestination(
-                    icon: Icon(Icons.group_outlined),
-                    selectedIcon: Icon(Icons.group_rounded),
-                    label: Text('Sharing'),
+                  NavigationRailDestination(
+                    icon: Badge.count(
+                      key: const Key('tsm-sharing-badge'),
+                      count: session.inbox.length,
+                      isLabelVisible: session.inbox.isNotEmpty,
+                      child: const Icon(Icons.group_outlined),
+                    ),
+                    selectedIcon: const Icon(Icons.group_rounded),
+                    label: const Text('Sharing'),
                   ),
                   const NavigationRailDestination(
                     icon: Icon(Icons.download_outlined),

@@ -833,6 +833,46 @@ use is rotated in two steps, so nothing stops working in between:
 Only one rotation of a key runs at a time: a second one is refused, naming
 who started the first and when.
 
+**Sharing entries with someone.** One or more entries go to another person
+as one encrypted package, a *share*: their fields, attachments, tags and
+expiry, never the vault's history.
+
+1. Mark the entries in the vault browser and choose the **Share** icon in
+   the bar of marked entries, or **Share** next to an entry's title.
+2. Choose how it is protected:
+   - **"Members"** (the default): for the members you tick, with their
+     hybrid keys;
+   - **"A passphrase"** (at least 8 characters): give it to the recipient
+     another way, by phone or in person; a passphrase is not weakened by a
+     quantum computer;
+   - **"A classical key"**: for one member who has only a classical key; it
+     is not protected against a future quantum computer.
+3. **"Make the share"** shows it as text (`-----BEGIN AGE ENCRYPTED
+   FILE-----`): **"Copy"** it into a message or email, **"Save as file…"**
+   (`<entry>.tsmshare`), or let the recipient's phone scan the **QR code**
+   (shown while it fits: one password for one member, not a certificate).
+   For members, **"Put into the inbox of <vault>"** commits it into the
+   inbox of a shared vault every recipient is a member of.
+
+The `age` command line (v1.3.0 or later) opens a share too: with the
+member's key, or `age -d` asking for the passphrase.
+
+**Receiving a share.** The **Shares** section of Sharing holds **"Import a
+share…"**: paste the text, open the file, or scan the QR code where the
+machine has a camera; a share under a passphrase asks for it. The dialog
+says who sent it: "From Bob, a member whose key you have", or only what the
+share claims when its key is not among your members. **"Import into…"**
+puts its entries, as new entries, into the vault and group you pick.
+
+**The inbox.** A shared vault's repository has an `inbox/<member>/` folder
+for each member who receives shares (`<member>` is the fingerprint of their
+member key). At each sync the app looks into your folders: Sharing's rail
+icon gets a badge, and the Shares section lists each package ("1 entry from
+Bob"). **"Open…"** shows it: **"Import into…"** imports it and deletes it
+from the folder, **"Decline"** deletes it. Packages older than 30 days are
+deleted by whichever member's app syncs next. The folder names show who
+receives shares and when, never what.
+
 
 ## Conflicts
 

@@ -257,7 +257,10 @@ void main() {
     await tester.ensureVisible(toggle);
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
-    await tester.tap(find.byKey(const Key('tsm-mobile-health')));
+    final health = find.byKey(const Key('tsm-mobile-health'));
+    await tester.ensureVisible(health);
+    await tester.pumpAndSettle();
+    await tester.tap(health);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('tsm-health')), findsOneWidget);
     await tester.tap(find.byKey(const Key('tsm-health-breach-switch')));

@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- Shares (part-sharing): the phone receives them (no Share action,
+  `sendsShares: false`): Settings › "Shares" with "Import a share…" and the
+  inbox, a banner for the packages found; the engine answers `inbox.list`,
+  `inbox.read` and `inbox.delete` (`inbox.put` refused).
 - Shared vaults (part-sharing): the engine answers `vault.recipients` by
   store, so the session takes up a shared vault's new keys after another
   member re-keyed it (`refreshSharedVaultKeys`) and writes them into the

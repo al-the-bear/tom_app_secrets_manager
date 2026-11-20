@@ -316,6 +316,7 @@ final class TomSecretsHost {
     this.keyboard,
     this.hotkeys,
     this.macOS = false,
+    this.sendsShares = true,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -344,6 +345,11 @@ final class TomSecretsHost {
 
   /// Whether the app runs on macOS (the default hotkeys use Cmd).
   final bool macOS;
+
+  /// **[C]** Whether this device sends shares (single-entry exports,
+  /// part-sharing): the desktop app does; a phone only receives them
+  /// (BP-32).
+  final bool sendsShares;
 
   /// The secrets service.
   final TomSecretsServiceHost service;

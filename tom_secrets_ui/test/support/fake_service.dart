@@ -943,6 +943,58 @@ final class FakeService implements TomSecretsAdminChannel {
         final bytes = base64.decode(args['bytes']! as String);
         recipientsFiles[s.location] = bytes;
         return {'op': 'ok', 'revision': tomSecretsBlobId(bytes)};
+      case 'inbox.list':
+        _unlocked();
+        final name = args['store']! as String;
+        store(name);
+        return {
+          'op': 'inbox',
+          'store': name,
+          'files': [
+            for (final MapEntry(:key, :value) in (inboxes[name] ?? {}).entries)
+              {
+                'member': key.split('/').first,
+                'name': key.split('/').last,
+                'revision': tomSecretsBlobId(value),
+              },
+          ],
+        };
+      case 'inbox.read':
+        _unlocked();
+        final name = args['store']! as String;
+        final bytes =
+            inboxes[name]?['${args['member']}/${args['name']}'] ??
+            (throw TomSecretsAdminException(
+              'not_found',
+              'the package is gone',
+              details: {'reason': 'inbox'},
+            ));
+        return {
+          'op': 'inboxFile',
+          'store': name,
+          'member': args['member'],
+          'name': args['name'],
+          'revision': tomSecretsBlobId(bytes),
+          'bytes': base64.encode(bytes),
+        };
+      case 'inbox.put':
+        _unlocked();
+        final name = args['store']! as String;
+        store(name);
+        final file = tomSecretsNewInboxName();
+        for (final m in (args['members']! as List).cast<String>()) {
+          (inboxes[name] ??= {})['$m/$file'] = base64.decode(
+            args['bytes']! as String,
+          );
+        }
+        return {'op': 'ok', 'name': file};
+      case 'inbox.delete':
+        _unlocked();
+        final name = args['store']! as String;
+        for (final f in (args['files']! as List).cast<Map>()) {
+          inboxes[name]?.remove('${f['member']}/${f['name']}');
+        }
+        return {'op': 'ok'};
       case 'settings.get':
         _unlocked();
         return {
@@ -1064,6 +1116,10 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// **[C]** The recipients files beside the vaults, by vault locator.
   final Map<String, Uint8List> recipientsFiles = {};
+
+  /// **[C]** The inbox folders beside the shared vaults: by store, the
+  /// packages by `<member>/<name>`.
+  final Map<String, Map<String, Uint8List>> inboxes = {};
 
   /// **[C]** The vault files of other people's repositories, by locator: a
   /// vault the primary comes to list there is served at the next reload.

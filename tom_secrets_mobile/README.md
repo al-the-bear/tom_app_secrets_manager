@@ -47,6 +47,12 @@ A phone runs no secrets service and keeps no copy of a vault:
   recipients file (`vault.recipients`), opens it with the member key from
   the primary and writes the new keys into the primary on GitHub. Creating,
   joining and changing members happen in the desktop app (BP-32).
+- **Shares** (single-entry exports, phase C) are received, never sent
+  (BP-32): Settings › "Shares" imports one pasted, scanned or opened; the
+  engine answers `inbox.list`, `inbox.read` and `inbox.delete`, so the
+  packages in the user's inbox folders of shared vaults are found at each
+  unlock and refresh (a banner names them), imported and deleted, and
+  packages older than 30 days deleted; `inbox.put` is refused.
 - **Attachments** are added from the document picker and opened in another
   app through the share sheet (the shared copy is removed when the sheet
   closes on iOS, at the next share or start on Android).

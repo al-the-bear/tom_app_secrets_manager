@@ -924,6 +924,12 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
           'revision': read.revision,
           'bytes': base64.encode(read.bytes),
         };
+      case 'inbox.list' || 'inbox.read' || 'inbox.delete':
+        // The inbox folders of shared vaults (part-sharing): a phone
+        // receives shares (lists, reads and deletes its packages, and the
+        // expired ones); sending them is the desktop app's (BP-32).
+        _unlocked();
+        return _inbox(op, args);
       case 'reload':
         _unlocked();
         await refresh(force: true);
@@ -966,6 +972,68 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         return {'op': 'deviceSettingsWritten', 'nextUnlock': const <String>[]};
       default:
         _refuse('unsupported', '$op is not done on a phone');
+    }
+  }
+
+  Future<Map<String, Object?>> _inbox(
+    String op,
+    Map<String, Object?> args,
+  ) async {
+    final store = args['store'];
+    if (store is! String) {
+      _refuse('malformed', '$op names a store', {'reason': 'inbox'});
+    }
+    try {
+      switch (op) {
+        case 'inbox.list':
+          final files = await _vaults.inbox(store);
+          return {
+            'op': 'inbox',
+            'store': store,
+            'files': [
+              for (final f in files)
+                {'member': f.member, 'name': f.name, 'revision': f.revision},
+            ],
+          };
+        case 'inbox.read':
+          final member = args['member'];
+          final name = args['name'];
+          if (member is! String || name is! String) {
+            _refuse('malformed', 'inbox.read names a member and a name', {
+              'reason': 'inbox',
+            });
+          }
+          final file = await _vaults.inboxFile(store, member, name);
+          if (file == null) {
+            _refuse('not_found', 'the package is gone', {'reason': 'inbox'});
+          }
+          return {
+            'op': 'inboxFile',
+            'store': store,
+            'member': member,
+            'name': name,
+            'revision': file.revision,
+            'bytes': base64.encode(file.bytes),
+          };
+        default:
+          final files = args['files'];
+          if (files is! List ||
+              files.any(
+                (f) =>
+                    f is! Map || f['member'] is! String || f['name'] is! String,
+              )) {
+            _refuse('malformed', 'inbox.delete carries files (member, name)', {
+              'reason': 'inbox',
+            });
+          }
+          await _vaults.inboxDelete(store, [
+            for (final f in files.cast<Map<Object?, Object?>>())
+              (member: f['member']! as String, name: f['name']! as String),
+          ]);
+          return {'op': 'ok'};
+      }
+    } on TomSecretsSaveException catch (e) {
+      _refuse(e.kind, e.message, {'reason': ?e.reason});
     }
   }
 

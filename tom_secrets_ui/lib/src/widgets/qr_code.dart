@@ -11,8 +11,17 @@ import 'package:qr/qr.dart';
 
 /// [data] as a QR code, [size] logical pixels wide.
 class TomSecretsQrCode extends StatelessWidget {
-  /// The code of [data].
-  const TomSecretsQrCode({super.key, required this.data, this.size = 200});
+  /// The code of [data]; [lowErrorCorrection] for the most data (level L, up
+  /// to 2,953 bytes: a share, `tomSecretsQrCapacity`), else level M.
+  const TomSecretsQrCode({
+    super.key,
+    required this.data,
+    this.size = 200,
+    this.lowErrorCorrection = false,
+  });
+
+  /// Whether it is drawn at error correction level L instead of M.
+  final bool lowErrorCorrection;
 
   /// The text it carries.
   final String data;
@@ -30,7 +39,9 @@ class TomSecretsQrCode extends StatelessWidget {
           QrImage(
             QrCode.fromData(
               data: data,
-              errorCorrectLevel: QrErrorCorrectLevel.M,
+              errorCorrectLevel: lowErrorCorrection
+                  ? QrErrorCorrectLevel.L
+                  : QrErrorCorrectLevel.M,
             ),
           ),
         ),

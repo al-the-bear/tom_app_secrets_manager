@@ -2,6 +2,27 @@
 
 ## 0.1.0
 
+- Single-entry exports and the inbox folders (part-sharing, BP-34): the
+  Share dialog (`tomSecretsShowShareDialog`: members' keys, a passphrase or
+  a classical key; text, QR code, `.tsmshare` file, a shared vault's
+  inbox), the Import a share dialog (`tomSecretsShowImportShareDialog`),
+  `TomSecretsSharesSection` on the Sharing screen with the inbox and the
+  rail's badge; the session's `writeShare`, `readShare`, `importShare`,
+  `inboxVaultsFor`, `putIntoInbox`, `checkInbox` (at each load, expired
+  packages deleted), `acceptInboxPackage`, `declineInboxPackage`;
+  `TomSecretsHost.sendsShares`; `tomSecretsPickGroup`; `TomSecretsQrCode`'s
+  `lowErrorCorrection` (level L).
+- Rotations with a migration period (part-key-rotation, phase C): the
+  member key rotated (`startMemberKeyRotation`: a new key beside the old
+  one, the shared vaults' recipients files written for both;
+  `finishMemberKeyRotation`: the old key dropped and deleted) and a shared
+  vault's key rotated for the same members (`rotateSharedVaultKeys`, the
+  record in the vault; `finishSharedVaultRotation` compacting its history),
+  on the Sharing screen and from the Keys screen's rows; the member key's
+  reminder row and its rotation age; a store whose key changed on another
+  device shown read-only (`TomSecretsStoreState.keyChanged`). The by-hand
+  rotation spec is renamed `TomSecretsKeyChanges` (the core's
+  `TomSecretsRotation` is the rotation record).
 - Shared vaults (part-sharing, phase C): created for chosen members,
   opened by their location, members added and removed (the vault re-keyed
   with its recipients file), the rotation offer, new keys taken up after

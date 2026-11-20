@@ -201,6 +201,14 @@ final class TomSecretsKdfGuardedOpener implements TomSecretsVaultOpener {
   }) => inner.writeBeside(locator, name, bytes, baseRevision: baseRevision);
 
   @override
+  Future<Map<String, String>> listBeside(String locator, String folder) =>
+      inner.listBeside(locator, folder);
+
+  @override
+  Future<void> deleteBeside(String locator, List<String> paths) =>
+      inner.deleteBeside(locator, paths);
+
+  @override
   Future<TomSecretsOpenedVault> move(
     String from,
     String to,
