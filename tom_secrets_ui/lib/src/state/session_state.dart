@@ -33,6 +33,7 @@ final class TomSecretsOpenVault {
     required this.file,
     required this.outerKey,
     required this.cipher,
+    this.previousOuterKey,
   });
 
   /// The store's name.
@@ -54,6 +55,15 @@ final class TomSecretsOpenVault {
   /// The outer cipher of a `.tsmx` file, kept by every save, or null; a
   /// rotation may set another.
   TomSecretsOuterCipher? cipher;
+
+  /// **[C]** During a guided rotation's migration period the old repository
+  /// key the `.tsmx` file keeps a slot for (base64): every save writes a
+  /// slot for it after the new key's.
+  String? previousOuterKey;
+
+  /// The repository keys a save writes slots for.
+  String? get writtenOuterKeys =>
+      tomSecretsJoinOuterKeys([outerKey, previousOuterKey]);
 }
 
 /// An entry by its store and UUID.
@@ -478,18 +488,8 @@ class TomSecretsSession extends ChangeNotifier {
       final list = TomSecretsPrimaryVaults(primary.file);
       final keys = list.byName(store);
       if (keys == null) throw StateError('the primary lists no $store');
-      list.put(
-        TomSecretsVaultKeys(
-          name: keys.name,
-          locator: keys.locator,
-          password: keys.password,
-          keyFile: keys.keyFile,
-          outerKey: keys.outerKey,
-          githubToken: keys.githubToken,
-          githubTokenExpires: keys.githubTokenExpires,
-          expires: at,
-        ),
-      );
+      // copyWith keeps a guided rotation's next and previous keys.
+      list.put(keys.copyWith(expires: at));
     }
     await save(primary.store);
   }
@@ -527,6 +527,16 @@ class TomSecretsSession extends ChangeNotifier {
     }
     final primary = _vaults.values.firstOrNull;
     if (primary == null) throw StateError('no primary is open');
+    final guided = guidedRotationOf(store);
+    if (guided != null) {
+      // Its keys are the guided rotation's until it finishes or is
+      // cancelled (part-key-rotation).
+      throw TomSecretsRotationException(
+        'a guided rotation of ${guided.target} runs: finish or cancel it '
+        'first',
+        rotation: guided,
+      );
+    }
     final at = (now ?? DateTime.now()).toUtc();
     final list = TomSecretsPrimaryVaults(primary.file);
     final isPrimary = store == primary.store;
@@ -1243,7 +1253,9 @@ class TomSecretsSession extends ChangeNotifier {
       }
     }
     final state = connection.stores[store];
-    if (state == null || !state.isOffline) return null;
+    // A file under a newer repository key than this device holds (a guided
+    // rotation's two slots) is read, never written, also while current.
+    if (state == null || !(state.isOffline || state.keyChanged)) return null;
     return 'read-only: ${state.offlineReason}';
   }
 
@@ -1464,11 +1476,12 @@ class TomSecretsSession extends ChangeNotifier {
     final location = answer['location'] as String;
     final stored = base64.decode(answer['bytes'] as String);
     final outerKey = keys['outerKey'] as String?;
+    final previousOuterKey = keys['previousOuterKey'] as String?;
     final file = await tomSecretsDecodeStored(
       location,
       stored,
       _credentialsOf(keys),
-      outerKey: outerKey,
+      outerKey: tomSecretsJoinOuterKeys([outerKey, previousOuterKey]),
     );
     final cipher = location.endsWith(tomSecretsOuterSuffix)
         ? tomSecretsOuterCipherOf(stored)
@@ -1481,6 +1494,7 @@ class TomSecretsSession extends ChangeNotifier {
       file: file,
       outerKey: outerKey,
       cipher: cipher,
+      previousOuterKey: previousOuterKey,
     );
   }
 
@@ -1521,7 +1535,7 @@ class TomSecretsSession extends ChangeNotifier {
     final bytes = await tomSecretsEncodeStored(
       vault.location,
       vault.file,
-      outerKey: vault.outerKey,
+      outerKey: vault.writtenOuterKeys,
       cipher: vault.cipher ?? TomSecretsOuterCipher.xchacha20Poly1305,
     );
     _ownSaves.add(store);
@@ -2768,6 +2782,390 @@ class TomSecretsSession extends ChangeNotifier {
         if (!identical(p, package)) p,
     ];
     notifyListeners();
+  }
+
+  // The guided rotation of the own vaults with a migration period
+  // (part-key-rotation, phase C): prepare (the next keys beside the old ones
+  // in the primary, which every device takes), switch (the vaults re-keyed;
+  // a repository key rotated alone keeps the old key's slot), finish (the
+  // old key gone, the history cut), or cancel before the switch.
+
+  /// The guided rotation running for [store]'s keys, or null: of its key
+  /// file (`vaultKeys`, target the store) or of its repository key alone
+  /// (`repositoryKey`, target its repository).
+  TomSecretsRotation? guidedRotationOf(String store) {
+    final file = _primaryFile;
+    if (file == null) return null;
+    final location = _locationOf(store);
+    if (location == null) return null;
+    final rotations = TomSecretsRotations(file);
+    return rotations.of(TomSecretsRotationKind.vaultKeys, store) ??
+        rotations.of(
+          TomSecretsRotationKind.repositoryKey,
+          tomSecretsRepositoryOf(location),
+        );
+  }
+
+  /// The devices that do not hold the new key of [rotation] yet (their
+  /// device record lacks its id): the ones it still waits for.
+  List<TomSecretsDeviceRecord> guidedRotationMissing(
+    TomSecretsRotation rotation,
+  ) {
+    final file = _primaryFile;
+    return file == null
+        ? const []
+        : TomSecretsDeviceRecords(file).missingKey(rotation.newKeyId);
+  }
+
+  String? _locationOf(String store) {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) return null;
+    if (store == primary.store) return primary.location;
+    return TomSecretsPrimaryVaults(primary.file).byName(store)?.locator;
+  }
+
+  /// This device's name (`pair.identity`), who a rotation names as started
+  /// by.
+  Future<String> _deviceName() async {
+    try {
+      final answer = await connection.request('pair.identity');
+      final device = answer['device'];
+      if (device is String && device.isNotEmpty) return device;
+    } on Object {
+      // Named by the user's member name below.
+    }
+    return memberName.trim().isEmpty ? 'this device' : memberName.trim();
+  }
+
+  /// The vaults a guided rotation of [store] changes: [store] itself, and
+  /// for a new repository key every vault of the same repository under the
+  /// same key (the primary among them when it is one), as the rotation by
+  /// hand does. Answers further vault names and whether the primary is one.
+  ({List<String> further, bool primary}) _guidedTargets(
+    String store, {
+    required bool repositoryKey,
+  }) {
+    final primary = _vaults.values.first;
+    final list = TomSecretsPrimaryVaults(primary.file);
+    final isPrimary = store == primary.store;
+    final location = _locationOf(store)!;
+    final outer = isPrimary ? primary.outerKey : list.byName(store)!.outerKey;
+    final repository = tomSecretsRepositoryOf(location);
+    final further = <String>[
+      if (!isPrimary) store,
+      if (repositoryKey)
+        for (final v in list.list())
+          if (v.name != store &&
+              v.outerKey == outer &&
+              tomSecretsRepositoryOf(v.locator) == repository)
+            v.name,
+    ];
+    final primaryToo =
+        isPrimary ||
+        (repositoryKey &&
+            primary.outerKey == outer &&
+            tomSecretsRepositoryOf(primary.location) == repository);
+    return (further: further, primary: primaryToo);
+  }
+
+  /// Prepares a guided rotation of [store]'s keys (step 1): a new key file
+  /// ([newKeyFile]) and/or, for a `.tsmx` vault, a new repository key
+  /// ([newRepositoryKey]) written beside the old ones into the primary
+  /// (each affected vault's entry, the primary's own `next-keys` entry),
+  /// nothing re-encrypted, and the rotation record started with its 14-day
+  /// migration period and the paired devices as pending. Every device's
+  /// service takes the next keys at its next sync. Refused while a guided
+  /// rotation of the same target runs, and for a shared vault (its keys
+  /// rotate on the Sharing screen).
+  Future<TomSecretsRotation> prepareGuidedRotation(
+    String store, {
+    bool newKeyFile = false,
+    bool newRepositoryKey = false,
+    DateTime? now,
+  }) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    if (!newKeyFile && !newRepositoryKey) {
+      throw ArgumentError('a new key file or a new repository key');
+    }
+    if (kindOf(store) == TomSecretsVaultKind.shared) {
+      throw StateError('a shared vault\'s key rotates on the Sharing screen');
+    }
+    final why = readOnlyReason(primary.store);
+    if (why != null) throw StateError(why);
+    final location = _locationOf(store);
+    if (location == null) throw StateError('the primary lists no $store');
+    final outer = location.endsWith(tomSecretsOuterSuffix);
+    if (newRepositoryKey && !outer) {
+      throw ArgumentError('$store is not outer encrypted');
+    }
+    final isPrimary = store == primary.store;
+    final held = await _heldKeys([store]);
+    final old = held[store]!;
+    if (isPrimary && newKeyFile && old['compositeKey'] is String) {
+      throw StateError(
+        'Changing the key file needs the master password, which this unlock '
+        '(the OS unlock) does not hold: lock, unlock with the master '
+        'password, and prepare again.',
+      );
+    }
+    final at = (now ?? DateTime.now()).toUtc();
+    final keyFile = newKeyFile ? TomSecretsKeyFile.generate().toBytes() : null;
+    final outerKey = newRepositoryKey
+        ? TomSecretsRepositoryKey.generate().toBase64()
+        : null;
+    final kind = newKeyFile
+        ? TomSecretsRotationKind.vaultKeys
+        : TomSecretsRotationKind.repositoryKey;
+    String id({List<int>? keyFile, String? outerKey}) =>
+        tomSecretsVaultKeyIds(
+          keyFile: keyFile,
+          outerKey: outerKey,
+        ).firstOrNull ??
+        'none';
+    final oldKeyFile = old['keyFile'] is String
+        ? base64.decode(old['keyFile']! as String)
+        : null;
+    final record = TomSecretsRotation(
+      kind: kind,
+      target: newKeyFile ? store : tomSecretsRepositoryOf(location),
+      oldKeyId: newKeyFile
+          ? id(keyFile: oldKeyFile)
+          : id(outerKey: old['outerKey'] as String?),
+      newKeyId: newKeyFile ? id(keyFile: keyFile) : id(outerKey: outerKey),
+      started: at,
+      endsAt: at.add(tomSecretsRotationPeriod),
+      by: await _deviceName(),
+      pending: [
+        for (final r in TomSecretsDeviceRecords(primary.file).list())
+          if (!r.isRevoked) r.device,
+      ],
+    );
+    // The record first: its lock refuses before anything is written.
+    TomSecretsRotations(primary.file).start(record);
+    final targets = _guidedTargets(store, repositoryKey: newRepositoryKey);
+    final list = TomSecretsPrimaryVaults(primary.file);
+    for (final name in targets.further) {
+      list.put(
+        list
+            .byName(name)!
+            .copyWith(
+              nextKeyFile: name == store ? keyFile : null,
+              nextOuterKey: outerKey,
+            ),
+      );
+    }
+    if (targets.primary) {
+      TomSecretsPrimaryNextKeys(
+        keyFile: isPrimary ? keyFile : null,
+        outerKey: outerKey,
+      ).writeTo(primary.file);
+    }
+    await save(primary.store);
+    return record;
+  }
+
+  /// Switches the guided rotation of [store] (step 2): the next keys become
+  /// the keys, written into the primary first (a repository key rotated
+  /// alone keeps the old one as the key whose slot the file keeps), then
+  /// every affected vault re-keyed: the primary with its new keys, a
+  /// repository key rotated alone with two slots. A device holding only the
+  /// old key keeps reading a two-slot file but writes nothing; after a key
+  /// file change it reads its copy under the old key until it has the new
+  /// one. The record names the switch. Works on the primary as it is now
+  /// (it is read again first: other devices wrote their device records).
+  Future<void> switchGuidedRotation(String store, {DateTime? now}) async {
+    await connection.reload();
+    await load();
+    final primary = _vaults.values.first;
+    final record = guidedRotationOf(store);
+    if (record == null) throw StateError('no guided rotation of $store runs');
+    if (record.switched != null) {
+      throw StateError('the rotation of ${record.target} switched already');
+    }
+    final at = (now ?? DateTime.now()).toUtc();
+    final repositoryOnly = record.kind == TomSecretsRotationKind.repositoryKey;
+    final list = TomSecretsPrimaryVaults(primary.file);
+    final further = [
+      for (final v in list.list())
+        if (v.hasNext) v.name,
+    ];
+    final next = TomSecretsPrimaryNextKeys.of(primary.file);
+    final device = await _deviceSettings();
+    final opened = <String>[];
+    for (final name in further) {
+      if (_vaultOf(name) == null) {
+        await openUnserved(name);
+        opened.add(name);
+      }
+    }
+    for (final name in further) {
+      final v = list.byName(name)!;
+      list.put(
+        v.copyWith(
+          keyFile: v.nextKeyFile,
+          outerKey: v.nextOuterKey,
+          previousOuterKey: repositoryOnly ? v.outerKey : null,
+          clearPrevious: !repositoryOnly,
+          clearNext: true,
+          expires: tomSecretsAddMonths(at, device.vaultKeyAgeMonths),
+        ),
+      );
+    }
+    Map<String, Object?>? primaryKeys;
+    if (next != null) {
+      final held = (await _heldKeys([primary.store]))[primary.store]!;
+      final oldOuter = primary.outerKey;
+      if (repositoryOnly) {
+        TomSecretsPrimaryNextKeys(
+          outerKey: next.outerKey,
+          previousOuterKey: oldOuter,
+        ).writeTo(primary.file);
+      }
+      final keyFile = next.keyFile != null
+          ? base64.encode(next.keyFile!)
+          : held['keyFile'] as String?;
+      if (next.keyFile != null) {
+        primary.file.credentials = tomSecretsVaultCredentials(
+          password: held['password'] as String?,
+          keyFile: next.keyFile,
+        );
+      }
+      if (next.outerKey != null) {
+        primary.outerKey = next.outerKey;
+        primary.previousOuterKey = repositoryOnly ? oldOuter : null;
+      }
+      primaryKeys = {
+        ...(next.keyFile == null
+            ? _heldKeysWire(held)
+            : {'password': held['password'] as String? ?? ''}),
+        'keyFile': ?keyFile,
+        'outerKey': ?primary.outerKey,
+        'previousOuterKey': ?primary.previousOuterKey,
+      };
+    }
+    final rotations = TomSecretsRotations(primary.file);
+    rotations.update(record.copyWith(switched: at));
+    await save(primary.store, keys: primaryKeys);
+    for (final name in further) {
+      final vault = _vaultOf(name)!;
+      final keys = list.byName(name)!;
+      vault.file.credentials = tomSecretsVaultCredentials(
+        password: keys.password,
+        keyFile: keys.keyFile == null
+            ? null
+            : Uint8List.fromList(keys.keyFile!),
+      );
+      vault.outerKey = keys.outerKey;
+      vault.previousOuterKey = keys.previousOuterKey;
+      await save(name);
+    }
+    for (final name in opened) {
+      closeEditOnly(name);
+    }
+  }
+
+  /// Finishes the guided rotation of [store] (step 3), after the migration
+  /// period or, with [early], at once: the old repository key leaves the
+  /// primary (the vaults' entries, the primary's `next-keys` entry), every
+  /// two-slot file is written again with the new key's slot only, the
+  /// record ends, and the history of every `github:` repository written is
+  /// cut (retention 0). Answers the devices that never took the new key and
+  /// the repositories whose history could not be cut, with why.
+  Future<
+    ({List<TomSecretsDeviceRecord> missing, Map<String, String> notCompacted})
+  >
+  finishGuidedRotation(
+    String store, {
+    bool early = false,
+    DateTime? now,
+  }) async {
+    await connection.reload();
+    await load();
+    final primary = _vaults.values.first;
+    final record = guidedRotationOf(store);
+    if (record == null) throw StateError('no guided rotation of $store runs');
+    if (record.switched == null) {
+      throw StateError('the rotation did not switch yet: switch or cancel it');
+    }
+    final at = (now ?? DateTime.now()).toUtc();
+    if (!early && !record.isDueAt(at)) {
+      throw StateError(
+        'the migration period ends on '
+        '${record.endsAt.toIso8601String().substring(0, 10)}',
+      );
+    }
+    final missing = guidedRotationMissing(record);
+    final list = TomSecretsPrimaryVaults(primary.file);
+    final rewritten = [
+      for (final v in list.list())
+        if (v.previousOuterKey != null) v.name,
+    ];
+    final targets = record.kind == TomSecretsRotationKind.vaultKeys
+        ? [record.target]
+        : rewritten;
+    final opened = <String>[];
+    for (final name in rewritten) {
+      if (_vaultOf(name) == null) {
+        await openUnserved(name);
+        opened.add(name);
+      }
+      list.put(list.byName(name)!.copyWith(clearPrevious: true));
+    }
+    final primaryRewritten = TomSecretsPrimaryNextKeys.clear(primary.file);
+    primary.previousOuterKey = null;
+    TomSecretsRotations(primary.file).end(record.kind, record.target);
+    await save(primary.store);
+    for (final name in rewritten) {
+      _vaultOf(name)!.previousOuterKey = null;
+      await save(name);
+    }
+    for (final name in opened) {
+      closeEditOnly(name);
+    }
+    final repositories = {
+      for (final name in {
+        ...targets,
+        ...rewritten,
+        if (primaryRewritten) primary.store,
+      })
+        ?tomSecretsGitHubRepositoryOf(_locationOf(name) ?? ''),
+    };
+    final notCompacted = <String, String>{};
+    for (final slug in repositories) {
+      try {
+        await connection.request('compact', {
+          'repository': slug,
+          'retentionDays': 0,
+        });
+      } on TomSecretsAdminException catch (e) {
+        notCompacted[slug] = e.message;
+      }
+    }
+    return (missing: missing, notCompacted: notCompacted);
+  }
+
+  /// Cancels the guided rotation of [store] before its switch: the next
+  /// keys leave the primary (and with it every device's keychain at its
+  /// next sync) and the record ends. After the switch a rotation only goes
+  /// forward.
+  Future<void> cancelGuidedRotation(String store) async {
+    final primary = _vaults.values.firstOrNull;
+    if (primary == null) throw StateError('no primary is open');
+    final record = guidedRotationOf(store);
+    if (record == null) throw StateError('no guided rotation of $store runs');
+    if (record.switched != null) {
+      throw StateError(
+        'the rotation switched already: it only goes forward (finish now)',
+      );
+    }
+    final list = TomSecretsPrimaryVaults(primary.file);
+    for (final v in list.list()) {
+      if (v.hasNext) list.put(v.copyWith(clearNext: true));
+    }
+    TomSecretsPrimaryNextKeys.clear(primary.file);
+    TomSecretsRotations(primary.file).end(record.kind, record.target);
+    await save(primary.store);
   }
 
   /// Marks [refs] for rotation after a member was removed: each gets the

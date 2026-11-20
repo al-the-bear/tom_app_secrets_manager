@@ -99,7 +99,10 @@ offering the import and the pairing.
   `TomSecretsKeyChanges`); the guided rotations with a migration period
   (`startMemberKeyRotation` / `finishMemberKeyRotation`,
   `rotateSharedVaultKeys` / `finishSharedVaultRotation`, the running
-  records `memberKeyRotation` and `sharedVaultRotation`); a proposed login saved as a new login
+  records `memberKeyRotation` and `sharedVaultRotation`; the own vaults'
+  `prepareGuidedRotation` / `switchGuidedRotation` /
+  `finishGuidedRotation` / `cancelGuidedRotation`, `guidedRotationOf`,
+  `guidedRotationMissing`); a proposed login saved as a new login
   (`saveProposalAsNew` into one of `proposalVaults`) or written into the
   login of that site and user (`proposalMatches`, `applyProposal`: the old
   password to the history); everything dropped on `locked`.
@@ -289,7 +292,11 @@ offering the import and the pairing.
   (`keys.rotate`: both together, the result naming the hosts reached over the
   approval link and those that take the key change from the vault), the
   member key's row (Rotate… starts its rotation) and a shared vault's key row
-  (Rotate… rotates it with a migration period); at the top
+  (Rotate… rotates it with a migration period); under "Rotate a vault's
+  keys" each own vault's Guided rotation… (a new key file and/or repository
+  key prepared beside the old one) and, while one runs, its step, the
+  devices still without the new key and Switch / Cancel, then Finish /
+  Finish now with the result and the emergency sheet; at the top
   "GitHub sign-in (this machine)" (`TomSecretsGitHubSignInSection`): the GitHub
   App named once, the device flow's code, signed in or a pasted token instead
 - `TomSecretsSharingView`: The Sharing screen (part-sharing, phase C; desktop

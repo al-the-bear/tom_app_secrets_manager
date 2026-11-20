@@ -48,6 +48,10 @@ final class FakeStore {
   String? password;
   Uint8List? keyFile;
   String? outerKey;
+
+  /// **[C]** The old repository key a two-slot file keeps during a guided
+  /// rotation's migration period.
+  String? previousOuterKey;
   Uint8List stored;
   String revision;
   String state;
@@ -82,6 +86,7 @@ final class FakeStore {
       'password': ?password,
     if (keyFile != null) 'keyFile': base64.encode(keyFile!),
     'outerKey': ?outerKey,
+    'previousOuterKey': ?previousOuterKey,
   };
 }
 
@@ -1062,27 +1067,36 @@ final class FakeService implements TomSecretsAdminChannel {
       file = await open(
         newKeys['password'] as String?,
         keyFile,
-        newKeys['outerKey'] as String?,
+        tomSecretsJoinOuterKeys([
+          newKeys['outerKey'] as String?,
+          newKeys['previousOuterKey'] as String?,
+        ]),
       );
       if (file == null) malformed();
       s
         ..password = newKeys['password'] as String?
         ..keyFile = keyFile
-        ..outerKey = newKeys['outerKey'] as String?;
+        ..outerKey = newKeys['outerKey'] as String?
+        ..previousOuterKey = newKeys['previousOuterKey'] as String?;
       rekeyedSaves.add(s.name);
     } else {
-      file = await open(s.password, s.keyFile, s.outerKey);
+      file = await open(
+        s.password,
+        s.keyFile,
+        tomSecretsJoinOuterKeys([s.outerKey, s.previousOuterKey]),
+      );
       final entry = listed[s.name];
       if (file == null && entry != null) {
         final kf = entry.keyFile == null
             ? null
             : Uint8List.fromList(entry.keyFile!);
-        file = await open(entry.password, kf, entry.outerKey);
+        file = await open(entry.password, kf, entry.writtenOuterKeys);
         if (file != null) {
           s
             ..password = entry.password
             ..keyFile = kf
-            ..outerKey = entry.outerKey;
+            ..outerKey = entry.outerKey
+            ..previousOuterKey = entry.previousOuterKey;
           rekeyedSaves.add(s.name);
         }
       }
@@ -1092,6 +1106,33 @@ final class FakeService implements TomSecretsAdminChannel {
       listed = {
         for (final v in TomSecretsPrimaryVaults(file).list()) v.name: v,
       };
+      // As the service's refresh: a vault whose listed keys changed and
+      // still open its file is served with them (a guided rotation's
+      // previous repository key added or dropped).
+      for (final other in stores) {
+        final entry = listed[other.name];
+        if (entry == null ||
+            (entry.outerKey == other.outerKey &&
+                entry.previousOuterKey == other.previousOuterKey)) {
+          continue;
+        }
+        final kf = entry.keyFile == null
+            ? null
+            : Uint8List.fromList(entry.keyFile!);
+        try {
+          await tomSecretsDecodeStored(
+            other.location,
+            other.stored,
+            tomSecretsVaultCredentials(password: entry.password, keyFile: kf),
+            outerKey: entry.writtenOuterKeys,
+          );
+          other
+            ..outerKey = entry.outerKey
+            ..previousOuterKey = entry.previousOuterKey;
+        } on Object {
+          // Kept until its re-keyed save.
+        }
+      }
     }
   }
 

@@ -680,12 +680,39 @@ device. The Pairing screen shows how each device reaches GitHub, and
 them, and cuts the GitHub history so no commit keeps the file under the old
 keys. Then save copies of the new key file and repository key, and replace
 your emergency sheet ("Print the emergency sheet…", "Save it as a PDF…").
-After rotating the primary's key file or repository key, your other devices
-need them: pair them again or copy the keys by hand; until then they open
-their offline copy only.
+After rotating the primary's key file or repository key this way, your
+other devices need them: pair them again or copy the keys by hand; until
+then they open their offline copy only. With several devices, use the guided
+rotation below instead.
 
 If a re-keyed save failed, a banner says the rotation is not finished;
 "Finish the rotation" completes it.
+
+### The guided rotation
+
+**"Guided rotation…"** (next to "Rotate…" under "Rotate a vault's keys")
+rotates a vault's key file or, for a vault with an outer encryption, its
+repository key so that your other devices keep working in between. It runs
+in three steps, and the vault's row shows where it is, since when, by which
+device, and **which devices do not have the new key yet**:
+
+1. **Prepare:** tick "A new key file" and/or "A new repository key" and
+   "Prepare". The new key is written beside the old one into the primary
+   vault; nothing is re-encrypted. Each of your devices takes it the next
+   time it syncs (for the primary's own keys, into its keychain), and drops
+   off the list.
+2. **"Switch"** re-keys the vault under the new key. A device that has not
+   taken the new key yet keeps reading its copy under the old key, read-only
+   ("its key changed on another device"). A repository key rotated alone
+   keeps the old key's slot in the file for the migration period, so such a
+   device still reads the current file, but writes nothing.
+3. **"Finish"** (after 14 days) or **"Finish now"** removes the old key,
+   writes the file again under the new key alone and cuts the GitHub
+   history. The result lists the devices that never took the new key (pair
+   them again) and offers a new emergency sheet.
+
+Before the switch, **"Cancel"** drops the new key. While a guided rotation
+runs, "Rotate…" is not offered for that vault.
 
 On a shared vault's key row, "Rotate…" rotates its key with a migration
 period instead (see [Sharing](#sharing)). Your member key has a row too

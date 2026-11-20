@@ -2,6 +2,15 @@
 
 ## 0.1.0
 
+- The guided rotation of the own vaults (part-key-rotation): prepare (a
+  new key file and/or repository key beside the old one in the primary,
+  the record started), switch (the vaults re-keyed, a repository key
+  rotated alone with two slots), finish (the old key gone, the history
+  cut, the devices that never took the new key listed, the emergency sheet
+  offered), cancel; on the Keys screen's vault rows. A vault's open copy
+  keeps the previous repository key (`TomSecretsOpenVault.previousOuterKey`)
+  and every save writes both slots; a store under a newer repository key is
+  read-only. The rotation by hand is refused while a guided one runs.
 - Single-entry exports and the inbox folders (part-sharing, BP-34): the
   Share dialog (`tomSecretsShowShareDialog`: members' keys, a passphrase or
   a classical key; text, QR code, `.tsmshare` file, a shared vault's

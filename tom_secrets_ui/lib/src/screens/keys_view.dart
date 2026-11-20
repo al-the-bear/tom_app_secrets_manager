@@ -26,6 +26,7 @@ import '../state/clients.dart';
 import '../state/rotation.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
+import '../widgets/emergency_sheet_offer.dart';
 import '../widgets/style.dart';
 import 'github_sign_in.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
@@ -47,6 +48,9 @@ class _KeysState extends State<TomSecretsKeysView> {
   TomSecretsSettingsReport? _settings;
   Map<String, Object?> _draft = const {};
   String? _error;
+
+  /// Why the last guided rotation step failed, shown in its section.
+  String? _guidedError;
   String? _agesMessage;
   List<TomSecretsPendingRotation> _pending = const [];
   String? _finishMessage;
@@ -478,14 +482,290 @@ class _KeysState extends State<TomSecretsKeysView> {
               store == primary.store ? '$store (primary)' : store,
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
-            subtitle: Text(location, overflow: TextOverflow.ellipsis),
-            trailing: TextButton(
-              key: Key('tsm-rotate-$store'),
-              onPressed: () => unawaited(_rotate(store)),
-              child: const Text('Rotate…'),
-            ),
+            subtitle: _guidedOf(context, session, store, location),
+            trailing: session.guidedRotationOf(store) != null
+                ? null
+                : Wrap(
+                    spacing: 4,
+                    children: [
+                      if (session.kindOf(store) != TomSecretsVaultKind.shared)
+                        TextButton(
+                          key: Key('tsm-guided-$store'),
+                          onPressed: () => unawaited(_prepareGuided(store)),
+                          child: const Text('Guided rotation…'),
+                        ),
+                      TextButton(
+                        key: Key('tsm-rotate-$store'),
+                        onPressed: () => unawaited(_rotate(store)),
+                        child: const Text('Rotate…'),
+                      ),
+                    ],
+                  ),
+          ),
+        if (_guidedError != null)
+          Text(
+            _guidedError!,
+            key: const Key('tsm-guided-error'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
       ],
+    );
+  }
+
+  /// A vault row's subtitle: its location, and the guided rotation running
+  /// for its keys with its steps (part-key-rotation).
+  Widget _guidedOf(
+    BuildContext context,
+    TomSecretsSession session,
+    String store,
+    String location,
+  ) {
+    final r = session.guidedRotationOf(store);
+    if (r == null) return Text(location, overflow: TextOverflow.ellipsis);
+    String day(DateTime d) => d.toLocal().toIso8601String().substring(0, 10);
+    final missing = session.guidedRotationMissing(r);
+    final due = r.isDueAt(DateTime.now());
+    final what = r.kind == TomSecretsRotationKind.repositoryKey
+        ? 'its repository key'
+        : 'its key file';
+    return Column(
+      key: Key('tsm-guided-running-$store'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(location, overflow: TextOverflow.ellipsis),
+        Text(
+          r.switched == null
+              ? 'A guided rotation of $what, prepared on ${day(r.started)} by '
+                    '${r.by}: the devices take the new key at their next sync.'
+              : 'A guided rotation of $what, switched on ${day(r.switched!)}; '
+                    'the migration period ${due ? 'is over' : 'ends on ${day(r.endsAt)}'}.',
+        ),
+        Text(
+          missing.isEmpty
+              ? 'Every paired device holds the new key.'
+              : 'Still without the new key: '
+                    '${missing.map((m) => m.device).join(', ')}.',
+          key: Key('tsm-guided-missing-$store'),
+        ),
+        Wrap(
+          spacing: 8,
+          children: [
+            if (r.switched == null) ...[
+              FilledButton.tonal(
+                key: Key('tsm-guided-switch-$store'),
+                onPressed: () => unawaited(_switchGuided(store)),
+                child: const Text('Switch'),
+              ),
+              TextButton(
+                key: Key('tsm-guided-cancel-$store'),
+                onPressed: () => unawaited(_cancelGuided(store)),
+                child: const Text('Cancel'),
+              ),
+            ] else ...[
+              FilledButton.tonal(
+                key: Key('tsm-guided-finish-$store'),
+                onPressed: due
+                    ? () => unawaited(_finishGuided(store, early: false))
+                    : null,
+                child: const Text('Finish'),
+              ),
+              TextButton(
+                key: Key('tsm-guided-finish-now-$store'),
+                onPressed: due
+                    ? null
+                    : () => unawaited(_finishGuided(store, early: true)),
+                child: const Text('Finish now'),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _guidedStep(Future<void> Function() step) async {
+    setState(() => _guidedError = null);
+    try {
+      await step();
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) {
+        setState(() => _guidedError = tomSecretsDescribeAdminError(e));
+      }
+    } on TomSecretsRotationException catch (e) {
+      if (mounted) setState(() => _guidedError = e.message);
+    } on StateError catch (e) {
+      if (mounted) setState(() => _guidedError = e.message);
+    } on ArgumentError catch (e) {
+      if (mounted) setState(() => _guidedError = '${e.message}');
+    }
+    await _load();
+  }
+
+  Future<void> _prepareGuided(String store) async {
+    final session = context.read<TomSecretsSession>();
+    final location = store == session.vaults.first.store
+        ? session.vaults.first.location
+        : TomSecretsPrimaryVaults(
+                session.vaults.first.file,
+              ).byName(store)?.locator ??
+              '';
+    final outer = location.endsWith(tomSecretsOuterSuffix);
+    var keyFile = true;
+    var repositoryKey = false;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          key: const Key('tsm-guided-dialog'),
+          title: Text('A guided rotation of $store'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'The new key is written beside the old one into the '
+                  'primary; nothing is re-encrypted yet. Your devices take it '
+                  'at their next sync, and the Keys screen lists those that '
+                  'have not. Then Switch re-keys the vault; after 14 days, or '
+                  'with Finish now, the old key goes and the history is cut.',
+                ),
+                CheckboxListTile(
+                  key: const Key('tsm-guided-key-file'),
+                  value: keyFile,
+                  title: const Text('A new key file'),
+                  onChanged: (v) => setDialog(() => keyFile = v ?? false),
+                ),
+                if (outer)
+                  CheckboxListTile(
+                    key: const Key('tsm-guided-repository-key'),
+                    value: repositoryKey,
+                    title: const Text('A new repository key'),
+                    subtitle: const Text(
+                      'Alone, the file keeps the old key\'s slot until the '
+                      'finish, so a device without the new key still reads '
+                      'it.',
+                    ),
+                    onChanged: (v) =>
+                        setDialog(() => repositoryKey = v ?? false),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('tsm-guided-go'),
+              onPressed: keyFile || repositoryKey
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              child: const Text('Prepare'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (go != true || !mounted) return;
+    await _guidedStep(
+      () => session.prepareGuidedRotation(
+        store,
+        newKeyFile: keyFile,
+        newRepositoryKey: repositoryKey,
+      ),
+    );
+  }
+
+  Future<void> _switchGuided(String store) async {
+    final session = context.read<TomSecretsSession>();
+    final r = session.guidedRotationOf(store);
+    final missing = r == null ? const [] : session.guidedRotationMissing(r);
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Switch $store to the new key?'),
+        content: Text(
+          missing.isEmpty
+              ? 'Every paired device holds the new key. The vault is re-keyed '
+                    'now.'
+              : 'Still without the new key: '
+                    '${missing.map((m) => m.device).join(', ')}. After the '
+                    'switch they read their copy under the old key (or the '
+                    'two-slot file) until they sync, and write nothing.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            key: const Key('tsm-guided-switch-go'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Switch'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    await _guidedStep(() => session.switchGuidedRotation(store));
+  }
+
+  Future<void> _cancelGuided(String store) => _guidedStep(
+    () => context.read<TomSecretsSession>().cancelGuidedRotation(store),
+  );
+
+  Future<void> _finishGuided(String store, {required bool early}) async {
+    final session = context.read<TomSecretsSession>();
+    ({List<TomSecretsDeviceRecord> missing, Map<String, String> notCompacted})?
+    result;
+    await _guidedStep(() async {
+      result = await session.finishGuidedRotation(store, early: early);
+    });
+    final done = result;
+    if (done == null || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('tsm-guided-finished'),
+        title: Text('The rotation of $store is finished'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                done.missing.isEmpty
+                    ? 'Every paired device took the new key.'
+                    : 'These devices never took the new key and open no later '
+                          'version: ${done.missing.map((m) => m.device).join(', ')}. '
+                          'Pair them again.',
+                key: const Key('tsm-guided-finished-missing'),
+              ),
+              if (done.notCompacted.isNotEmpty)
+                Text(
+                  'The history could not be cut now in '
+                  '${done.notCompacted.keys.join(', ')}: compact it later.',
+                ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your emergency sheet names the old keys: replace it.',
+              ),
+              TomSecretsEmergencySheetOffer(sheet: session.emergencySheet),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            key: const Key('tsm-guided-finished-close'),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 

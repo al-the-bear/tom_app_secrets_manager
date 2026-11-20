@@ -282,7 +282,7 @@ class _VaultHeader extends StatelessWidget {
     final session = context.watch<TomSecretsSession>();
     final selected =
         session.selectedStore == vault.store && session.selectedGroup == null;
-    final offline = state?.isOffline ?? false;
+    final offline = (state?.isOffline ?? false) || (state?.keyChanged ?? false);
     final rewritten = state?.rewrittenHead != null;
     return ListTile(
       key: Key('tsm-vault-${vault.store}'),
