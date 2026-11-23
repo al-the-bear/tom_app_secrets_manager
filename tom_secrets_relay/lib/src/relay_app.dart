@@ -195,3 +195,45 @@ String? tomSecretsRelayConfigFile(List<String> args) {
   if (env != null && env.isNotEmpty) return env;
   return File('relay.yaml').existsSync() ? 'relay.yaml' : null;
 }
+
+/// The address a health check asks: `/health` on [configuration]'s port,
+/// on its host (the loopback when it listens on every address).
+Uri tomSecretsRelayHealthUrl(TomSecretsRelayServerConfiguration configuration) {
+  final host = configuration.host;
+  final any =
+      host.isEmpty ||
+      host == '0.0.0.0' ||
+      host == '::' ||
+      configuration.listenToAnyIp == true;
+  return Uri(
+    scheme: 'http',
+    host: any ? '127.0.0.1' : host,
+    port: configuration.port,
+    path: '/health',
+  );
+}
+
+/// The container's health check (`tom_secrets_relay health`): asks [url]
+/// and answers 0 when it says 200 within [timeout], else 1, saying why on
+/// [err]. A container image on `scratch` has no curl, so the executable
+/// checks itself; `/health` is not counted against the address limits.
+Future<int> tomSecretsRelayHealthCheck(
+  Uri url, {
+  Duration timeout = const Duration(seconds: 5),
+  StringSink? err,
+}) async {
+  final client = HttpClient()..connectionTimeout = timeout;
+  try {
+    final request = await client.getUrl(url).timeout(timeout);
+    final response = await request.close().timeout(timeout);
+    await response.drain<void>();
+    if (response.statusCode == HttpStatus.ok) return 0;
+    err?.writeln('relay health: $url answered ${response.statusCode}');
+    return 1;
+  } on Object catch (e) {
+    err?.writeln('relay health: $url: $e');
+    return 1;
+  } finally {
+    client.close(force: true);
+  }
+}

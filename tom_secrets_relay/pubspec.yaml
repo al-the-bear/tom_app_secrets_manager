@@ -4,7 +4,7 @@ description: >-
   application carrying pairing rendezvous, approval links and mailboxes of
   age packages between devices, seeing only ciphertext. License: BSD-3-Clause.
 publish_to: none
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/al-the-bear/tom_app_secrets_manager
 
 environment:

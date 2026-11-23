@@ -24,10 +24,12 @@ const List<String> secretsCiStages = [
   'standalone',
   'release',
   'mobile',
+  'relay',
 ];
 
-/// The stages `:all` leaves out: the releases are built when one is made.
-const Set<String> secretsCiStagesNotInAll = {'release', 'mobile'};
+/// The stages `:all` leaves out: the releases and the relay's image are
+/// built when one is made.
+const Set<String> secretsCiStagesNotInAll = {'release', 'mobile', 'relay'};
 
 /// One-line descriptions, shared by `--help` and the README.
 const Map<String, String> secretsCiStageDescriptions = {
@@ -82,9 +84,13 @@ const Map<String, String> secretsCiStageDescriptions = {
       'with the key TSM_ANDROID_SIGNING names, as '
       'tom_secrets_mobile-<version>-android.apk beside the release archives, '
       'in SHA256SUMS; iOS is installed from Xcode (DP-130)',
+  'relay':
+      'the relay server\'s container image (not part of :all): docker build '
+      'of tom_secrets_relay (its Dockerfile: the AOT bundle on scratch), '
+      'tagged tom_secrets_relay:<version>; needs a running Docker',
   'all':
-      'every stage above but :release and :mobile, in that order, continuing '
-      'past a red',
+      'every stage above but :release, :mobile and :relay, in that order, '
+      'continuing past a red',
 };
 
 /// The test tag of the licence-boundary check, run by `:licences` only.
@@ -462,6 +468,8 @@ class SecretsCiStages {
         await _release(run);
       case 'mobile':
         await _mobile(run);
+      case 'relay':
+        await _relayImage(run);
       default:
         throw ArgumentError.value(stage, 'stage', 'not a stage');
     }
@@ -517,6 +525,24 @@ extension on SecretsCiStages {
         'Info.plist',
       ),
     );
+  }
+
+  /// The relay server's container image, tagged with its version (part-relay,
+  /// DP-67): `docker build` of the package, whose Dockerfile builds the AOT
+  /// bundle and puts it on `scratch`.
+  Future<void> _relayImage(CiRun run) async {
+    const stage = 'relay';
+    final relay = p.join(workspace.repoRoot, 'tom_secrets_relay');
+    final version = secretsPubspecVersion(p.join(relay, 'pubspec.yaml'));
+    await run.step(stage, 'image', 'relay.image.log', [
+      CiCommand('docker', [
+        'build',
+        '--pull',
+        '-t',
+        secretsRelayImageTag(version),
+        '.',
+      ], workingDirectory: relay),
+    ]);
   }
 
   /// The mobile app's Android release: the signed APK beside the archives.
@@ -851,3 +877,6 @@ String? secretsCiNoSuiteReason(String packageDir) {
       .any((e) => e is File && e.path.endsWith('_test.dart'));
   return hasTest ? null : 'no *_test.dart under test/';
 }
+
+/// The tag `:relay` gives the relay server's image of [version].
+String secretsRelayImageTag(String version) => 'tom_secrets_relay:$version';

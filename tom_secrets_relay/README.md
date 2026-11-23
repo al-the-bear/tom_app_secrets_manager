@@ -79,6 +79,32 @@ directory, one file per item with a JSON index per recipient. The
 framework's resource-key protection is on: only the relay's routes, all
 public, are served.
 
+`tom_secrets_relay health [config=<file>]` is a health check instead: it
+asks the running relay's `/health` on the configured host and port (the
+loopback when it listens on every address) and exits 0 when it answers 200,
+else 1.
+
+### In a container
+
+The `Dockerfile` builds the image: the AOT bundle (`dart build cli`, the
+executable and `tom_pqc`'s native library) on `scratch` with the Dart
+image's `/runtime`, running as uid 65532, its health check the `health`
+mode above.
+
+```text
+docker build -t tom_secrets_relay .
+docker run -d --network host --read-only --cap-drop ALL \
+  -v "$PWD/relay.yaml:/config/relay.yaml:ro" -v "$PWD/data:/data" \
+  tom_secrets_relay
+```
+
+Mount the configuration at `/config/relay.yaml` and give the storage a
+volume at `/data` (`relay.storage: /data`, owned by uid 65532). With host
+networking, bind it to the loopback (`host: 127.0.0.1`) behind the proxy and
+keep the default `trustedProxies`; with a published port, trust the address
+the proxy's requests arrive from inside the container instead.
+`tom_secrets_build/ci.sh :relay` builds the image too.
+
 ## Development
 
 - `./reflection_generation.sh` regenerates

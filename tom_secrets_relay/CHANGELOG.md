@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- The container image (`Dockerfile`): the AOT bundle on `scratch` with the
+  Dart image's `/runtime`, uid 65532, `/config/relay.yaml`, `/data`, its
+  health check the new `health` mode (`tom_secrets_relay health`, which asks
+  the running relay's `/health` and exits 0 or 1;
+  `tomSecretsRelayHealthCheck`, `tomSecretsRelayHealthUrl`).
+
 ## 0.1.0
 
 - The relay server (part-relay, phase C) on `tom_core_server`: the pairing

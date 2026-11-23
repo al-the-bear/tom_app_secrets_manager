@@ -28,6 +28,7 @@ void main() {
       ]);
       expect(resolve(['release']), ['release'], reason: 'only when named');
       expect(resolve(['mobile']), ['mobile'], reason: 'only when named');
+      expect(resolve(['relay']), ['relay'], reason: 'only when named');
       expect(resolve(['licences', 'analyze', 'licences']), [
         'licences',
         'analyze',
@@ -72,6 +73,10 @@ void main() {
       secretsWriteFile(root, 'test/a/b_test.dart', 'void main() {}');
       expect(secretsCiNoSuiteReason(root.path), isNull);
     });
+  });
+
+  test('the relay image is tagged with the relay\'s version', () {
+    expect(secretsRelayImageTag('0.1.0'), 'tom_secrets_relay:0.1.0');
   });
 
   group('the mobile release', () {

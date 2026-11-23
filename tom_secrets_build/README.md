@@ -115,6 +115,7 @@ Log and step names are paths relative to the folder that holds all three.
 - `:all`: the stages above, in that order.
 - `:release`: not part of `:all`: the release for this platform, below.
 - `:mobile`: not part of `:all`: the mobile app's Android release, below.
+- `:relay`: not part of `:all`: the relay server's container image, below.
 
 The packages are found, never listed: every directory with a `pubspec.yaml`
 (an npm package: a `package.json` with its `package-lock.json`; a Cargo
@@ -225,6 +226,18 @@ version is `tom_secrets_mobile`'s) and listed in that folder's `SHA256SUMS`.
 It is installed directly on the phone (DP-204). The iOS app is not a release
 file: it is built from Xcode onto the device under the user's free personal
 team (DP-130).
+
+## The relay image
+
+`./ci.sh :relay` builds the relay server's container image with Docker
+(a running Docker is needed; without one the stage is red):
+`docker build --pull -t tom_secrets_relay:<version> .` in `tom_secrets_relay`,
+the version its own. Its `Dockerfile` builds the AOT bundle (`dart build cli`:
+the executable and `tom_pqc`'s native library) and puts it on `scratch` with
+the Dart image's `/runtime`; the image runs as uid 65532, reads
+`/config/relay.yaml`, keeps its storage in `/data` and checks its health with
+its own `health` mode. A deployment builds the image where it runs, from the
+same committed source.
 
 ## Configuration
 
