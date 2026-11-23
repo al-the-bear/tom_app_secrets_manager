@@ -45,7 +45,9 @@ import java.io.File
  *   [AutofillAuthActivity] can ask the unlocked app for logins; a login the
  *   service saw submitted ([ACTION_PROPOSE]) is handed to Dart as a
  *   proposal (`takeProposal`, or pushed as `proposal`); whether the service
- *   is on, and the system's choice of the service opened.
+ *   is on, and the system's choice of the service opened; the passkey
+ *   identities the Credential Manager provider lists without unlocking
+ *   (`passkeyIdentities`, [PasskeyIdentities]).
  */
 open class MainActivity : FlutterFragmentActivity() {
     /** The Autofill service's unlock: its own engine, no cache, no proposals. */
@@ -159,6 +161,16 @@ open class MainActivity : FlutterFragmentActivity() {
                                         .setData(Uri.parse("package:$packageName")),
                                 )
                             }
+                            result.success(null)
+                        }
+                        "passkeyIdentities" -> {
+                            // What the passkey provider lists without
+                            // unlocking (TomSecretsCredentialService).
+                            @Suppress("UNCHECKED_CAST")
+                            PasskeyIdentities.write(
+                                this,
+                                (call.arguments as? List<Map<String, Any?>>) ?: emptyList(),
+                            )
                             result.success(null)
                         }
                         else -> result.notImplemented()

@@ -32,10 +32,12 @@ enum TomSecretsReaderError: Error {
 
 /// Reads the snapshot: its key from the data-protection keychain (Touch ID
 /// or the login password releases it), the file from the App Group
-/// container. Nothing is written; the data lives in the extension's memory
-/// until it closes.
+/// container. The one file the extension writes is the pending file, where
+/// a passkey made here waits until the app saves it into a vault; the data
+/// it read lives in the extension's memory until it closes.
 enum TomSecretsSnapshotReader {
-  static func read(reason: String) throws -> TomSecretsAutofillSnapshot {
+  /// The App Group container and the keychain access group of this build.
+  static func places() throws -> (container: URL, keychainGroup: String) {
     let info = Bundle.main.infoDictionary ?? [:]
     // Without a team the build setting leaves `.tom.secrets`: not configured.
     guard let group = info[TomSecretsAutofillPlaces.appGroupKey] as? String,
@@ -45,6 +47,11 @@ enum TomSecretsSnapshotReader {
       let container = FileManager.default.containerURL(
         forSecurityApplicationGroupIdentifier: group)
     else { throw TomSecretsReaderError.notConfigured }
+    return (container, keychainGroup)
+  }
+
+  static func read(reason: String) throws -> TomSecretsAutofillSnapshot {
+    let (container, keychainGroup) = try places()
     let file = container.appendingPathComponent(TomSecretsAutofillPlaces.snapshotPath)
     guard let sealed = try? Data(contentsOf: file) else { throw TomSecretsReaderError.noSnapshot }
 
@@ -78,5 +85,58 @@ enum TomSecretsSnapshotReader {
     } catch {
       throw TomSecretsReaderError.unreadable
     }
+  }
+
+  // MARK: The pending passkeys.
+
+  /// The pending key the app made. It has no Touch ID of its own: the
+  /// extension reads the snapshot first, which verifies the user.
+  static func pendingKey(_ keychainGroup: String) throws -> SymmetricKey {
+    var item: CFTypeRef?
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: TomSecretsAutofillPlaces.keyService,
+      kSecAttrAccount as String: TomSecretsAutofillPending.keyAccount,
+      kSecAttrAccessGroup as String: keychainGroup,
+      kSecUseDataProtectionKeychain as String: true,
+      kSecReturnData as String: true,
+    ]
+    guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+      var keyData = item as? Data
+    else { throw TomSecretsReaderError.noSnapshot }
+    defer { keyData.resetBytes(in: 0..<keyData.count) }
+    return SymmetricKey(data: keyData)
+  }
+
+  /// The passkeys made here that the app has not saved into a vault yet.
+  static func pendingPasskeys() -> [TomSecretsAutofillPasskey] {
+    guard let (container, keychainGroup) = try? places(),
+      let sealed = try? Data(
+        contentsOf: container.appendingPathComponent(TomSecretsAutofillPending.path)),
+      let key = try? pendingKey(keychainGroup)
+    else { return [] }
+    return (try? TomSecretsAutofillPending.open(sealed, key: key)) ?? []
+  }
+
+  /// Adds [passkey] to the pending file, which the app reads at its next
+  /// sync and clears once the passkey is in a vault.
+  static func addPending(_ passkey: TomSecretsAutofillPasskey) throws {
+    let (container, keychainGroup) = try places()
+    let key = try pendingKey(keychainGroup)
+    let url = container.appendingPathComponent(TomSecretsAutofillPending.path)
+    var failure: Error?
+    var coordinatorError: NSError?
+    NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinatorError) { at in
+      do {
+        let sealed = try TomSecretsAutofillPending.appending(
+          passkey, to: try? Data(contentsOf: at), key: key)
+        try FileManager.default.createDirectory(
+          at: at.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try sealed.write(to: at, options: .atomic)
+      } catch {
+        failure = error
+      }
+    }
+    if let error = coordinatorError ?? failure { throw error }
   }
 }

@@ -227,7 +227,24 @@ the vaults do not hold, Android asks whether to save it in Tom Secrets: the
 app opens and "A login to save" › "Review" shows it, to save as a new login,
 update the existing one, or drop.
 
-## Health
+## Passkeys on Android
+
+On Android 14 and later Tom Secrets keeps and uses passkeys. Turn it on in
+the phone's Settings › Passwords, passkeys & accounts: add "Tom Secrets" as
+a service for passkeys.
+
+- **Signing in.** A site or app that asks for a passkey lists yours from
+  Tom Secrets. Pick one, and your fingerprint (or the screen lock)
+  confirms. When the app is not open and unlocked, its unlock opens first.
+  A passkey made on another device since this phone was last unlocked shows
+  as "Unlock Tom Secrets" first.
+- **Creating one.** When a site creates a passkey, choose "Tom Secrets".
+  The passkey goes into the login of that site in your vaults, or into a
+  new login. It is saved to GitHub at once, so every device has it.
+- **Which passkeys.** Only passkeys of your personal and shared vaults are
+  used, never a system vault's.
+- **Which apps.** An app may use a site's passkeys only when the site names
+  that app.
 
 Settings › **"Health"** lists what in the vaults needs attention, as on the
 desktop (its user guide has the details): weak, reused, old (one year by

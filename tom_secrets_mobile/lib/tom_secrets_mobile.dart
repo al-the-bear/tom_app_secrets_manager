@@ -16,6 +16,7 @@ export 'src/mobile_host.dart';
 export 'src/mobile_kdf_guard.dart';
 export 'src/mobile_keychain.dart';
 export 'src/mobile_lifecycle.dart';
+export 'src/mobile_passkeys.dart';
 export 'src/mobile_ports.dart';
 export 'src/mobile_scanner.dart';
 export 'src/mobile_settings_view.dart';

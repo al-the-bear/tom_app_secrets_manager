@@ -23,6 +23,9 @@
 ///   own unlock on an engine of its own: the vaults fetched through
 ///   GitHub's REST API and opened in memory, the logins answered, everything
 ///   dropped when the activity ends. Without network it says so.
+/// - **Passkeys** (`mobile_passkeys.dart`): the same channel answers the
+///   Credential Manager provider's `passkey` requests while the app runs
+///   unlocked, and hands it the passkey identities.
 /// - **Saving:** the service's `onSaveRequest` opens the app with the login,
 ///   which becomes a proposal (`proposal` event, the Proposals screen):
 ///   saved into a personal or shared vault once the user confirms (BP-28).
@@ -326,6 +329,12 @@ abstract interface class TomSecretsAutofillPlatform {
   /// Opens the system's choice of the autofill service
   /// (`ACTION_REQUEST_SET_AUTOFILL_SERVICE`).
   Future<void> openSettings();
+
+  /// **[C]** Hands the Credential Manager provider the passkey
+  /// [identities] it lists without unlocking (relying party, user name,
+  /// credential id; never a key), after every unlock and change; `[]` when
+  /// the device is set up again.
+  Future<void> setPasskeyIdentities(List<Map<String, Object?>> identities);
 }
 
 /// [TomSecretsAutofillPlatform] over [tomSecretsAutofillChannelName].
@@ -364,6 +373,17 @@ final class TomSecretsChannelAutofill implements TomSecretsAutofillPlatform {
 
   @override
   Future<void> openSettings() => _channel.invokeMethod<void>('openSettings');
+
+  @override
+  Future<void> setPasskeyIdentities(
+    List<Map<String, Object?>> identities,
+  ) async {
+    try {
+      await _channel.invokeMethod<void>('passkeyIdentities', identities);
+    } on MissingPluginException {
+      // No provider on this platform.
+    }
+  }
 }
 
 /// The channel of the unlock activity (`autofillMain`'s engine).

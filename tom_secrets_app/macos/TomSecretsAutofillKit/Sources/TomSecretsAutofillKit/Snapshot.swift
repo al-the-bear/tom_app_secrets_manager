@@ -54,6 +54,18 @@ public struct TomSecretsAutofillSnapshot: Equatable, Sendable {
   public let header: Header
   public let written: Date
   public let entries: [TomSecretsAutofillEntry]
+  /// **[C]** The passkeys of the snapshot (none in a snapshot without them).
+  public let passkeys: [TomSecretsAutofillPasskey]
+
+  public init(
+    header: Header, written: Date, entries: [TomSecretsAutofillEntry],
+    passkeys: [TomSecretsAutofillPasskey] = []
+  ) {
+    self.header = header
+    self.written = written
+    self.entries = entries
+    self.passkeys = passkeys
+  }
 
   /// Opens [data] with [key].
   public static func open(_ data: Data, key: SymmetricKey) throws -> TomSecretsAutofillSnapshot {
@@ -88,12 +100,14 @@ public struct TomSecretsAutofillSnapshot: Equatable, Sendable {
     struct Document: Decodable {
       let formatVersion: Int
       let entries: [TomSecretsAutofillEntry]
+      let passkeys: [TomSecretsAutofillPasskey]?
     }
     let document = try JSONDecoder().decode(Document.self, from: plain)
     return TomSecretsAutofillSnapshot(
       header: header,
       written: Self.date(header.written) ?? .distantPast,
-      entries: document.entries)
+      entries: document.entries,
+      passkeys: document.passkeys ?? [])
   }
 
   /// Whether it is older than a day (the provider says how old then).

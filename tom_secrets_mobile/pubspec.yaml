@@ -22,7 +22,7 @@ dependencies:
   # without an offline cache: the vaults are held in memory only. No service
   # runs on a phone (part-mobile).
   tom_secrets_service: ^0.25.2
-  tom_secrets_core: ^0.2.25
+  tom_secrets_core: ^0.2.26
   tom_secrets_client: ^0.2.16
   tom_core_storage: ^0.1.3
   # The keychain items (key files, repository keys, GitHub tokens) and the
@@ -33,6 +33,8 @@ dependencies:
   # Not imported: the floor its Android build needs (the getrandom system
   # call through syscall(2), 0.1.2), for the pairing's ML-KEM.
   tom_pqc: ^0.1.2
+  # SHA-256 of the client data a passkey provider makes (DP-120).
+  crypto: ^3.0.6
   http: ^1.2.0
   path_provider: ^2.1.5
   provider: ^6.1.5

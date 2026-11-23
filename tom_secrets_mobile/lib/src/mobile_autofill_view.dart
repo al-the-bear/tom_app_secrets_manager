@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 
 import 'mobile_autofill.dart';
 import 'mobile_engine.dart';
+import 'mobile_passkeys.dart';
 
 /// The answer to the service's request, after the unlock.
 class TomSecretsAutofillAnswer extends StatefulWidget {
@@ -70,6 +71,69 @@ class _AnswerState extends State<TomSecretsAutofillAnswer> {
           message: _message!,
           onClose: widget.platform.cancel,
         );
+}
+
+/// **[C]** The answer to the passkey provider's request after the unlock
+/// (DP-120): a sign-in signed, a new passkey made and kept in a vault, or
+/// the passkeys a sign-in may use; a refusal is shown, Close ends it.
+class TomSecretsPasskeyAnswer extends StatefulWidget {
+  /// The answer from [engine]'s vaults to [platform]'s request.
+  const TomSecretsPasskeyAnswer({
+    super.key,
+    required this.engine,
+    required this.platform,
+    required this.answerer,
+  });
+
+  final TomSecretsMobileEngine engine;
+  final TomSecretsPasskeyUnlockPlatform platform;
+  final TomSecretsPasskeyAnswerer answerer;
+
+  @override
+  State<TomSecretsPasskeyAnswer> createState() => _PasskeyAnswerState();
+}
+
+class _PasskeyAnswerState extends State<TomSecretsPasskeyAnswer> {
+  TomSecretsPasskeyRefusal? _refused;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_answer());
+  }
+
+  Future<void> _answer() async {
+    final request = await widget.platform.request();
+    final answer = await widget.answerer.answer(
+      request,
+      widget.engine.autofillStores,
+      widget.engine.keepPasskey,
+    );
+    final error = answer['error'];
+    if (error is String) {
+      if (mounted) {
+        setState(
+          () => _refused = TomSecretsPasskeyRefusal(
+            TomSecretsPasskeyError.values.byName(error),
+            answer['message'] as String? ?? error,
+          ),
+        );
+      }
+      return;
+    }
+    await widget.platform.done(answer);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final refused = _refused;
+    return refused == null
+        ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+        : TomSecretsAutofillMessage(
+            message: refused.message,
+            onClose: () => widget.platform.fail(refused),
+          );
+  }
 }
 
 /// A message of the service's unlock with Close (it ends without filling).

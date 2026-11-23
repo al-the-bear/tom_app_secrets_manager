@@ -25,6 +25,7 @@ import 'mobile_documents.dart';
 import 'mobile_engine.dart';
 import 'mobile_host.dart';
 import 'mobile_lifecycle.dart';
+import 'mobile_passkeys.dart';
 import 'mobile_ports.dart';
 import 'mobile_setup.dart';
 import 'mobile_shell.dart';
@@ -54,6 +55,7 @@ class TomSecretsMobileApp extends StatefulWidget {
     this.kdfMemoryLimit = TomSecretsMobileEngine.defaultKdfMemoryLimit,
     this.autofill,
     this.autofillUnlock,
+    this.passkeyUnlock,
     this.assetLinks,
     this.breachCheck,
   });
@@ -112,6 +114,11 @@ class TomSecretsMobileApp extends StatefulWidget {
   /// unlocks on an engine of its own, answers the request and ends.
   final TomSecretsAutofillUnlockPlatform? autofillUnlock;
 
+  /// **[C]** Set when the app runs as the Credential Manager provider's
+  /// unlock (`passkeyMain`): it unlocks on an engine of its own, answers
+  /// the passkey request and ends.
+  final TomSecretsPasskeyUnlockPlatform? passkeyUnlock;
+
   /// The Digital Asset Links checker of package matches.
   final TomSecretsAssetLinks? assetLinks;
 
@@ -134,6 +141,7 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
   // over the app's HTTP client (closed with the app when it made its own).
   late final TomSecretsBreachCheck _breachCheck =
       widget.breachCheck ?? TomSecretsBreachCheck(client: widget.httpClient);
+  StreamSubscription<Object?>? _identities;
   late final TomSecretsAssetLinks _links =
       widget.assetLinks ?? TomSecretsAssetLinks(client: widget.httpClient);
 
@@ -160,7 +168,9 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
       documents: widget.documents,
       kdfMemoryLimit: widget.kdfMemoryLimit,
     );
-    if (widget.autofillUnlock == null) _attachAutofill(_engine!);
+    if (widget.autofillUnlock == null && widget.passkeyUnlock == null) {
+      _attachAutofill(_engine!);
+    }
   }
 
   /// The service asks the running app (DP-175): its state, the logins from
@@ -172,7 +182,28 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
       stores: () => engine.autofillStores,
       links: _links,
     );
+    final passkeys = TomSecretsPasskeyAnswerer(links: _links);
+    // The provider lists passkeys without unlocking: their identities
+    // follow every unlock and change.
+    _identities?.cancel();
+    _identities = engine.events.listen((_) {
+      final stores = engine.autofillStores;
+      if (stores != null) {
+        unawaited(
+          platform.setPasskeyIdentities(tomSecretsPasskeyIdentities(stores)),
+        );
+      }
+    });
     platform.setHandler((method, arguments) async {
+      if (method == 'passkey') {
+        return passkeys.answer(
+          TomSecretsPasskeyRequest.fromMap(
+            arguments as Map<Object?, Object?>? ?? const {},
+          ),
+          engine.autofillStores,
+          engine.keepPasskey,
+        );
+      }
       if (method == 'proposal') {
         _deliverProposal(
           engine,
@@ -215,6 +246,9 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
 
   Future<void> _forget() async {
     final engine = _engine;
+    unawaited(_identities?.cancel());
+    _identities = null;
+    unawaited(widget.autofill?.setPasskeyIdentities(const []));
     setState(() => _engine = null);
     await engine?.close();
     await _setup.reset();
@@ -250,6 +284,7 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
   @override
   void dispose() {
     widget.autofill?.setHandler(null);
+    unawaited(_identities?.cancel());
     unawaited(_engine?.close());
     if (widget.breachCheck == null) _breachCheck.close();
     super.dispose();
@@ -259,14 +294,19 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
   Widget build(BuildContext context) {
     final engine = _engine;
     final autofillUnlock = widget.autofillUnlock;
-    if (engine == null && autofillUnlock != null) {
+    final passkeyUnlock = widget.passkeyUnlock;
+    // The unlock of the Autofill service or of the passkey provider: ends
+    // without an answer from Cancel.
+    final Future<void> Function()? endUnlock =
+        autofillUnlock?.cancel ?? passkeyUnlock?.cancel;
+    if (engine == null && endUnlock != null) {
       return MaterialApp(
         title: 'Tom Secrets',
         theme: tomSecretsTheme(Brightness.light),
         darkTheme: tomSecretsTheme(Brightness.dark),
         home: TomSecretsAutofillMessage(
           message: 'Set Tom Secrets Manager up first: open the app.',
-          onClose: autofillUnlock.cancel,
+          onClose: endUnlock,
         ),
       );
     }
@@ -307,12 +347,12 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
               : TomSecretsMobileFiles(widget.documents!),
           attachmentsShare: true,
           breachCheck: _breachCheck,
-          unlockFooter: (context) => autofillUnlock != null
+          unlockFooter: (context) => endUnlock != null
               ? Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton(
                     key: const Key('tsm-autofill-unlock-cancel'),
-                    onPressed: () => unawaited(autofillUnlock.cancel()),
+                    onPressed: () => unawaited(endUnlock()),
                     child: const Text('Cancel'),
                   ),
                 )
@@ -337,6 +377,12 @@ class _MobileAppState extends State<TomSecretsMobileApp> {
                   engine: engine,
                   platform: autofillUnlock,
                   links: _links,
+                )
+              : passkeyUnlock != null
+              ? TomSecretsPasskeyAnswer(
+                  engine: engine,
+                  platform: passkeyUnlock,
+                  answerer: TomSecretsPasskeyAnswerer(links: _links),
                 )
               : TomSecretsMobileShell(
                   engine: engine,

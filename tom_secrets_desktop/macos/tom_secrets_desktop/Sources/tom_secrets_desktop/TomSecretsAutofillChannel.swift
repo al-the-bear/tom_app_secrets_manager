@@ -3,6 +3,7 @@
 
 import AuthenticationServices
 import Cocoa
+import CryptoKit
 import FlutterMacOS
 import LocalAuthentication
 import Security
@@ -24,7 +25,15 @@ import Security
 /// - `remove`: the snapshot and its key deleted;
 /// - `setIdentities`: the QuickType identities (domain and user name, no
 ///   password) replaced, or all removed;
-/// - `openSettings`: System Settings at the AutoFill providers.
+/// - `openSettings`: System Settings at the AutoFill providers;
+/// - **[C]** `readPending`: the pending file of the passkeys the extension
+///   registered (its bytes and SHA-256) with the pending key, which
+///   `storeKey` makes once (random, kept across unlocks in the shared
+///   access group, this device only, readable while the Mac is unlocked);
+///   `replacePending`: the file replaced (or deleted) only while it is still
+///   the one read (`expected`), so a passkey the extension adds meanwhile
+///   is never lost; passkey identities (`ASPasskeyCredentialIdentity`,
+///   macOS 14) beside the password ones.
 ///
 /// The extension (`tom_secrets_app/macos/TomSecretsAutofill`, its core
 /// `TomSecretsAutofillKit`'s `TomSecretsAutofillPlaces`) reads the same
@@ -34,6 +43,8 @@ enum TomSecretsAutofillChannel {
   static let snapshotPath = "TomSecretsAutofill/snapshot.tsmaf"
   static let keyService = "tom.secrets.autofill"
   static let keyAccount = "snapshot-key"
+  static let pendingPath = "TomSecretsAutofill/pending-passkeys.tsmaf"
+  static let pendingKeyAccount = "pending-key"
   static let extensionName = "TomSecretsAutofill.appex"
 
   static func register(messenger: FlutterBinaryMessenger) {
@@ -59,6 +70,11 @@ enum TomSecretsAutofillChannel {
       case "setIdentities":
         guard let list = args["identities"] as? [[String: String]] else { return bad(result) }
         setIdentities(list, result)
+      case "readPending":
+        result(readPending())
+      case "replacePending":
+        guard let expected = args["expected"] as? String else { return bad(result) }
+        result(replacePending((args["bytes"] as? FlutterStandardTypedData)?.data, expected: expected))
       case "openSettings":
         let url = URL(string: "x-apple.systempreferences:com.apple.Passwords-Settings.extension")!
         result(NSWorkspace.shared.open(url))
@@ -117,20 +133,81 @@ enum TomSecretsAutofillChannel {
     }
   }
 
-  private static func keyQuery() -> [String: Any]? {
+  private static func keyQuery(account: String = keyAccount) -> [String: Any]? {
     guard let keychainGroup else { return nil }
     return [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: keyService,
-      kSecAttrAccount as String: keyAccount,
+      kSecAttrAccount as String: account,
       kSecAttrAccessGroup as String: keychainGroup,
       kSecUseDataProtectionKeychain as String: true,
     ]
   }
 
+  private static var pendingURL: URL? {
+    snapshotURL?.deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent(pendingPath)
+  }
+
+  /// The pending key, made when there is none.
+  private static func pendingKey() -> Data? {
+    guard var query = keyQuery(account: pendingKeyAccount) else { return nil }
+    var read = query
+    read[kSecReturnData as String] = true
+    var item: CFTypeRef?
+    if SecItemCopyMatching(read as CFDictionary, &item) == errSecSuccess, let data = item as? Data {
+      return data
+    }
+    let key = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
+    query[kSecValueData as String] = key
+    query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    query[kSecAttrLabel as String] = "Tom Secrets Manager AutoFill passkeys"
+    return SecItemAdd(query as CFDictionary, nil) == errSecSuccess ? key : nil
+  }
+
+  private static func readPending() -> Any {
+    guard let key = pendingKey() else { return error("no pending key") }
+    guard let url = pendingURL, let bytes = try? Data(contentsOf: url) else {
+      return ["key": FlutterStandardTypedData(bytes: key)]
+    }
+    return [
+      "key": FlutterStandardTypedData(bytes: key),
+      "bytes": FlutterStandardTypedData(bytes: bytes),
+      "sha256": SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined(),
+    ]
+  }
+
+  private static func replacePending(_ bytes: Data?, expected: String) -> Any {
+    guard let url = pendingURL else { return error("no App Group container") }
+    // Coordinated with the extension's append, so a passkey it adds between
+    // the check and the write is never lost.
+    var answer: Any = false
+    var coordinatorError: NSError?
+    NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinatorError) { at in
+      let current = (try? Data(contentsOf: at)).map {
+        SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined()
+      }
+      guard current == expected else { return }
+      do {
+        if let bytes {
+          try bytes.write(to: at, options: [.atomic])
+        } else {
+          try FileManager.default.removeItem(at: at)
+        }
+        answer = true
+      } catch let e {
+        answer = error("\(e)")
+      }
+    }
+    if let coordinatorError { return error("\(coordinatorError)") }
+    return answer
+  }
+
   private static func storeKey(_ key: Data, keyId: String) -> Any {
     guard var query = keyQuery() else { return error("no keychain access group") }
     SecItemDelete(query as CFDictionary)
+    // The pending key outlives the unlock: made once, kept.
+    _ = pendingKey()
     var biometrics: NSError?
     let flags: SecAccessControlCreateFlags =
       LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &biometrics)
@@ -162,6 +239,8 @@ enum TomSecretsAutofillChannel {
   private static func remove() -> Any {
     if let url = snapshotURL { try? FileManager.default.removeItem(at: url) }
     if let query = keyQuery() { SecItemDelete(query as CFDictionary) }
+    // AutoFill off: the passkeys not yet saved stay for the app to save,
+    // the pending key with them.
     return true
   }
 
@@ -182,14 +261,38 @@ enum TomSecretsAutofillChannel {
         store.removeAllCredentialIdentities(done)
         return
       }
-      let identities = list.compactMap { item -> ASPasswordCredentialIdentity? in
-        guard let domain = item["domain"], let user = item["userName"] else { return nil }
+      let passwords = list.compactMap { item -> ASPasswordCredentialIdentity? in
+        guard item["credentialId"] == nil, let domain = item["domain"],
+          let user = item["userName"]
+        else { return nil }
         return ASPasswordCredentialIdentity(
           serviceIdentifier: ASCredentialServiceIdentifier(identifier: domain, type: .domain),
           user: user, recordIdentifier: item["recordIdentifier"])
       }
-      store.replaceCredentialIdentities(with: identities, completion: done)
+      if #available(macOS 14.0, *) {
+        let passkeys = list.compactMap { item -> ASPasskeyCredentialIdentity? in
+          guard let id = item["credentialId"], let credentialID = base64url(id),
+            let rp = item["domain"]
+          else { return nil }
+          return ASPasskeyCredentialIdentity(
+            relyingPartyIdentifier: rp, userName: item["userName"] ?? "",
+            credentialID: credentialID,
+            userHandle: item["userHandle"].flatMap(base64url) ?? Data(),
+            recordIdentifier: item["recordIdentifier"])
+        }
+        var all: [any ASCredentialIdentity] = passwords
+        all.append(contentsOf: passkeys as [any ASCredentialIdentity])
+        store.replaceCredentialIdentities(all, completion: done)
+      } else {
+        store.replaceCredentialIdentities(with: passwords, completion: done)
+      }
     }
+  }
+
+  private static func base64url(_ text: String) -> Data? {
+    var t = text.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+    while t.count % 4 != 0 { t += "=" }
+    return Data(base64Encoded: t)
   }
 
   private static func error(_ message: String) -> FlutterError {

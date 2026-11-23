@@ -288,6 +288,51 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     'password': password,
   });
 
+  /// **[C]** Keeps a passkey Credential Manager registered (DP-120): in
+  /// the personal or shared vault `tomSecretsPasskeyHome` picks (the one
+  /// holding the site's login), in the site's login entry or a new one
+  /// (`tomSecretsKeepPasskey`), saved as every edit is (`save`: written to
+  /// GitHub at once, else kept in memory as a change not written). Answers
+  /// the vault. Refused while locked and without a personal or shared
+  /// vault.
+  Future<String> keepPasskey(TomSecretsPasskey passkey) async {
+    _unlocked();
+    final served = _vaults.resolver?.stores ?? const <TomSecretsStore>[];
+    final candidates = {
+      for (final s in served)
+        if (!_isSystem(s.name)) s.name: s.file,
+    };
+    final store = tomSecretsPasskeyHome(candidates, passkey);
+    if (store == null) {
+      _refuse('denied', 'no personal or shared vault is open', {
+        'reason': 'read_only',
+      });
+    }
+    // Edited on a copy of the held file: the served one changes with the
+    // save, as for an edit the screens send.
+    final held = await _vaults.vaultFile(store);
+    final (credentials, outerKey) = _keysOf(store);
+    final file = await _vaults.opener.decode(
+      held.location,
+      held.stored,
+      credentials,
+      outerKey: outerKey,
+    );
+    tomSecretsKeepPasskey(file, passkey);
+    final stored = await tomSecretsEncodeStored(
+      held.location,
+      file,
+      outerKey: outerKey,
+      like: held.stored,
+    );
+    await request('save', {
+      'store': store,
+      'bytes': base64.encode(stored),
+      'baseRevision': held.revision,
+    });
+    return store;
+  }
+
   Future<T> _serial<T>(Future<T> Function() body) {
     final result = _queue.then((_) => body());
     _queue = result.then((_) {}, onError: (_) {});

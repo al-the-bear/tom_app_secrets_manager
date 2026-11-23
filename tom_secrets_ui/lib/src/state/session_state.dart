@@ -1812,6 +1812,27 @@ class TomSecretsSession extends ChangeNotifier {
         v.store,
   ];
 
+  /// **[C]** Keeps a passkey an OS provider registered (the macOS AutoFill
+  /// provider, Android's Credential Manager) and saves it: in the vault of
+  /// [proposalVaults] that holds the site's login (or that passkey already),
+  /// else the first of them; in the login entry of its site and user, else
+  /// a new login entry (`tomSecretsKeepPasskey`). Answers the entry. Throws
+  /// [StateError] when no vault may take it.
+  Future<TomSecretsEntryRef> keepPasskey(TomSecretsPasskey passkey) async {
+    final vaults = proposalVaults;
+    if (vaults.isEmpty) {
+      throw StateError('no personal or shared vault is open for writing');
+    }
+    final store = tomSecretsPasskeyHome({
+      for (final v in vaults) v: _vaultOf(v)!.file,
+    }, passkey)!;
+    final entry = tomSecretsKeepPasskey(_vaultOf(store)!.file, passkey);
+    final ref = TomSecretsEntryRef(store, entry.uuid);
+    await save(store);
+    notifyListeners();
+    return ref;
+  }
+
   /// Saves [proposal] as a new login titled [title] in [store] and forgets
   /// it; answers the new entry (opened in the editor).
   Future<TomSecretsEntryRef> saveProposalAsNew(

@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Passkeys in the macOS AutoFill provider (DP-120): the snapshot carries
+  the passkeys of the personal and shared vaults and their identities;
+  each sync saves the passkeys the provider made
+  (`TomSecretsAutofillPending`, `TomSecretsSession.keepPasskey`) and then
+  clears them from the pending file.
 - Relays (part-relay): the relay settings on the Sharing screen (the relays
   in order with their services, the default for pairing,
   `TomSecretsRelaySettings`, `TomSecretsRelaysSection`); a shared vault's

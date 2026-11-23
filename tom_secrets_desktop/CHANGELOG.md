@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- AutoFill passkeys (macOS 14): `ASPasskeyCredentialIdentity` beside the
+  password identities; the pending file of the passkeys the extension made,
+  read with the lasting pending key and replaced only when unchanged
+  (coordinated with the extension).
 - Auto-type's keyboard through FFI, no plugin: `TomSecretsMacKeyboard`
   (`CGEventPost`, the Accessibility API and its prompt, secure input),
   `TomSecretsWindowsKeyboard` (`SendInput`, `GetWindowTextW`),

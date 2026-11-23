@@ -58,8 +58,12 @@ the app's, listed in [`tom_secrets_app`](../tom_secrets_app/README.md).
   (`ASCredentialIdentityStore.getState`), the snapshot key into the
   data-protection keychain's shared access group (`biometryCurrentSet`, or
   `userPresence` on a Mac without Touch ID), the sealed snapshot into the App
-  Group container (atomically), removal, the QuickType identities, and
-  System Settings opened. The groups come from the app's Info.plist
+  Group container (atomically), removal, the QuickType identities
+  (passwords, and on macOS 14 the passkeys as `ASPasskeyCredentialIdentity`),
+  and System Settings opened. The pending passkeys the extension made
+  (`readPending` with the lasting pending key, made at the first unlock;
+  `replacePending`, coordinated with the extension's writes and refused
+  when the file changed since it was read) are saved by `tom_secrets_ui`. The groups come from the app's Info.plist
   (`TSMAutofillAppGroup`, `TSMAutofillKeychainGroup`); null on Windows and
   Linux.
 - **Tray**: `TomSecretsPluginTray` over `tray_manager`: the macOS menu bar

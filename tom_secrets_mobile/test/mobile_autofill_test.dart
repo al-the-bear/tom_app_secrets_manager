@@ -63,6 +63,11 @@ final class _Platform implements TomSecretsAutofillPlatform {
     settingsOpened++;
     enabled = true;
   }
+
+  @override
+  Future<void> setPasskeyIdentities(
+    List<Map<String, Object?>> identities,
+  ) async {}
 }
 
 /// The unlock activity's side, recorded.

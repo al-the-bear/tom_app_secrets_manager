@@ -13,6 +13,15 @@
 ///   the extension matches like the browser without the Public Suffix List),
 ///   its `tsm.urlMatch` rule, the TOTP when it has one, and its change time.
 ///   Entries the rule `never` keeps out of the browser are left out.
+///   **[C]** Beside them `passkeys`: each passkey of those vaults
+///   (`KPEX_PASSKEY_*`) with its entry, relying party, credential id, user
+///   handle and name and its private key, which the provider signs with;
+///   still never served on the client endpoint.
+/// - **[C] Passkeys registered in the provider:** the extension cannot
+///   write a vault, so it keeps each new passkey in the pending file of the
+///   App Group (sealed under the lasting pending key of the shared keychain
+///   group) and uses it from there; the app saves it into a vault at its
+///   next sync ([TomSecretsSession.keepPasskey]) and clears it.
 /// - **Format** ([TomSecretsAutofillSnapshot]): the magic `TSM-AUTOFILL`, a
 ///   big-endian 32-bit header length, the header (JSON: `formatVersion`,
 ///   `keyId`, `written`), a 12-byte nonce, then the JSON document sealed with
@@ -72,17 +81,22 @@ final class TomSecretsAutofillState {
 }
 
 /// A QuickType suggestion (`ASPasswordCredentialIdentity`): a domain and a
-/// user name, never a password (DP-51).
+/// user name, never a password (DP-51); **[C]** with [credentialId] a
+/// passkey's (`ASPasskeyCredentialIdentity`: the relying party as
+/// [domain], its user handle).
 @immutable
 final class TomSecretsAutofillIdentity {
-  /// [userName] at [domain] for the entry [recordIdentifier].
+  /// [userName] at [domain] for the entry [recordIdentifier]; a passkey's
+  /// with [credentialId] and [userHandle] (base64url).
   const TomSecretsAutofillIdentity({
     required this.domain,
     required this.userName,
     required this.recordIdentifier,
+    this.credentialId,
+    this.userHandle,
   });
 
-  /// The web domain (a host).
+  /// The web domain (a host), a passkey's relying party.
   final String domain;
 
   /// The user name.
@@ -91,11 +105,19 @@ final class TomSecretsAutofillIdentity {
   /// The entry, `<store>/~<32 hex>`.
   final String recordIdentifier;
 
+  /// A passkey's credential id (base64url), else null.
+  final String? credentialId;
+
+  /// A passkey's user handle (base64url), when it has one.
+  final String? userHandle;
+
   /// The channel form.
   Map<String, String> toJson() => {
     'domain': domain,
     'userName': userName,
     'recordIdentifier': recordIdentifier,
+    'credentialId': ?credentialId,
+    'userHandle': ?userHandle,
   };
 
   @override
@@ -103,10 +125,13 @@ final class TomSecretsAutofillIdentity {
       other is TomSecretsAutofillIdentity &&
       other.domain == domain &&
       other.userName == userName &&
-      other.recordIdentifier == recordIdentifier;
+      other.recordIdentifier == recordIdentifier &&
+      other.credentialId == credentialId &&
+      other.userHandle == userHandle;
 
   @override
-  int get hashCode => Object.hash(domain, userName, recordIdentifier);
+  int get hashCode =>
+      Object.hash(domain, userName, recordIdentifier, credentialId, userHandle);
 }
 
 /// The host's AutoFill (macOS: the App Group container, the keychain, the
@@ -131,6 +156,14 @@ abstract interface class TomSecretsAutofillPort {
 
   /// Opens System Settings at the AutoFill providers.
   Future<void> openSettings();
+
+  /// **[C]** The passkeys the extension registered and the app has not
+  /// saved yet, each `{id, passkey}` (the passkey as the snapshot names it),
+  /// opened with the pending key; none without them.
+  Future<List<({String id, TomSecretsPasskey passkey})>> pendingPasskeys();
+
+  /// **[C]** Forgets the pending passkeys [ids] (saved into a vault).
+  Future<void> clearPendingPasskeys(List<String> ids);
 }
 
 /// The snapshot's binary form.
@@ -234,7 +267,49 @@ Map<String, Object?> tomSecretsAutofillDocument(
       if (!isSystem(store.name))
         for (final indexed in store.entries) ?tomSecretsAutofillEntry(indexed),
   ],
+  'passkeys': [
+    for (final store in stores)
+      if (!isSystem(store.name))
+        for (final indexed in store.entries)
+          ?tomSecretsAutofillPasskey(indexed),
+  ],
 };
+
+/// **[C]** The passkey of an entry for the snapshot, or null (none, an
+/// overlay).
+Map<String, Object?>? tomSecretsAutofillPasskey(
+  TomSecretsIndexedEntry indexed,
+) {
+  if (indexed.isOverlay) return null;
+  final passkey = TomSecretsPasskey.fromEntry(indexed.entry);
+  if (passkey == null) return null;
+  return {
+    'id': '${indexed.store}/~${tomSecretsUuidHex(indexed.entry.uuid)}',
+    'store': indexed.store,
+    'title': indexed.entry.label ?? '',
+    ...tomSecretsAutofillPasskeyJson(passkey),
+  };
+}
+
+/// **[C]** [passkey] as the snapshot and the pending file name it.
+Map<String, Object?> tomSecretsAutofillPasskeyJson(TomSecretsPasskey passkey) =>
+    {
+      'rpId': passkey.relyingParty,
+      'credentialId': passkey.credentialId,
+      'userHandle': ?passkey.userHandle,
+      'userName': ?passkey.userName,
+      'privateKeyPem': passkey.privateKeyPem,
+    };
+
+/// **[C]** The passkey of a snapshot or pending-file [json].
+TomSecretsPasskey tomSecretsAutofillPasskeyOf(Map<Object?, Object?> json) =>
+    TomSecretsPasskey(
+      relyingParty: json['rpId']! as String,
+      credentialId: json['credentialId']! as String,
+      privateKeyPem: json['privateKeyPem']! as String,
+      userHandle: json['userHandle'] as String?,
+      userName: json['userName'] as String?,
+    );
 
 /// One entry of the snapshot, or null when it is not offered (not a login,
 /// an overlay, the rule `never`, no web URL).
@@ -293,6 +368,17 @@ List<TomSecretsAutofillIdentity> tomSecretsAutofillIdentities(
   Map<String, Object?> document,
 ) {
   final out = <TomSecretsAutofillIdentity>{};
+  for (final p in (document['passkeys'] as List? ?? const []).cast<Map>()) {
+    out.add(
+      TomSecretsAutofillIdentity(
+        domain: p['rpId'] as String,
+        userName: p['userName'] as String? ?? '',
+        recordIdentifier: p['id'] as String,
+        credentialId: p['credentialId'] as String,
+        userHandle: p['userHandle'] as String?,
+      ),
+    );
+  }
   for (final e in (document['entries']! as List).cast<Map>()) {
     final userName = e['userName'] as String;
     if (userName.isEmpty) continue;
@@ -452,13 +538,28 @@ class TomSecretsAutofill extends ChangeNotifier {
       }
       return;
     }
+    // Passkeys the provider registered: into a vault first, so the snapshot
+    // carries them from there.
+    final pending = await port.pendingPasskeys();
+    if (pending.isNotEmpty) {
+      final saved = <String>[];
+      for (final p in pending) {
+        try {
+          await session.keepPasskey(p.passkey);
+          saved.add(p.id);
+        } on Object catch (e) {
+          _error = 'A passkey for ${p.passkey.relyingParty} was not saved: $e';
+        }
+      }
+      if (saved.isNotEmpty) await port.clearPendingPasskeys(saved);
+    }
     final now = _now();
     final document = tomSecretsAutofillDocument(
       session.resolution.stores,
       isSystem: (s) => session.kindOf(s) == TomSecretsVaultKind.system,
       written: now,
     );
-    final content = jsonEncode(document['entries']);
+    final content = jsonEncode([document['entries'], document['passkeys']]);
     if (_key == null) {
       _key = _random(32);
       _keyId = base64Url.encode(_random(9));
@@ -515,4 +616,48 @@ class TomSecretsAutofill extends ChangeNotifier {
     session.removeListener(_onSession);
     super.dispose();
   }
+}
+
+/// **[C]** The pending file of the passkeys the macOS AutoFill provider
+/// registered: the snapshot's sealed format ([TomSecretsAutofillSnapshot],
+/// header key id `pending`) under the lasting pending key, its document
+/// `{formatVersion, entries: [], passkeys: [{id, rpId, credentialId,
+/// userHandle?, userName?, privateKeyPem, created}]}`. The extension adds to
+/// it; the app opens it, saves the passkeys and writes it back without them.
+abstract final class TomSecretsAutofillPending {
+  /// The passkeys of [sealed], opened with [key].
+  static Future<List<({String id, TomSecretsPasskey passkey})>> open(
+    Uint8List sealed,
+    Uint8List key,
+  ) async {
+    final opened = await TomSecretsAutofillSnapshot.open(sealed, key);
+    return [
+      for (final p
+          in (opened.document['passkeys'] as List? ?? const [])
+              .cast<Map<Object?, Object?>>())
+        (id: p['id']! as String, passkey: tomSecretsAutofillPasskeyOf(p)),
+    ];
+  }
+
+  /// [passkeys] sealed under [key] at [written]; [nonce] for a test vector
+  /// only.
+  static Future<Uint8List> seal(
+    List<({String id, TomSecretsPasskey passkey})> passkeys, {
+    required Uint8List key,
+    required DateTime written,
+    List<int>? nonce,
+  }) => TomSecretsAutofillSnapshot.seal(
+    {
+      'formatVersion': TomSecretsAutofillSnapshot.formatVersion,
+      'entries': const <Object?>[],
+      'passkeys': [
+        for (final p in passkeys)
+          {'id': p.id, ...tomSecretsAutofillPasskeyJson(p.passkey)},
+      ],
+    },
+    key: key,
+    keyId: 'pending',
+    written: written,
+    nonce: nonce,
+  );
 }

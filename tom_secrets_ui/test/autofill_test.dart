@@ -30,6 +30,16 @@ const _vectorPath =
     '../tom_secrets_app/macos/TomSecretsAutofillKit/Tests/'
     'TomSecretsAutofillKitTests/Resources/snapshot_vector.json';
 
+/// **[C]** The passkey vector the Swift package's tests read: keys as core
+/// writes them and a pending file sealed here; and the pending file the
+/// Swift package sealed, opened here.
+const _passkeyVectorPath =
+    '../tom_secrets_app/macos/TomSecretsAutofillKit/Tests/'
+    'TomSecretsAutofillKitTests/Resources/passkey_vector.json';
+const _swiftPendingPath =
+    '../tom_secrets_app/macos/TomSecretsAutofillKit/Tests/'
+    'TomSecretsAutofillKitTests/Resources/pending_swift_vector.json';
+
 final class _Clipboard implements TomClipboardPort {
   @override
   Future<TomClipboardReceipt?> placeConcealed(String text) async =>
@@ -50,6 +60,8 @@ final class _Port implements TomSecretsAutofillPort {
   final List<List<TomSecretsAutofillIdentity>> identities = [];
   int removed = 0;
   int settingsOpened = 0;
+  final List<({String id, TomSecretsPasskey passkey})> pending = [];
+  final List<String> cleared = [];
 
   @override
   Future<TomSecretsAutofillState> state() async => current;
@@ -71,6 +83,16 @@ final class _Port implements TomSecretsAutofillPort {
 
   @override
   Future<void> openSettings() async => settingsOpened++;
+
+  @override
+  Future<List<({String id, TomSecretsPasskey passkey})>>
+  pendingPasskeys() async => [...pending];
+
+  @override
+  Future<void> clearPendingPasskeys(List<String> ids) async {
+    cleared.addAll(ids);
+    pending.removeWhere((p) => ids.contains(p.id));
+  }
 }
 
 Future<KdbxFile> _vault(void Function(KdbxFile) fill) async {
@@ -184,6 +206,120 @@ void main() {
       expect(file.readAsStringSync(), text);
     });
   });
+
+  group('the passkey vectors', () {
+    final key = Uint8List.fromList(List.generate(32, (i) => 0x10 + i));
+    final passkey = TomSecretsPasskey(
+      relyingParty: 'site.example',
+      credentialId: 'ZGVtby1jcmVkZW50aWFs',
+      privateKeyPem: tomSecretsPasskeyPem(
+        Uint8List.fromList(List.generate(32, (i) => i + 1)),
+      ),
+      userHandle: 'dXNlcg',
+      userName: 'alice',
+    );
+
+    test(
+      'the vector the extension reads is the one this code writes',
+      () async {
+        final pending = await TomSecretsAutofillPending.seal(
+          [(id: 'pending-1', passkey: passkey)],
+          key: key,
+          written: DateTime.utc(2026, 11, 23, 12),
+          nonce: List.generate(12, (i) => 0xb0 + i),
+        );
+        final vector = {
+          'es256Pem': passkey.privateKeyPem,
+          'ed25519Pem': tomSecretsPasskeyPem({
+            'kty': 'OKP',
+            'crv': 'Ed25519',
+            'd': base64Url.encode(List.generate(32, (i) => 0x40 + i)),
+          }),
+          'pendingKey': base64.encode(key),
+          'pending': base64.encode(pending),
+          'note':
+              'Demo keys. Written by tom_secrets_ui/test/autofill_test.dart '
+              '(TSM_UPDATE_VECTORS=1).',
+        };
+        final text = '${const JsonEncoder.withIndent('  ').convert(vector)}\n';
+        final file = File(_passkeyVectorPath);
+        if (Platform.environment['TSM_UPDATE_VECTORS'] == '1') {
+          file.writeAsStringSync(text);
+        }
+        expect(file.readAsStringSync(), text);
+        final opened = await TomSecretsAutofillPending.open(pending, key);
+        expect(opened.single.id, 'pending-1');
+        expect(opened.single.passkey.privateKeyPem, passkey.privateKeyPem);
+      },
+    );
+
+    test('a pending file the extension sealed opens here', () async {
+      final vector =
+          jsonDecode(File(_swiftPendingPath).readAsStringSync()) as Map;
+      final opened = await TomSecretsAutofillPending.open(
+        base64.decode(vector['sealed'] as String),
+        base64.decode(vector['key'] as String),
+      );
+      final p = opened.single;
+      expect(p.id, 'swift-pending-1');
+      expect(p.passkey.relyingParty, 'swift.example');
+      expect(p.passkey.userName, 'bob');
+      // The key the extension made is one core signs with.
+      final assertion = await tomSecretsPasskeyAssertion(
+        p.passkey,
+        List.filled(32, 7),
+      );
+      expect(
+        assertion.authenticatorData.sublist(0, 32),
+        tomSecretsRpIdHash('swift.example'),
+      );
+    });
+  });
+
+  test(
+    'the document carries the passkeys of personal and shared vaults, '
+    'never a system vault\'s; each is a QuickType passkey identity',
+    () async {
+      final reg = await tomSecretsCreatePasskey(
+        rpId: 'site.example',
+        userHandle: Uint8List.fromList([1, 2, 3]),
+        userName: 'alice',
+      );
+      final personal = await _vault((f) {
+        tomSecretsKeepPasskey(f, reg.passkey);
+      });
+      final system = await _vault((f) {
+        TomSecretsMetadata(kind: TomSecretsVaultKind.system).writeTo(f);
+        tomSecretsKeepPasskey(f, reg.passkey);
+      });
+      final document = tomSecretsAutofillDocument(
+        [
+          TomSecretsStore.fromFile(personal, name: 'personal'),
+          TomSecretsStore.fromFile(system, name: 'fleet'),
+        ],
+        isSystem: (s) => s == 'fleet',
+        written: DateTime.utc(2026, 11, 23),
+      );
+      final passkeys = (document['passkeys']! as List).cast<Map>();
+      expect(passkeys, hasLength(1));
+      expect(passkeys.single['store'], 'personal');
+      expect(passkeys.single['rpId'], 'site.example');
+      expect(passkeys.single['credentialId'], reg.passkey.credentialId);
+      expect(passkeys.single['userHandle'], reg.passkey.userHandle);
+      expect(passkeys.single['privateKeyPem'], reg.passkey.privateKeyPem);
+      expect(
+        tomSecretsAutofillPasskeyOf(passkeys.single).credentialId,
+        reg.passkey.credentialId,
+      );
+      final identity = tomSecretsAutofillIdentities(
+        document,
+      ).firstWhere((i) => i.credentialId != null);
+      expect(identity.domain, 'site.example');
+      expect(identity.userName, 'alice');
+      expect(identity.userHandle, reg.passkey.userHandle);
+      expect(identity.toJson()['credentialId'], reg.passkey.credentialId);
+    },
+  );
 
   test('the document: logins of personal and shared vaults, their web URLs '
       'with host and site, the rule, the TOTP; never a system vault\'s, an '
@@ -400,6 +536,41 @@ void main() {
       await tester.tap(find.byKey(const Key('tsm-autofill-open-settings')));
       await wait(tester, 1);
       expect(port.settingsOpened, 1);
+    });
+
+    testWidgets('a passkey the provider registered is saved into the vault '
+        'at the next sync, cleared from the pending file, and then in the '
+        'snapshot', (tester) async {
+      final reg = await tester.runAsync(
+        () => tomSecretsCreatePasskey(
+          rpId: 'db.example',
+          userHandle: Uint8List.fromList([7, 7, 7]),
+          userName: 'demo-user',
+        ),
+      );
+      port.pending.add((id: 'pending-1', passkey: reg!.passkey));
+      await unlocked(tester);
+      expect(port.cleared, ['pending-1']);
+      final session = Provider.of<TomSecretsSession>(
+        tester.element(find.byType(TomSecretsMainShell)),
+        listen: false,
+      );
+      // Kept in the demo primary's login of db.example.
+      final main = session.index.firstWhere((e) => e.title == 'Main');
+      final entry = session.entryOf(main.ref)!;
+      expect(
+        TomSecretsPasskey.fromEntry(entry)!.credentialId,
+        reg.passkey.credentialId,
+      );
+      final document = await lastDocument(tester);
+      expect(
+        (document['passkeys']! as List).cast<Map>().single['credentialId'],
+        reg.passkey.credentialId,
+      );
+      expect(
+        port.identities.last.where((i) => i.credentialId != null).single.domain,
+        'db.example',
+      );
     });
 
     testWidgets('a removed device (its record revoked in the primary) keeps '

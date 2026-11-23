@@ -22,6 +22,7 @@
 
 /* Begin PBXBuildFile section */
 		003BBDE9B8A7F728C8D1425A /* Totp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9BF9820BF000FA6A95B779 /* Totp.swift */; };
+		5A55C0DE7E11A2B3C4D5E6F7 /* Passkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A55C0DE7E11A2B3C4D5E6F8 /* Passkey.swift */; };
 		01084FC19C29152D53576CD8 /* Matching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9230F5A66D8661C67E002808 /* Matching.swift */; };
 		2493F2FDD1062545E46CF934 /* AutofillListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D243E963246C2DC7D51C0A7 /* AutofillListView.swift */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
@@ -90,6 +91,7 @@
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
 		5213BDA67BBA45957D2FF6A5 /* TomSecretsAutofill.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = TomSecretsAutofill.entitlements; sourceTree = "<group>"; };
 		6B9BF9820BF000FA6A95B779 /* Totp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Totp.swift; sourceTree = "<group>"; };
+		5A55C0DE7E11A2B3C4D5E6F8 /* Passkey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Passkey.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7949DD53BAC68F14438EB114 /* TomSecretsAutofill.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TomSecretsAutofill.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7ABAAA09D28D448281CEAC02 /* Snapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
@@ -233,6 +235,7 @@
 				7ABAAA09D28D448281CEAC02 /* Snapshot.swift */,
 				9230F5A66D8661C67E002808 /* Matching.swift */,
 				6B9BF9820BF000FA6A95B779 /* Totp.swift */,
+				5A55C0DE7E11A2B3C4D5E6F8 /* Passkey.swift */,
 			);
 			name = TomSecretsAutofillKit;
 			path = TomSecretsAutofillKit/Sources/TomSecretsAutofillKit;
@@ -458,6 +461,7 @@
 				D6546F937E8AB3BD3D28717A /* Snapshot.swift in Sources */,
 				01084FC19C29152D53576CD8 /* Matching.swift in Sources */,
 				003BBDE9B8A7F728C8D1425A /* Totp.swift in Sources */,
+				5A55C0DE7E11A2B3C4D5E6F7 /* Passkey.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

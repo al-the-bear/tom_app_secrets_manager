@@ -24,7 +24,18 @@ Future<void> main() => _run();
 Future<void> autofillMain() =>
     _run(autofillUnlock: const TomSecretsChannelAutofillUnlock());
 
-Future<void> _run({TomSecretsAutofillUnlockPlatform? autofillUnlock}) async {
+/// **[C]** The Credential Manager provider's unlock (DP-120): its native
+/// activity starts this entry point on an engine of its own when the app's
+/// process holds no unlocked vault; the app's own unlock, then the passkey
+/// request answered.
+@pragma('vm:entry-point')
+Future<void> passkeyMain() =>
+    _run(passkeyUnlock: const TomSecretsChannelPasskeyUnlock());
+
+Future<void> _run({
+  TomSecretsAutofillUnlockPlatform? autofillUnlock,
+  TomSecretsPasskeyUnlockPlatform? passkeyUnlock,
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
   final support = await getApplicationSupportDirectory();
   final preferences = await TomSecretsMobilePreferences.open(
@@ -44,10 +55,12 @@ Future<void> _run({TomSecretsAutofillUnlockPlatform? autofillUnlock}) async {
       kdfMemoryLimit: await tomSecretsMobileKdfMemoryLimit(),
       discovery: const TomSecretsBonsoirPairingDiscovery(),
       // The Autofill service is Android's; iOS has none (TD-4).
-      autofill: Platform.isAndroid && autofillUnlock == null
+      autofill:
+          Platform.isAndroid && autofillUnlock == null && passkeyUnlock == null
           ? const TomSecretsChannelAutofill()
           : null,
       autofillUnlock: autofillUnlock,
+      passkeyUnlock: passkeyUnlock,
     ),
   );
 }

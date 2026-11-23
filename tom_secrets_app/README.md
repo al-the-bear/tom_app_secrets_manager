@@ -64,12 +64,29 @@ snapshot of the personal and shared vaults' logins the app writes into the
 App Group container, after Touch ID or the login password releases its key
 from the keychain, matches the field's site like the browser extension,
 offers a search, and fills the login picked (or a one-time code on macOS
-15). It writes nothing and cannot save.
+15). It cannot save a login.
+
+Passkeys (macOS 14, `ProvidesPasskeys`):
+
+- **Signing in.** The site's passkeys from the snapshot are listed and the
+  one picked signs (`ASPasskeyAssertionCredential`). The kit is the
+  authenticator: ES256 or Ed25519, the flags user present, verified,
+  backup eligible and backed up, the counter 0.
+- **Creating one.** A new passkey is made with the site's first supported
+  algorithm (`none` attestation). The extension then writes the one file
+  it writes, the pending file `TomSecretsAutofill/pending-passkeys.tsmaf`
+  in the App Group container: the snapshot's sealed format under the
+  lasting pending key (keychain account `pending-key`, the app's).
+- **Into a vault.** The pending file's passkeys can sign in at once. The
+  app saves them into a vault at its next sync and clears the file.
 
 - Its core, `macos/TomSecretsAutofillKit` (a Swift package: the snapshot
-  opened with CryptoKit, matching, TOTP), is tested with `swift test`,
-  against a vector the app's Dart code seals (`tom_secrets_ui`'s
-  `autofill_test.dart`).
+  opened with CryptoKit, matching, TOTP, the passkeys and the pending
+  file), is tested with `swift test`, against vectors the app's Dart code
+  seals (`tom_secrets_ui`'s `autofill_test.dart`: the snapshot, the
+  passkeys' keys and a pending file). Dart opens the pending file the kit
+  seals, `pending_swift_vector.json`, written with
+  `TSM_UPDATE_VECTORS=1 swift test`.
 - The extension target is in `Runner.xcodeproj` but not embedded in the
   app: its entitlements (the AutoFill credential provider, the App Group,
   the keychain access group) need the Apple Developer team's provisioning

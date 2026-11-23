@@ -1324,6 +1324,23 @@ password. The provider cannot save a new login: add it in the app or let
 the browser extension propose it. AutoFill needs the team-signed build of
 the app; a build without it says so here.
 
+**Passkeys** (macOS 14 and later) go through the same provider:
+
+- **Signing in.** When a site asks for a passkey, macOS offers Tom Secrets
+  Manager. Touch ID opens the site's passkeys from your personal and shared
+  vaults, and the one you pick signs you in. QuickType suggests them too.
+- **Creating one.** When a site creates a passkey, choose Tom Secrets
+  Manager and answer "Save" after Touch ID. The passkey works from this Mac
+  at once.
+- **Into a vault.** The app puts the new passkey into a vault the next time
+  it is unlocked or syncs. It goes into the login of that site and user
+  name, else into a new login, in the vault that holds the site's login.
+  From there every device has it.
+- **Kinds.** Tom Secrets Manager makes ES256 and Ed25519 passkeys. A site
+  that offers neither is told so.
+- **Never for clients.** A passkey is never given to a client, `tsm` or the
+  browser extension.
+
 **Shared by every device**: the configuration kept in the primary vault
 (`tsm.config`): the dimensions in priority order and the files per
 environment, edited as YAML and saved with "Save in the primary vault". For

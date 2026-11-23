@@ -97,6 +97,30 @@ A phone runs no secrets service and keeps no copy of a vault:
   (`onSaveRequest`): the app opens with it under Proposals, saved into a
   personal or shared vault once confirmed. Settings › "Autofill service"
   turns it on.
+- **Android's Credential Manager provider** (part-os-integration, DP-120,
+  Android 14+, `TomSecretsCredentialService`): the passkeys of the personal
+  and shared vaults, never a system vault's.
+  - **Listing.** A sign-in is listed at once from the passkey identities:
+    the relying party, user name and credential id, never a key. The app
+    hands them over after every unlock and change, and the provider keeps
+    them in its no-backup files. A site with no identity gets "Unlock Tom
+    Secrets", which lists its passkeys after the unlock.
+  - **Answering.** The entry picked is answered as the Autofill service's
+    are: by the running app after BiometricPrompt (`PasskeyActivity`), or
+    by its own unlock (`PasskeyUnlockActivity`, Dart entry point
+    `passkeyMain`).
+  - **New passkeys.** A creation makes ES256 or Ed25519 by the site's
+    order. It is refused when the site excludes a passkey held. The
+    passkey is kept in the vault of the site's login, in that login or a
+    new one (`TomSecretsMobileEngine.keepPasskey`), and written to GitHub
+    before the site gets its answer.
+  - **The caller is checked.** A browser on the privileged-browser
+    allowlist names the page; the origin must be the relying party or
+    below it, over https. The allowlist is
+    `res/raw/privileged_browsers.json`, the list Google publishes for
+    passkey providers. An app must be named, with its signing certificate,
+    by the site's Digital Asset Links, and gets client data naming it.
+    A caller that is not let in learns nothing of the vaults.
 - **The health report** (part-password-manager, DP-39): Settings › Health
   opens `tom_secrets_ui`'s Health screen; the breach check runs while the
   app is open and unlocked, each run shown as a snack bar with "Turn off
@@ -196,7 +220,9 @@ another device; an attachment added and shared; a too heavy vault refused;
 the token reminder; the unlock retried once the network is back; the fetch
 sizes (documents in memory); the Autofill service's matching, Digital Asset
 Links (a fake site), the running app answering it, a submitted login
-becoming a proposal, and the app as the service's own unlock. Demo data
+becoming a proposal, and the app as the service's own unlock; the passkey
+provider's caller check, a sign-in signed, a passkey made, refused or kept
+in a vault on GitHub, and the app as the provider's own unlock. Demo data
 only. The camera itself is checked on a device.
 
 The Autofill service's native side runs on an emulator or a device
@@ -218,6 +244,10 @@ cd android && ./gradlew app:connectedDebugAndroidTest
   trust material from the pairing.
 - The GitHub App sign-in (device flow) is a desktop feature; the phone uses
   the token the pairing gave it.
-- The Autofill service fills logins, not passkeys (Credential Manager is
-  phase C); an app the system's package visibility hides gives no
-  certificate, so its package matches stay "unverified app".
+- The Autofill service fills logins, the Credential Manager provider
+  passkeys (Android 14 and later only); an app the system's package
+  visibility hides gives no certificate, so its package matches stay
+  "unverified app".
+- The privileged-browser allowlist is a copy taken when the app was built:
+  a browser added to Google's list later is treated as an app until the
+  copy is refreshed.

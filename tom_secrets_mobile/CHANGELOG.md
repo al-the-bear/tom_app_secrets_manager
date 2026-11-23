@@ -2,6 +2,12 @@
 
 ## 0.1.0
 
+- The Credential Manager provider (Android 14+, DP-120): passkeys of the
+  personal and shared vaults listed from their identities, signed and made
+  after BiometricPrompt or the app's own unlock (`passkeyMain`), kept in
+  the vault of the site's login (`TomSecretsMobileEngine.keepPasskey`); the
+  caller checked (a privileged browser's origin, an app by the site's
+  Digital Asset Links).
 - The phone pairs through a GitHub relay (part-relay): the desktop's QR
   code fills the relay (or it is typed), the phone's own token for that
   repository is pasted, the address (when there is one) is tried first; the

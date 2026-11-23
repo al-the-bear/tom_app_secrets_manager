@@ -116,6 +116,11 @@ offering the import and the pairing.
   (`TomSecretsAutofillSnapshot`; the key handed to the host for the
   keychain), and the QuickType identities (site and user name); off deletes
   the snapshot, its key and the identities; the lock keeps the snapshot.
+  The snapshot carries the passkeys of those vaults
+  (`tomSecretsAutofillPasskeyJson`) and their identities. Each sync first
+  saves the passkeys the provider made into a vault
+  (`TomSecretsSession.keepPasskey`), then clears them from the pending
+  file (`TomSecretsAutofillPending`).
   Settings › Password AutoFill shows the provider's state, the way to
   System Settings, the switch and QuickType.
 - `TomSecretsProposalsView`: The Proposals screen (BP-28, DP-43, DP-52): the

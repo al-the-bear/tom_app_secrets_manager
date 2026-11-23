@@ -73,6 +73,8 @@ dependencies {
     // the running app's memory; the keyboard's inline chip (Android 11+).
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.autofill:autofill:1.1.0")
+    // The Credential Manager provider (DP-120, Android 14+): passkeys.
+    implementation("androidx.credentials:credentials:1.5.0")
 
     // The Autofill service's device tests (src/androidTest).
     androidTestImplementation("androidx.test:runner:1.6.2")
