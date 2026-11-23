@@ -137,6 +137,18 @@ export interface OpenAppRequest {
   entryId?: string;
 }
 
+/** Content script → background: a page's passkey sign-in (DP-120). */
+export interface PasskeyGetRequest {
+  op: 'tsm.passkeyGet';
+  options: import('./webauthn').PasskeyGetOptions;
+}
+
+/** Content script → background: a page's new passkey. */
+export interface PasskeyCreateRequest {
+  op: 'tsm.passkeyCreate';
+  options: import('./webauthn').PasskeyCreateOptions;
+}
+
 /** Background → content script: show the list at the field; fill; close. */
 export type ToContent =
   | { op: 'tsm.showList'; token: string; listUrl: string }
@@ -145,7 +157,12 @@ export type ToContent =
   | { op: 'tsm.openListHere' }
   | { op: 'tsm.doFillNew'; token: string; password: string }
   | { op: 'tsm.showBar'; token: string; barUrl: string }
-  | { op: 'tsm.closeBar'; token: string };
+  | { op: 'tsm.closeBar'; token: string }
+  | {
+      op: 'tsm.passkeyDone';
+      token: string;
+      answer: Omit<import('./webauthn').PasskeyBridgeAnswer, '__tsm' | 'id'>;
+    };
 
 /** What the background answers the list. */
 export interface ListAnswer {
@@ -159,6 +176,8 @@ export interface ListAnswer {
   newPassword?: boolean;
   /** The popup: proposals for this site are off ("Never for this site"). */
   never?: boolean;
+  /** A passkey sign-in: the candidates are the page's passkeys. */
+  passkey?: boolean;
   error?: HostError;
 }
 
@@ -175,4 +194,6 @@ export type ToBackground =
   | BarRequest
   | BarAnswerRequest
   | FillNewRequest
-  | NeverRequest;
+  | NeverRequest
+  | PasskeyGetRequest
+  | PasskeyCreateRequest;

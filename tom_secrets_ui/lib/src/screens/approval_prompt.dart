@@ -20,7 +20,13 @@
 /// A browser prompt (the browser extension's first lookup that no grant
 /// covers, protocol.md 5.5, DP-44) lists the page's logins: once (for ten
 /// minutes), always (for this browser only, the scope these logins, their
-/// vaults or all, preset to all) or never.
+/// vaults or all, preset to all) or never. **[C]** The same prompt asks for
+/// a page's passkeys (protocol.md 5.8).
+///
+/// **[C]** A new passkey (protocol.md 5.8): a site creates a passkey
+/// through the browser extension; "Save in Tom Secrets Manager" makes it
+/// and keeps it in the site's login, "Not now" lets the browser offer its
+/// own.
 library;
 
 import 'package:flutter/material.dart';
@@ -143,6 +149,7 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
       _picked ??= pick.firstOrNull?.entryId;
     }
     final browser = prompt.browser;
+    final passkeyCreate = prompt.passkeyCreate;
     if (browser && !_browserDefaults) {
       // DP-44: one grant per browser for its logins; the host is the
       // product's own executable, updated with it, so not pinned.
@@ -185,8 +192,12 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              browser
-                  ? 'The browser extension asks for logins'
+              passkeyCreate != null
+                  ? 'Save a passkey for ${passkeyCreate.rpId}?'
+                  : browser
+                  ? prompt.passkey
+                        ? 'The browser extension asks for passkeys'
+                        : 'The browser extension asks for logins'
                   : pick != null
                   ? 'A tool asks for a login'
                   : ssh == null
@@ -257,16 +268,39 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     ),
                   ],
                 )
+              else if (passkeyCreate != null)
+                TomSecretsSection(
+                  key: const Key('tsm-approval-passkey-create'),
+                  title: 'A new passkey',
+                  icon: Icons.key_rounded,
+                  children: [
+                    line('Site', passkeyCreate.rpId),
+                    line('User', passkeyCreate.userName),
+                    line('Page', passkeyCreate.url),
+                    line('Browser', prompt.parentExe),
+                    Text(
+                      'It goes into the login of this site and user in your '
+                      'vaults (a new login when there is none), and every '
+                      'device has it from there.',
+                      style: label,
+                    ),
+                  ],
+                )
               else if (browser)
                 TomSecretsSection(
                   key: const Key('tsm-approval-browser'),
-                  title: 'The logins of ${prompt.site}',
+                  title: prompt.passkey
+                      ? 'The passkeys of ${prompt.site}'
+                      : 'The logins of ${prompt.site}',
                   icon: Icons.language_rounded,
                   children: [
                     line('Page', prompt.url),
                     line('Browser', prompt.parentExe),
                     for (final r in prompt.resolved)
-                      line('Login', '${r.store}/${r.path}'),
+                      line(
+                        prompt.passkey ? 'Passkey' : 'Login',
+                        '${r.store}/${r.path}',
+                      ),
                   ],
                 )
               else if (ssh == null)
@@ -311,7 +345,12 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     runSpacing: 4,
                     children: [
                       for (final (value, text)
-                          in browser
+                          in passkeyCreate != null
+                              ? const [
+                                  ('once', 'Save in Tom Secrets Manager'),
+                                  ('never', 'Not now'),
+                                ]
+                              : browser
                               ? const [
                                   ('once', 'This time'),
                                   ('always', 'Always in this browser'),
@@ -351,7 +390,7 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                         isDense: true,
                       ),
                     ),
-                  if (confirmOnly)
+                  if (confirmOnly && passkeyCreate == null)
                     Text(
                       ssh?.forwarded ?? false
                           ? 'A grant lets this key be used over a forwarded '
@@ -363,8 +402,11 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     ),
                   if (browser && _decision == 'once')
                     Text(
-                      'The extension may list these logins and fill each '
-                      'once in the next ten minutes.',
+                      prompt.passkey
+                          ? 'The extension may list these passkeys and sign '
+                                'in with them in the next ten minutes.'
+                          : 'The extension may list these logins and fill '
+                                'each once in the next ten minutes.',
                       key: const Key('tsm-approval-browser-once'),
                       style: label,
                     ),

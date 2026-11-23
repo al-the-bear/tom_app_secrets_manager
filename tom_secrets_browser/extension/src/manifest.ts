@@ -57,6 +57,15 @@ export function manifest(
       family === 'chromium' ? { service_worker: 'background.js' } : { scripts: ['background.js'] },
     content_scripts: [
       { matches: pages, js: ['content.js'], all_frames: true, run_at: 'document_idle' },
+      // Passkeys (DP-120): the page's WebAuthn calls, in the page's world
+      // from its start, before the page's own scripts take a reference.
+      {
+        matches: pages,
+        js: ['webauthn.js'],
+        all_frames: true,
+        run_at: 'document_start',
+        world: 'MAIN',
+      },
     ],
     action: { default_popup: 'popup.html', default_title: 'Tom Secrets Manager', default_icon: icons },
     commands: {
@@ -71,9 +80,9 @@ export function manifest(
     ...(family === 'firefox'
       ? {
           browser_specific_settings: {
-            gecko: { id: firefoxExtensionId, strict_min_version: '115.0' },
+            gecko: { id: firefoxExtensionId, strict_min_version: '128.0' },
           },
         }
-      : { minimum_chrome_version: '110' }),
+      : { minimum_chrome_version: '111' }),
   };
 }

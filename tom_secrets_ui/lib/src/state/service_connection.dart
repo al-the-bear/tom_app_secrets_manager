@@ -622,6 +622,8 @@ final class TomSecretsApprovalPrompt {
     required this.pick,
     required this.url,
     required this.browser,
+    required this.passkey,
+    required this.passkeyCreate,
   });
 
   /// The prompt of [event], or null when it names no approval.
@@ -659,6 +661,15 @@ final class TomSecretsApprovalPrompt {
           : null,
       url: event['url'] as String?,
       browser: event['browser'] == true,
+      passkey: event['passkey'] == true,
+      passkeyCreate: switch (event['passkeyCreate']) {
+        final Map c => (
+          rpId: c['rpId'] as String? ?? '',
+          userName: c['userName'] as String? ?? '',
+          url: c['url'] as String? ?? '',
+        ),
+        _ => null,
+      },
     );
   }
 
@@ -708,6 +719,15 @@ final class TomSecretsApprovalPrompt {
   /// for the logins of the page [url] ([resolved]); a lasting answer holds
   /// for the browser that started its host ([parentExe]).
   final bool browser;
+
+  /// **[C]** A browser prompt of passkeys (protocol.md 5.8): [resolved] are
+  /// the entries of the page's passkeys.
+  final bool passkey;
+
+  /// **[C]** A new passkey for `userName` at `rpId` that the page `url`
+  /// creates (protocol.md 5.8): answered once (saved) or never, nothing
+  /// written as a grant; null for any other prompt.
+  final ({String rpId, String userName, String url})? passkeyCreate;
 
   /// The site of [url] (its host), or the address as written.
   String get site {

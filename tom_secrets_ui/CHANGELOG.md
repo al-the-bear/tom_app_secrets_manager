@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- The approval prompt asks for a site's passkeys (a browser prompt with
+  `passkey`) and confirms a new passkey ("Save a passkey for …?",
+  `passkeyCreate`: "Save in Tom Secrets Manager" or "Not now"; protocol.md
+  5.8, DP-120).
 - Passkeys in the macOS AutoFill provider (DP-120): the snapshot carries
   the passkeys of the personal and shared vaults and their identities;
   each sync saves the passkeys the provider made

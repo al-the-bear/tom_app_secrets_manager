@@ -16,9 +16,25 @@
 // shows it under Proposals. The password lives here only until the bar is
 // answered or for [proposalLifetimeMs]; "Never for this site" keeps the
 // site, never a secret, in the extension's storage.
+//
+// Passkeys (DP-120, protocol.md 5.8): a page's sign-in lists its passkeys
+// in the extension's own list; the background makes the client data (the
+// origin from the browser's sender information) and the service signs for
+// the passkey picked. A new passkey goes to the service, which asks the
+// app. While Tom Secrets Manager is not running unlocked, or has nothing
+// for the page, the browser's own WebAuthn answers.
 
 import { type ExtensionApi, hostName, type NativePort, type Sender } from './api';
 import { HostFailure, HostSession, unreachableKind } from './host';
+import {
+  clientDataJson,
+  type PasskeyBridgeAnswer,
+  type PasskeyCreateOptions,
+  type PasskeyGetOptions,
+  rpIdOf,
+  sha256,
+  toBase64Url,
+} from './webauthn';
 import type {
   BarAnswer,
   Candidate,
@@ -45,8 +61,37 @@ interface ListContext {
   frameSite: boolean;
   /** Opened at a new-password field: the list suggests a password. */
   newPassword?: boolean;
+  /** A passkey sign-in: the page's request and its passkeys. */
+  passkey?: PasskeyContext;
   /** When it is forgotten. */
   expires: number;
+}
+
+/** A page's passkey sign-in waiting for the user's pick. */
+interface PasskeyContext {
+  rpId: string;
+  challenge: string;
+  origin: string;
+  crossOrigin: boolean;
+  candidates: Candidate[];
+}
+
+type PageAnswer = Omit<PasskeyBridgeAnswer, '__tsm' | 'id'>;
+
+/** The browser's own WebAuthn answers. */
+const fallback: PageAnswer = { fallback: true };
+
+/** The origin of [url] when it may use passkeys (https, http on
+ *  localhost), or null. */
+function originOf(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const local = u.protocol === 'http:' ? u.hostname === 'localhost' : false;
+    if (u.protocol === 'https:' || local) return u.origin;
+  } catch {
+    // Not a URL.
+  }
+  return null;
 }
 
 /** How long a list's token stays valid. */
@@ -76,6 +121,16 @@ function hostOf(url: string): string {
   } catch {
     return '';
   }
+}
+
+/** The frame a passkey request comes from. */
+interface PasskeyFrame {
+  tabId: number;
+  frameId: number;
+  frameUrl: string;
+  pageUrl: string;
+  origin: string;
+  crossOrigin: boolean;
 }
 
 /** The extension's background, over [api]. */
@@ -150,6 +205,10 @@ export class Background {
   /** Answers [message] from [sender]. */
   async handle(message: ToBackground, sender: Sender): Promise<unknown> {
     switch (message.op) {
+      case 'tsm.passkeyGet':
+        return this.passkeyGet(sender, message.options);
+      case 'tsm.passkeyCreate':
+        return this.passkeyCreate(sender, message.options);
       case 'tsm.openList':
         return this.openList(sender, message.otpField === true, message.newPassword === true);
       case 'tsm.fillNew':
@@ -249,6 +308,14 @@ export class Background {
   private async list(token: string, frameSite: boolean, unlock: boolean): Promise<unknown> {
     const c = this.context(token);
     if (!c) return refused();
+    if (c.passkey) {
+      return {
+        state: 'running',
+        candidates: c.passkey.candidates,
+        site: c.passkey.rpId,
+        passkey: true,
+      } satisfies ListAnswer;
+    }
     if (c.newPassword) {
       // The suggestion is made in the list; nothing to ask the host.
       return {
@@ -300,6 +367,7 @@ export class Background {
   private async fill(token: string, entryId: string): Promise<unknown> {
     const c = this.context(token);
     if (!c) return refused();
+    if (c.passkey) return this.passkeySign(token, c, c.passkey, entryId);
     const answer = await this.withHost((h) =>
       h.request('fill', { entryId, ...this.target(c), totp: c.otpField }),
     );
@@ -481,8 +549,165 @@ export class Background {
   private async close(token: string): Promise<unknown> {
     const c = this.lists.get(token);
     this.lists.delete(token);
-    if (c) await this.toContent(c.tabId, { op: 'tsm.closeList', token }, c.frameId);
+    if (c?.passkey) {
+      // The user closed the passkey list: the browser's own answers.
+      await this.toContent(c.tabId, { op: 'tsm.passkeyDone', token, answer: fallback }, c.frameId);
+    } else if (c) {
+      await this.toContent(c.tabId, { op: 'tsm.closeList', token }, c.frameId);
+    }
     return { closed: true };
+  }
+
+  // ── Passkeys (DP-120) ────────────────────────────────────────────────
+
+  /** The frame of [sender] for a passkey request: its address, its origin
+   *  and whether that is another origin than the page's; null when it may
+   *  not ask. */
+  private passkeyFrame(sender: Sender): PasskeyFrame | null {
+    const tabId = sender.tab?.id;
+    const frameUrl = sender.url;
+    const pageUrl = sender.tab?.url ?? sender.url;
+    if (tabId === undefined || !frameUrl || !pageUrl) return null;
+    const origin = originOf(frameUrl);
+    if (!origin) return null;
+    return {
+      tabId,
+      frameId: sender.frameId ?? 0,
+      frameUrl,
+      pageUrl,
+      origin,
+      crossOrigin: originOf(pageUrl) !== origin,
+    };
+  }
+
+  /** A page's sign-in: its passkeys from the service, then the list; the
+   *  browser's own when there are none or the service is not running
+   *  unlocked. */
+  private async passkeyGet(sender: Sender, options: PasskeyGetOptions): Promise<unknown> {
+    const frame = this.passkeyFrame(sender);
+    if (!frame || typeof options?.challenge !== 'string') return fallback;
+    const rpId = rpIdOf(options, frame.frameUrl);
+    const answer = await this.withHost(async (h) => {
+      const state = (await h.request('status')).state;
+      if (state !== 'running') return null;
+      const found = await h.request('passkeys', {
+        url: frame.frameUrl,
+        rpId,
+        allowCredentials: options.allowCredentials,
+      });
+      return (found.candidates ?? []) as Array<Record<string, string>>;
+    });
+    if (answer === null || 'error' in answer || answer.length === 0) return fallback;
+    const token = this.newToken();
+    this.lists.set(token, {
+      tabId: frame.tabId,
+      frameId: frame.frameId,
+      pageUrl: frame.pageUrl,
+      frameUrl: frame.frameUrl,
+      otpField: false,
+      frameSite: false,
+      passkey: {
+        rpId,
+        challenge: options.challenge,
+        origin: frame.origin,
+        crossOrigin: frame.crossOrigin,
+        candidates: answer.map((c) => ({
+          entryId: c.entryId,
+          title: c.title,
+          userName: c.userName,
+          matchedUrl: rpId,
+          hasTotp: false,
+        })),
+      },
+      expires: this.now() + listLifetimeMs,
+    });
+    return { token, listUrl: this.api.runtime.getURL(`list.html#${token}`) };
+  }
+
+  /** The passkey picked in the list: the client data made here, signed by
+   *  the service, the credential sent to the one frame that asked. */
+  private async passkeySign(
+    token: string,
+    c: ListContext,
+    p: PasskeyContext,
+    entryId: string,
+  ): Promise<unknown> {
+    if (!p.candidates.some((k) => k.entryId === entryId)) return refused();
+    const clientData = clientDataJson('webauthn.get', p.challenge, p.origin, p.crossOrigin);
+    const signed = await this.withHost(async (h) =>
+      h.request('passkeyGet', {
+        url: c.frameUrl,
+        rpId: p.rpId,
+        entryId,
+        clientDataHash: toBase64Url(await sha256(clientData)),
+      }),
+    );
+    this.lists.delete(token);
+    const failed = 'error' in signed ? signed.error !== undefined : false;
+    const s = signed as Record<string, unknown>;
+    const answer: PageAnswer = failed
+      ? fallback
+      : {
+          credential: {
+            credentialId: String(s.credentialId),
+            clientDataJSON: toBase64Url(new TextEncoder().encode(clientData)),
+            authenticatorData: String(s.authenticatorData),
+            signature: String(s.signature),
+            userHandle: typeof s.userHandle === 'string' ? s.userHandle : undefined,
+          },
+        };
+    await this.toContent(c.tabId, { op: 'tsm.passkeyDone', token, answer }, c.frameId);
+    return { signed: answer.credential !== undefined };
+  }
+
+  /** A page's new passkey: the service asks the app and keeps it; a
+   *  credential the vaults hold already is the page's InvalidStateError;
+   *  anything else the browser's own. */
+  private async passkeyCreate(sender: Sender, options: PasskeyCreateOptions): Promise<unknown> {
+    const frame = this.passkeyFrame(sender);
+    if (!frame || typeof options?.challenge !== 'string' || typeof options.userId !== 'string') {
+      return fallback;
+    }
+    const rpId = rpIdOf(options, frame.frameUrl);
+    const made = await this.withHost(async (h) => {
+      const state = (await h.request('status')).state;
+      if (state !== 'running') return null;
+      return h.request('passkeyCreate', {
+        url: frame.frameUrl,
+        rpId,
+        userId: options.userId,
+        userName: options.userName ?? '',
+        displayName: options.displayName,
+        algorithms: options.algorithms,
+        excludeCredentials: options.excludeCredentials,
+      });
+    });
+    if (made === null) return fallback;
+    if ('error' in made) {
+      const e = made.error as HostError | undefined;
+      if (e) {
+        return e.reason === 'excluded'
+          ? { error: { name: 'InvalidStateError', message: 'this account has a passkey already' } }
+          : fallback;
+      }
+    }
+    const clientData = clientDataJson(
+      'webauthn.create',
+      options.challenge,
+      frame.origin,
+      frame.crossOrigin,
+    );
+    const a = made as Record<string, unknown>;
+    return {
+      credential: {
+        credentialId: String(a.credentialId),
+        clientDataJSON: toBase64Url(new TextEncoder().encode(clientData)),
+        authenticatorData: String(a.authenticatorData),
+        attestationObject: String(a.attestationObject),
+        publicKey: String(a.publicKey),
+        publicKeyAlgorithm: Number(a.publicKeyAlgorithm),
+      },
+    } satisfies PageAnswer;
   }
 
   /** The popup: the active tab's state and logins (its top frame). */

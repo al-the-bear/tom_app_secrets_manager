@@ -13,11 +13,16 @@
 /// | `check {url, frameUrl?, userName?, password}` | `match` without waiting, then `getMany` of the `Password` of the page's logins of that user | `state`: `new`, `changed` (with `entryId`, `userName`), `known` or `unknown`; never a value |
 /// | `propose {url, title?, userName, password}` | `propose` | `accepted`, `known` |
 /// | `openApp {entryId?}` | — | the desktop app started at the entry |
+/// | **[C]** `passkeys {url, rpId, allowCredentials?}` | `passkeys` | `candidates [{entryId, title, userName, credentialId}]`, never a key |
+/// | **[C]** `passkeyGet {url, rpId, entryId, clientDataHash}` | `passkeyGet` | `credentialId`, `authenticatorData`, `signature`, `userHandle?` (base64url) |
+/// | **[C]** `passkeyCreate {url, rpId, userId, userName, displayName?, algorithms, excludeCredentials?}` | `passkeyCreate` (the app asks the user) | `credentialId`, `authenticatorData`, `attestationObject`, `publicKey`, `publicKeyAlgorithm` |
 ///
 /// Every answer carries the request's `id`; a refusal is `error {kind,
 /// message, reason?}` with the service's kind (`not_running` when no
 /// service answers).
 library;
+
+import 'dart:convert';
 
 import 'package:tom_secrets_client/tom_secrets_client.dart';
 
@@ -44,6 +49,32 @@ abstract interface class TomSecretsBrowserService {
     required String userName,
     required String password,
     String? title,
+  });
+
+  /// **[C]** `passkeys` of [rpId] for the page [url].
+  Future<List<TomSecretsPasskeyCandidate>> passkeys(
+    String url,
+    String rpId, {
+    List<String>? allowCredentials,
+  });
+
+  /// **[C]** `passkeyGet`: the service signs with the passkey [entryId].
+  Future<TomSecretsPasskeySignature> passkeyGet({
+    required String url,
+    required String rpId,
+    required String entryId,
+    required List<int> clientDataHash,
+  });
+
+  /// **[C]** `passkeyCreate`: a new passkey once the user confirms it.
+  Future<TomSecretsPasskeyCreated> passkeyCreate({
+    required String url,
+    required String rpId,
+    required List<int> userId,
+    required String userName,
+    String? displayName,
+    required List<int> algorithms,
+    List<String>? excludeCredentials,
   });
 
   /// Closes the connection.
@@ -90,6 +121,45 @@ final class TomSecretsClientBrowserService implements TomSecretsBrowserService {
     userName: userName,
     password: password,
     title: title,
+  );
+
+  @override
+  Future<List<TomSecretsPasskeyCandidate>> passkeys(
+    String url,
+    String rpId, {
+    List<String>? allowCredentials,
+  }) => client.passkeys(url, rpId, allowCredentials: allowCredentials);
+
+  @override
+  Future<TomSecretsPasskeySignature> passkeyGet({
+    required String url,
+    required String rpId,
+    required String entryId,
+    required List<int> clientDataHash,
+  }) => client.passkeyGet(
+    url: url,
+    rpId: rpId,
+    entryId: entryId,
+    clientDataHash: clientDataHash,
+  );
+
+  @override
+  Future<TomSecretsPasskeyCreated> passkeyCreate({
+    required String url,
+    required String rpId,
+    required List<int> userId,
+    required String userName,
+    String? displayName,
+    required List<int> algorithms,
+    List<String>? excludeCredentials,
+  }) => client.passkeyCreate(
+    url: url,
+    rpId: rpId,
+    userId: userId,
+    userName: userName,
+    displayName: displayName,
+    algorithms: algorithms,
+    excludeCredentials: excludeCredentials,
   );
 
   @override
@@ -140,6 +210,9 @@ final class TomSecretsBrowserHost {
         'check' => await _check(request),
         'propose' => await _propose(request),
         'openApp' => await _openApp(request),
+        'passkeys' => await _passkeys(request),
+        'passkeyGet' => await _passkeyGet(request),
+        'passkeyCreate' => await _passkeyCreate(request),
         _ => null,
       };
       if (answer == null) {
@@ -295,6 +368,92 @@ final class TomSecretsBrowserHost {
       title: _string(request, 'title'),
     );
     return {'accepted': true, 'known': known};
+  }
+
+  /// The strings of [request]'s list [key], or null without one.
+  static List<String>? _strings(Map<String, Object?> request, String key) {
+    final v = request[key];
+    if (v == null) return null;
+    if (v is! List || v.any((e) => e is! String)) {
+      throw _Malformed('$key is a list of strings', key);
+    }
+    return v.cast<String>();
+  }
+
+  static List<int> _bytes(Map<String, Object?> request, String key) {
+    final v = request[key];
+    try {
+      if (v is String && v.isNotEmpty) {
+        return base64Url.decode(base64Url.normalize(v));
+      }
+    } on FormatException {
+      // Fall through: malformed.
+    }
+    throw _Malformed('$key is base64url', key);
+  }
+
+  Future<Map<String, Object?>> _passkeys(Map<String, Object?> request) async {
+    final found = await service.passkeys(
+      _need(request, 'url'),
+      _need(request, 'rpId'),
+      allowCredentials: _strings(request, 'allowCredentials'),
+    );
+    return {
+      'candidates': [
+        for (final c in found)
+          {
+            'entryId': c.entryId,
+            'title': c.title,
+            'userName': c.userName,
+            'credentialId': c.credentialId,
+          },
+      ],
+    };
+  }
+
+  Future<Map<String, Object?>> _passkeyGet(Map<String, Object?> request) async {
+    final signed = await service.passkeyGet(
+      url: _need(request, 'url'),
+      rpId: _need(request, 'rpId'),
+      entryId: _need(request, 'entryId'),
+      clientDataHash: _bytes(request, 'clientDataHash'),
+    );
+    return {
+      'credentialId': signed.credentialId,
+      'authenticatorData': signed.authenticatorData,
+      'signature': signed.signature,
+      'userHandle': ?signed.userHandle,
+    };
+  }
+
+  Future<Map<String, Object?>> _passkeyCreate(
+    Map<String, Object?> request,
+  ) async {
+    final algorithms = request['algorithms'];
+    if (algorithms is! List || algorithms.any((a) => a is! int)) {
+      throw const _Malformed(
+        'algorithms is a list of COSE numbers',
+        'algorithms',
+      );
+    }
+    final made = await service.passkeyCreate(
+      url: _need(request, 'url'),
+      rpId: _need(request, 'rpId'),
+      userId: _bytes(request, 'userId'),
+      userName: request['userName'] is String
+          ? request['userName']! as String
+          : '',
+      displayName: _string(request, 'displayName'),
+      algorithms: algorithms.cast<int>(),
+      excludeCredentials: _strings(request, 'excludeCredentials'),
+    );
+    return {
+      'credentialId': made.credentialId,
+      'authenticatorData': made.authenticatorData,
+      'attestationObject': made.attestationObject,
+      'publicKey': made.publicKey,
+      'publicKeyAlgorithm': made.publicKeyAlgorithm,
+    };
   }
 
   Future<Map<String, Object?>> _openApp(Map<String, Object?> request) async {

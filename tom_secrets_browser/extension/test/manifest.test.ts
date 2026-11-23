@@ -30,17 +30,27 @@ test('Firefox: a background script and the gecko id, no key', () => {
   assert.deepEqual(m.background, { scripts: ['background.js'] });
   assert.equal(m.key, undefined);
   assert.deepEqual(m.browser_specific_settings, {
-    gecko: { id: firefoxExtensionId, strict_min_version: '115.0' },
+    gecko: { id: firefoxExtensionId, strict_min_version: '128.0' },
   });
 });
 
-test('the permissions, the content script in every frame, the shortcut, the list page', () => {
+test('the permissions, the content scripts in every frame, the shortcut, the list page', () => {
   const m = manifest('chromium', '1.2.3') as Record<string, any>;
   assert.equal(m.version, '1.2.3');
   assert.deepEqual(m.permissions, ['nativeMessaging', 'activeTab', 'scripting', 'storage', 'contextMenus']);
   assert.deepEqual(m.host_permissions, ['<all_urls>']);
   assert.equal(m.content_scripts[0].all_frames, true);
   assert.deepEqual(m.content_scripts[0].matches, ['http://*/*', 'https://*/*']);
+  // Passkeys (DP-120): the page-world script in every frame from its start
+  // (`world: "MAIN"`: Chrome 111, Firefox 128).
+  assert.deepEqual(m.content_scripts[1], {
+    matches: ['http://*/*', 'https://*/*'],
+    js: ['webauthn.js'],
+    all_frames: true,
+    run_at: 'document_start',
+    world: 'MAIN',
+  });
+  assert.equal(m.minimum_chrome_version, '111');
   assert.equal(m.commands['open-list'].suggested_key.mac, 'Command+Shift+L');
   assert.ok(m.web_accessible_resources[0].resources.includes('list.html'));
   // Manifest V3: no remote code, no content_security_policy loosening.

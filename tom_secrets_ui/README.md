@@ -257,8 +257,11 @@ offering the import and the pairing.
   only when started by the same parent. An ssh-agent signature shows the key,
   the destination host (its `known_hosts` names) and the purpose, and a lasting
   answer may hold only for that host; a confirmation (a forwarded agent, a key
-  or vault that asks) is answered for that signature only. Closes itself when
-  the prompt ends elsewhere; Later leaves it under Clients.
+  or vault that asks) is answered for that signature only. **[C]** A browser
+  prompt of passkeys names them so; a new passkey ("Save a passkey for …?")
+  shows the site, the user and the page, and is saved once or not now.
+  Closes itself when the prompt ends elsewhere; Later leaves it under
+  Clients.
 - `TomSecretsClientsView`: Approvals (the waiting prompts, answered from here),
   the allow list of every host (filtered by host, grouped by executable, script,
   folder, interpreter; last use, accepted or not, Revoke), pre-approving a

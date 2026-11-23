@@ -207,6 +207,86 @@ void main() {
     });
   });
 
+  testWidgets('a browser prompt of passkeys names them so', (tester) async {
+    await unlocked(tester);
+    service.ask({
+      'approvalId': 'a-3',
+      'host': 'demo-host',
+      'identity': {
+        'kind': 'exe',
+        'exe': '/opt/tsm/bin/tsm-browser-host',
+        'args': ['chrome-extension://lcejninmlbnhfnpedlgjjfeelhbgmach/'],
+        'cwd': '/',
+        'parent': {'exe': '/usr/bin/chromium'},
+      },
+      'refs': ['team/~01'],
+      'resolved': [
+        {'store': 'team', 'path': 'Web/Mail', 'kind': 'login'},
+      ],
+      'url': 'https://mail.example.com/login',
+      'browser': true,
+      'passkey': true,
+    });
+    await wait(tester);
+    expect(
+      find.text('The browser extension asks for passkeys'),
+      findsOneWidget,
+    );
+    expect(find.text('The passkeys of mail.example.com'), findsOneWidget);
+    expect(find.text('Passkey'), findsOneWidget);
+    expect(find.textContaining('sign in with them'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tsm-approval-answer')));
+    await wait(tester);
+    expect(service.approvals.single['decision'], 'once');
+  });
+
+  testWidgets('a new passkey: the site, the user and the page; saved once or '
+      'not now, never a lasting grant', (tester) async {
+    await unlocked(tester);
+    Map<String, Object?> event(String id) => {
+      'approvalId': id,
+      'host': 'demo-host',
+      'identity': {
+        'kind': 'exe',
+        'exe': '/opt/tsm/bin/tsm-browser-host',
+        'args': const <String>[],
+        'cwd': '/',
+        'parent': {'exe': '/usr/bin/firefox'},
+      },
+      'refs': const <String>[],
+      'resolved': const <Object>[],
+      'confirmOnly': true,
+      'url': 'https://shop.example.org/signup',
+      'passkeyCreate': {
+        'rpId': 'shop.example.org',
+        'userName': 'demo-shopper',
+        'url': 'https://shop.example.org/signup',
+      },
+    };
+    service.ask(event('a-4'));
+    await wait(tester);
+    expect(find.text('Save a passkey for shop.example.org?'), findsOneWidget);
+    expect(
+      find.byKey(const Key('tsm-approval-passkey-create')),
+      findsOneWidget,
+    );
+    expect(find.text('demo-shopper'), findsOneWidget);
+    expect(find.text('Save in Tom Secrets Manager'), findsOneWidget);
+    expect(find.byKey(const Key('tsm-approval-decision-always')), findsNothing);
+    expect(find.byKey(const Key('tsm-approval-confirm-only')), findsNothing);
+    await tester.tap(find.byKey(const Key('tsm-approval-answer')));
+    await wait(tester);
+    expect(service.approvals.single['decision'], 'once');
+
+    service.ask(event('a-5'));
+    await wait(tester);
+    await tester.tap(find.byKey(const Key('tsm-approval-decision-never')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tsm-approval-answer')));
+    await wait(tester);
+    expect(service.approvals.last['decision'], 'never');
+  });
+
   testWidgets('Settings › Integrations: ssh and git switched on and off, the '
       'blocks written and removed', (tester) async {
     await unlocked(tester);

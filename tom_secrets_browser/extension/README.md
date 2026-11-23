@@ -79,6 +79,28 @@ which asks the secrets service.
   own) or "Never". The list says it is asking meanwhile; with the app
   closed nothing is asked and no login is listed. System vaults are never
   served to the browser, neither their logins nor their values.
+- **Passkeys** (DP-120). A script in the page's own world
+  (`webauthn.js`, `world: "MAIN"`, from the page's start) takes over
+  `navigator.credentials.get` and `create` for passkey requests. It hands
+  them to the content script by `postMessage`.
+  - **Signing in.** The background asks the host for the page's passkeys.
+    When there are some, the extension's own list opens at the top right of
+    the page ("Sign in to … with a passkey"). The user picks one there,
+    where the page cannot reach. The background then makes the client data
+    (`webauthn.get`, the frame's origin from the browser's sender
+    information, never the page's word), and the service signs its hash.
+    The page gets a `PublicKeyCredential` shaped as WebAuthn's.
+  - **Creating one.** A creation goes to the service, which asks in the
+    app ("Save a passkey for …?"). Once saved, the page gets the `none`
+    attestation and the public key. A passkey the vaults hold already for
+    that account is the page's `InvalidStateError`.
+  - **The browser's own.** It answers everything else: conditional
+    requests (the browser's own passkey autofill), a page with no passkey
+    in the vaults, a locked or closed app, no host, the list closed, "Not
+    now" in the app.
+  - **No key.** The extension never holds a passkey's key: the service
+    signs. The page may send the bridge's messages itself, which gains it
+    nothing WebAuthn would not give it.
 - **Who may ask.** Only the extension's own list and popup pages may ask for
   a list, a fill or a code, and only the bar page for its bar, each only for
   the token of its own. Every other sender is answered `denied`. No stored
@@ -150,6 +172,11 @@ The tests (node:test, with jsdom for the page) cover:
 - proposals: known, new and changed logins, the bar after a navigation,
   Save, Not now, Never for this site and the popup's switch, a closed tab
   and the lifetime, a refused Save;
+- passkeys: the options and the client data, the background's sign-in
+  (the list, the signature sent to the one frame that asked) and creation
+  (an excluded credential), the browser's own WebAuthn when nothing is
+  there, the page script's take-over (conditional requests left alone) and
+  the credential objects;
 - the generator, both manifests, the icons and the store packages read
   back.
 
@@ -171,3 +198,6 @@ and `npm test` (`:test`), and checks the dependency closure from
   blocks Copy code in the in-page list; the popup's Copy code still works.
   The copied code stays on the clipboard until something else is copied.
 - Safari is phase C.
+- Passkeys need Chrome 111 or Firefox 128 at least (`world: "MAIN"` content
+  scripts). While Tom Secrets Manager is locked a page's passkeys are the
+  browser's own; the extension does not ask for an unlock then.

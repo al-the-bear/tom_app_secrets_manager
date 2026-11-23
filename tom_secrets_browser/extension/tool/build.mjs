@@ -76,6 +76,7 @@ const entries = {
   list: 'list.ts',
   popup: 'popup.ts',
   bar: 'bar.ts',
+  webauthn: 'webauthn-main.ts',
 };
 
 for (const family of ['chromium', 'firefox']) {
@@ -87,7 +88,7 @@ for (const family of ['chromium', 'firefox']) {
       entryPoints: [join(root, 'src', entry)],
       bundle: true,
       format: 'iife',
-      target: family === 'chromium' ? 'chrome110' : 'firefox115',
+      target: family === 'chromium' ? 'chrome111' : 'firefox128',
       outfile: join(out, `${name}.js`),
       legalComments: 'none',
       logLevel: 'warning',

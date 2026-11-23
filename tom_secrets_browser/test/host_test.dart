@@ -75,6 +75,88 @@ final class _Service implements TomSecretsBrowserService {
     return false;
   }
 
+  final List<Map<String, Object?>> passkeyCalls = [];
+
+  @override
+  Future<List<TomSecretsPasskeyCandidate>> passkeys(
+    String url,
+    String rpId, {
+    List<String>? allowCredentials,
+  }) async {
+    passkeyCalls.add({
+      'op': 'passkeys',
+      'url': url,
+      'rpId': rpId,
+      'allowCredentials': allowCredentials,
+    });
+    if (rpId != 'mail.example.com') return const [];
+    return const [
+      TomSecretsPasskeyCandidate(
+        entryId: 'team/~0123456789abcdef0123456789abcdef',
+        title: 'Mail',
+        userName: 'demo-user',
+        credentialId: 'ZGVtby1jcmVk',
+      ),
+    ];
+  }
+
+  @override
+  Future<TomSecretsPasskeySignature> passkeyGet({
+    required String url,
+    required String rpId,
+    required String entryId,
+    required List<int> clientDataHash,
+  }) async {
+    passkeyCalls.add({
+      'op': 'passkeyGet',
+      'url': url,
+      'rpId': rpId,
+      'entryId': entryId,
+      'clientDataHash': clientDataHash,
+    });
+    return const TomSecretsPasskeySignature(
+      credentialId: 'ZGVtby1jcmVk',
+      authenticatorData: 'ZGF0YQ',
+      signature: 'c2ln',
+      userHandle: 'dXNlcg',
+    );
+  }
+
+  @override
+  Future<TomSecretsPasskeyCreated> passkeyCreate({
+    required String url,
+    required String rpId,
+    required List<int> userId,
+    required String userName,
+    String? displayName,
+    required List<int> algorithms,
+    List<String>? excludeCredentials,
+  }) async {
+    passkeyCalls.add({
+      'op': 'passkeyCreate',
+      'url': url,
+      'rpId': rpId,
+      'userId': userId,
+      'userName': userName,
+      'algorithms': algorithms,
+      'excludeCredentials': excludeCredentials,
+    });
+    if (excludeCredentials?.contains('ZGVtby1jcmVk') ?? false) {
+      throw TomSecretsClientException(
+        TomSecretsErrorKind.denied,
+        'the vaults hold this passkey',
+        details: const {'reason': 'excluded'},
+      );
+    }
+    return const TomSecretsPasskeyCreated(
+      credentialId: 'bmV3',
+      authenticatorData: 'ZGF0YQ',
+      attestationObject: 'YXR0',
+      publicKey: 'cGs',
+      publicKeyAlgorithm: -7,
+    );
+  }
+
   @override
   Future<void> close() async => closed = true;
 }
@@ -423,6 +505,99 @@ void main() {
         '--show-entry',
         'team/~ab',
       ]);
+    });
+  });
+
+  group('passkeys [C]', () {
+    test('passkeys lists by name and credential id; passkeyGet passes the '
+        'hash as bytes and answers the signature; passkeyCreate the user '
+        'handle and the algorithms', () async {
+      final listed = await host.handle({
+        'id': 1,
+        'op': 'passkeys',
+        'url': 'https://mail.example.com/login',
+        'rpId': 'mail.example.com',
+        'allowCredentials': ['ZGVtby1jcmVk'],
+      });
+      expect(listed['candidates'], [
+        {
+          'entryId': 'team/~0123456789abcdef0123456789abcdef',
+          'title': 'Mail',
+          'userName': 'demo-user',
+          'credentialId': 'ZGVtby1jcmVk',
+        },
+      ]);
+      expect(service.passkeyCalls.last['allowCredentials'], ['ZGVtby1jcmVk']);
+
+      final signed = await host.handle({
+        'id': 2,
+        'op': 'passkeyGet',
+        'url': 'https://mail.example.com/login',
+        'rpId': 'mail.example.com',
+        'entryId': 'team/~0123456789abcdef0123456789abcdef',
+        'clientDataHash': base64Url
+            .encode(List.filled(32, 7))
+            .replaceAll('=', ''),
+      });
+      expect(signed, {
+        'id': 2,
+        'op': 'passkeyGet',
+        'credentialId': 'ZGVtby1jcmVk',
+        'authenticatorData': 'ZGF0YQ',
+        'signature': 'c2ln',
+        'userHandle': 'dXNlcg',
+      });
+      expect(service.passkeyCalls.last['clientDataHash'], List.filled(32, 7));
+
+      final made = await host.handle({
+        'id': 3,
+        'op': 'passkeyCreate',
+        'url': 'https://mail.example.com/signup',
+        'rpId': 'mail.example.com',
+        'userId': 'AQID',
+        'userName': 'demo-user',
+        'algorithms': [-7, -257],
+      });
+      expect(made['publicKeyAlgorithm'], -7);
+      expect(made['attestationObject'], 'YXR0');
+      expect(service.passkeyCalls.last['userId'], [1, 2, 3]);
+    });
+
+    test('a malformed request is refused; the service\'s refusal comes back '
+        'with its reason', () async {
+      final noHash = await host.handle({
+        'id': 1,
+        'op': 'passkeyGet',
+        'url': 'https://mail.example.com/',
+        'rpId': 'mail.example.com',
+        'entryId': 'team/~0123456789abcdef0123456789abcdef',
+      });
+      expect((noHash['error']! as Map)['reason'], 'clientDataHash');
+      final badAlgorithms = await host.handle({
+        'id': 2,
+        'op': 'passkeyCreate',
+        'url': 'https://mail.example.com/',
+        'rpId': 'mail.example.com',
+        'userId': 'AQID',
+        'userName': 'demo-user',
+        'algorithms': ['ES256'],
+      });
+      expect((badAlgorithms['error']! as Map)['reason'], 'algorithms');
+      final excluded = await host.handle({
+        'id': 3,
+        'op': 'passkeyCreate',
+        'url': 'https://mail.example.com/',
+        'rpId': 'mail.example.com',
+        'userId': 'AQID',
+        'userName': 'demo-user',
+        'algorithms': [-7],
+        'excludeCredentials': ['ZGVtby1jcmVk'],
+      });
+      expect(excluded['error'], {
+        'kind': 'denied',
+        'message': 'the vaults hold this passkey',
+        'reason': 'excluded',
+      });
     });
   });
 

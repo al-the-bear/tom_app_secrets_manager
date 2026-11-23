@@ -60,7 +60,12 @@ export function renderList(root: HTMLElement, answer: ListAnswer, actions: ViewA
   const doc = root.ownerDocument;
   root.replaceChildren();
   const header = el(doc, 'header');
-  header.append(el(doc, 'strong', { text: answer.site ? `Logins for ${answer.site}` : 'Tom Secrets Manager' }));
+  const heading = answer.passkey
+    ? `Sign in to ${answer.site} with a passkey`
+    : answer.site
+      ? `Logins for ${answer.site}`
+      : 'Tom Secrets Manager';
+  header.append(el(doc, 'strong', { text: heading }));
   if (actions.close) header.append(button(doc, '×', 'tsm-close', actions.close));
   root.append(header);
 

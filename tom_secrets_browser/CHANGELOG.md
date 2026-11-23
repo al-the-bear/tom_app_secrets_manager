@@ -2,6 +2,13 @@
 
 ## 0.1.0
 
+- Passkeys (DP-120, protocol.md 5.8): the host's `passkeys`, `passkeyGet`
+  and `passkeyCreate` over the service's; the extension takes over a page's
+  WebAuthn calls in the page's world (`webauthn.js`, `world: "MAIN"`), lists
+  the page's passkeys in its own list, makes the client data with the
+  frame's origin from the browser and has the service sign; a new passkey
+  is confirmed in the app; the browser's own WebAuthn answers whatever Tom
+  Secrets Manager does not. Chrome 111 and Firefox 128 at least.
 - The browser extension (`extension/`, part-browser): Manifest V3 for
   Chromium browsers and Firefox from one TypeScript source; the login
   fields found in every frame (open shadow roots too); the list of the

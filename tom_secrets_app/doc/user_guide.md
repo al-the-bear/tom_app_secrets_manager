@@ -563,7 +563,11 @@ time" (the extension may list them and fill each once in the next ten
 minutes), "Always in this browser" or "Never". A lasting answer "Covers"
 "These logins", "Their vaults" or "All logins" (preset), and holds for that
 browser only: another browser asks on its own. System vaults are never
-given to a browser.
+given to a browser. The same prompt asks for a site's passkeys ("The
+browser extension asks for passkeys"). **"Save a passkey for <site>?"**
+asks when a site creates a passkey through the extension: it names the
+site, the user and the page. "Save in Tom Secrets Manager" saves it, "Not
+now" lets the browser offer its own.
 
 "Allow" (or "Refuse" for Never) answers; "Later" leaves the request waiting
 under Clients. A program that asked for a client token gets one with an
@@ -1304,6 +1308,23 @@ with the app closed nothing is asked and the list shows no login. A
 browser you refused, or one you want to approve again, is under Clients ›
 Allow list ("Revoke"). The browser is never given the logins or values of
 system vaults.
+
+**Passkeys in the browser** need Chrome 111 or Firefox 128 at least.
+- **Signing in.** When a site asks for a passkey and your vaults hold one
+  for it, the extension's list opens at the top right of the page: "Sign in
+  to … with a passkey". Pick the passkey, and Tom Secrets Manager signs you
+  in.
+- **Approval.** The first time, the app asks you to approve the browser for
+  the site's passkeys, as for logins ("The browser extension asks for
+  passkeys").
+- **Creating one.** When a site creates a passkey, the app asks "Save a
+  passkey for …?". "Save in Tom Secrets Manager" keeps it in the login of
+  that site and user, or in a new login, and every device has it from
+  there. "Not now" lets the browser offer its own.
+- **The browser's own.** Close the list, or have Tom Secrets Manager locked
+  or closed, and the browser's own passkeys (a phone, a security key, its
+  own store) answer instead.
+- **Never handed out.** A passkey's key never leaves the app's service.
 
 **Password AutoFill** (macOS): macOS fills logins in apps and Safari through
 Tom Secrets Manager's AutoFill provider. Turn it on in System Settings ›

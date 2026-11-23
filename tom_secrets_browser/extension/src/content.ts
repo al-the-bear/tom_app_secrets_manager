@@ -11,6 +11,12 @@
 // shadow root, so the page can neither read nor restyle it. So do the icons
 // in the login fields and the bar "Save in Tom Secrets Manager?" that a
 // submitted login brings up in the top frame (part-browser, DP-43).
+//
+// Passkeys (DP-120): the page-world script (webauthn-page.ts) hands the
+// page's WebAuthn requests over by `postMessage`; this script asks the
+// background, shows the list of the page's passkeys for a sign-in, and
+// answers the page script with the credential, a refusal, or "the browser's
+// own".
 
 import type { ExtensionApi } from './api';
 import {
@@ -23,6 +29,7 @@ import {
 import { fillLogin, setFieldValue } from './fill';
 import { FieldIcons } from './icons';
 import type { ToContent } from './messages';
+import type { PasskeyBridgeAnswer, PasskeyBridgeRequest } from './webauthn';
 
 /** The list's size in the page. */
 const listWidth = 340;
@@ -50,6 +57,8 @@ export class ContentScript {
   private observer: MutationObserver | undefined;
   private scheduled = false;
   private lastCaptured = { key: '', at: 0 };
+  /** The page script's sign-in waiting for the passkey list: its id. */
+  private passkeyRequest: { token: string; id: string } | undefined;
 
   constructor(
     private readonly doc: Document,
@@ -94,6 +103,43 @@ export class ContentScript {
     );
     // The page a form led to: the bar still waiting for this tab.
     if (this.isTop()) void this.showPendingBar();
+    // The page script's passkey requests.
+    this.doc.defaultView?.addEventListener('message', (event: MessageEvent) => {
+      const data = event.data as PasskeyBridgeRequest | undefined;
+      if (event.source !== this.doc.defaultView || data?.__tsm !== 'webauthn-request') return;
+      void this.passkey(data);
+    });
+  }
+
+  /** Answers the page script's request [r] (DP-120): a sign-in shows the
+   *  list of the page's passkeys first; anything Tom Secrets Manager cannot
+   *  answer is the browser's own. */
+  async passkey(r: PasskeyBridgeRequest): Promise<void> {
+    const answer = (await this.api.runtime
+      .sendMessage(
+        r.kind === 'get'
+          ? { op: 'tsm.passkeyGet', options: r.options }
+          : { op: 'tsm.passkeyCreate', options: r.options },
+      )
+      .catch(() => ({ fallback: true }))) as
+      | (Omit<PasskeyBridgeAnswer, '__tsm' | 'id'> & { token?: string; listUrl?: string })
+      | undefined;
+    if (answer?.token && answer.listUrl) {
+      this.passkeyRequest = { token: answer.token, id: r.id };
+      this.removeList();
+      this.token = answer.token;
+      this.showList(answer.listUrl, true);
+      return;
+    }
+    this.answerPage(r.id, answer ?? { fallback: true });
+  }
+
+  private answerPage(id: string, answer: Omit<PasskeyBridgeAnswer, '__tsm' | 'id'>): void {
+    const { credential, error, fallback } = answer;
+    this.doc.defaultView?.postMessage(
+      { __tsm: 'webauthn-answer', id, credential, error, fallback } satisfies PasskeyBridgeAnswer,
+      '*',
+    );
   }
 
   private isTop(): boolean {
@@ -211,6 +257,14 @@ export class ContentScript {
       case 'tsm.closeBar':
         if (message.token === this.barToken) this.removeBar();
         return { closed: true };
+      case 'tsm.passkeyDone': {
+        const pending = this.passkeyRequest;
+        if (!pending || pending.token !== message.token) return null;
+        this.passkeyRequest = undefined;
+        if (this.token === message.token) this.removeList();
+        this.answerPage(pending.id, message.answer);
+        return { answered: true };
+      }
       default:
         return null;
     }
@@ -261,7 +315,9 @@ export class ContentScript {
     this.barToken = undefined;
   }
 
-  private showList(listUrl: string): void {
+  /** The list at the anchor field, or at the top right of the page
+   *  ([fixed]: a passkey sign-in, which has no field). */
+  private showList(listUrl: string, fixed = false): void {
     const anchor = this.anchor();
     const host = this.doc.createElement('tom-secrets-list');
     const root = host.attachShadow({ mode: 'closed' });
@@ -277,8 +333,9 @@ export class ContentScript {
     const view = this.doc.defaultView;
     const top = (rect ? rect.bottom : 16) + (view?.scrollY ?? 0) + 4;
     const left = Math.max(4, (rect ? rect.left : 16) + (view?.scrollX ?? 0));
-    host.style.cssText =
-      `all:initial;position:absolute;z-index:2147483647;top:${top}px;left:${left}px;`;
+    host.style.cssText = fixed
+      ? 'all:initial;position:fixed;z-index:2147483647;top:12px;right:12px;'
+      : `all:initial;position:absolute;z-index:2147483647;top:${top}px;left:${left}px;`;
     (this.doc.body ?? this.doc.documentElement).appendChild(host);
     this.host = host;
   }

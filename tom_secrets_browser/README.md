@@ -65,6 +65,17 @@ service's error kind (`not_running` when no service answers).
   is in with `--show-entry <entryId>` (on macOS `open -n -a` on the bundle):
   a running app comes to the front and shows the entry (`unavailable`,
   reason `no_app`, when the app is not there).
+- **[C]** The passkeys (the service's protocol.md 5.8, DP-120). The host
+  passes these on, and the service never answers a key:
+  - `passkeys {url, rpId, allowCredentials?}`: the page's passkeys by name
+    and credential id (`candidates`).
+  - `passkeyGet {url, rpId, entryId, clientDataHash}`: the service signs
+    for the passkey picked (`credentialId`, `authenticatorData`,
+    `signature`, `userHandle`).
+  - `passkeyCreate {url, rpId, userId, userName, displayName?, algorithms,
+    excludeCredentials?}`: a new passkey once the user confirms it in the
+    app (`credentialId`, `authenticatorData`, `attestationObject`,
+    `publicKey`, `publicKeyAlgorithm`).
 
 ## Installing
 
