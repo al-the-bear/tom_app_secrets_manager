@@ -2,9 +2,11 @@
 
 ## 0.1.0
 
-- A desktop's QR code for a pairing on a relay alone (part-relay) is
-  recognised and refused with what to do: a phone pairs on the same network
-  or over the VPN.
+- The phone pairs through a GitHub relay (part-relay): the desktop's QR
+  code fills the relay (or it is typed), the phone's own token for that
+  repository is pasted, the address (when there is one) is tried first; the
+  token is kept for the repository (`TomSecretsMobileSetup.applyPairing`'s
+  `ownTokens`); a relay failure is said naming the relay.
 - Guided rotations (part-key-rotation): the engine takes the next keys at
   each unlock, refresh and save of the primary (the primary's own into the
   keychain as `<handle>.next`, the key ids into the phone's device record),

@@ -4,8 +4,10 @@
 /// The first screen of a phone that is not set up: pairing with a desktop
 /// app — its Pairing screen's QR code scanned (DP-56), or its code typed
 /// with the address (over the VPN) or without it (on the same network the
-/// open window is found by its announcement) — or the primary set up by
-/// hand.
+/// open window is found by its announcement), or through a GitHub
+/// repository the desktop's pairing also waits on (part-relay, with the
+/// phone's own token for it; the address first when there is one) — or the
+/// primary set up by hand.
 library;
 
 import 'dart:io';
@@ -21,34 +23,81 @@ import 'package:tom_secrets_ui/tom_secrets_ui.dart'
 
 import 'mobile_setup.dart';
 
-/// Receives a pairing: the address and code of the giving desktop, this
-/// device's name; answers the giver's name and the bundle. A test hands in
-/// its own.
+/// What a pairing gave the phone: the giver's name, the bundle, and the
+/// tokens the phone brought itself (a pairing through a relay).
+typedef TomSecretsMobileReceived = ({
+  String giver,
+  TomSecretsPairingBundle bundle,
+  Map<String, String> ownTokens,
+});
+
+/// Receives a pairing: the address and code of the giving desktop, or the
+/// relay its pairing waits on with this phone's token for it, this
+/// device's name; answers what it gave. A test hands in its own.
 typedef TomSecretsMobileReceive =
-    Future<({String giver, TomSecretsPairingBundle bundle})> Function({
-      required String address,
-      required int port,
+    Future<TomSecretsMobileReceived> Function({
+      String? address,
+      int? port,
+      TomSecretsRelayId? relay,
+      String? relayToken,
       required TomSecretsPairingCode code,
       required String device,
     });
 
 /// The real pairing: `tomSecretsReceivePairingForSetup` (which refuses a
-/// bundle without the primary or its token). The phone keeps no trust
-/// material: it approves nothing and is not an approval link's peer.
-Future<({String giver, TomSecretsPairingBundle bundle})>
-tomSecretsMobileReceive({
-  required String address,
-  required int port,
+/// bundle without the primary or its token): at [address]:[port] when
+/// given, else (or when nothing answers there) through [relay], a GitHub
+/// repository reached with [relayToken] ([relayFor] builds it; a test
+/// hands in its own). The phone keeps no trust material: it approves
+/// nothing and is not an approval link's peer.
+Future<TomSecretsMobileReceived> tomSecretsMobileReceive({
+  String? address,
+  int? port,
+  TomSecretsRelayId? relay,
+  String? relayToken,
   required TomSecretsPairingCode code,
   required String device,
+  TomSecretsRelay Function(TomSecretsRelayId id, String token, String device)?
+  relayFor,
 }) async {
+  if (address != null && port != null) {
+    try {
+      final receipt = await tomSecretsReceivePairingForSetup(
+        address: address,
+        port: port,
+        code: code,
+        device: device,
+      );
+      return (
+        giver: receipt.giver,
+        bundle: receipt.bundle,
+        ownTokens: const <String, String>{},
+      );
+    } on TomSecretsPairingException catch (e) {
+      // Not reachable there: the relay next (part-relay: the network first).
+      if (relay == null || e.failure != TomSecretsPairingFailure.closed) {
+        rethrow;
+      }
+    }
+  }
+  if (relay == null || relayToken == null) {
+    throw ArgumentError('an address and port, or a relay with its token');
+  }
+  final build =
+      relayFor ??
+      (id, token, device) =>
+          TomSecretsGitHubRelay.withToken(id, token, device: device);
   final receipt = await tomSecretsReceivePairingForSetup(
-    address: address,
-    port: port,
+    relay: build(relay, relayToken, device),
+    ownTokens: {relay.address: relayToken},
     code: code,
     device: device,
   );
-  return (giver: receipt.giver, bundle: receipt.bundle);
+  return (
+    giver: receipt.giver,
+    bundle: receipt.bundle,
+    ownTokens: receipt.ownTokens,
+  );
 }
 
 /// The setup screen; [onSetUp] runs once the phone is set up.
@@ -89,6 +138,8 @@ class TomSecretsMobileSetupScreen extends StatefulWidget {
 class _SetupState extends State<TomSecretsMobileSetupScreen> {
   final _address = TextEditingController();
   final _code = TextEditingController();
+  final _relay = TextEditingController();
+  final _relayToken = TextEditingController();
   final _device = TextEditingController();
   final _locator = TextEditingController();
   final _token = TextEditingController();
@@ -100,7 +151,15 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
 
   @override
   void dispose() {
-    for (final c in [_address, _code, _device, _locator, _token]) {
+    for (final c in [
+      _address,
+      _code,
+      _relay,
+      _relayToken,
+      _device,
+      _locator,
+      _token,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -119,15 +178,43 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
       setState(() => _error = e.message);
       return;
     }
+    TomSecretsRelayId? relay;
+    final relayText = _relay.text.trim();
+    if (relayText.isNotEmpty) {
+      try {
+        relay = TomSecretsRelayId.parse(relayText);
+      } on FormatException catch (e) {
+        setState(() => _error = e.message);
+        return;
+      }
+      if (relay.kind != TomSecretsRelayKind.github) {
+        setState(
+          () => _error =
+              'Pairing through ${relay!.text} is not available in this '
+              'version: pair through a GitHub repository, on the same '
+              'network or over the VPN.',
+        );
+        return;
+      }
+      if (_relayToken.text.trim().isEmpty) {
+        setState(
+          () => _error =
+              'Pairing through GitHub needs this device\'s token for '
+              '${relay!.address} first (contents read and write).',
+        );
+        return;
+      }
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       // No address typed: on the same network the open window is found by
-      // the code's number (the desktop announces it).
+      // the code's number (the desktop announces it); with a relay, the
+      // relay is used instead.
       final discovery = widget.discovery;
-      if (_address.text.trim().isEmpty && discovery != null) {
+      if (_address.text.trim().isEmpty && discovery != null && relay == null) {
         final found = await tomSecretsFindPairingWindow(
           discovery,
           code.number,
@@ -139,26 +226,40 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
         }
         _address.text = found.typed!;
       }
-      final (String, int) at;
-      try {
-        at = tomSecretsParsePairingAddress(_address.text);
-      } on FormatException catch (e) {
-        setState(() => _error = e.message);
-        return;
+      (String, int)? at;
+      if (_address.text.trim().isNotEmpty || relay == null) {
+        try {
+          at = tomSecretsParsePairingAddress(_address.text);
+        } on FormatException catch (e) {
+          setState(() => _error = e.message);
+          return;
+        }
       }
       final receipt = await widget.receive(
-        address: at.$1,
-        port: at.$2,
+        address: at?.$1,
+        port: at?.$2,
+        relay: relay,
+        relayToken: relay == null ? null : _relayToken.text.trim(),
         code: code,
         device: device,
       );
-      await widget.setup.applyPairing(receipt.bundle, device: device);
+      await widget.setup.applyPairing(
+        receipt.bundle,
+        device: device,
+        ownTokens: receipt.ownTokens,
+      );
       setState(
         () => _received =
             'Received from ${receipt.giver}: '
             '${[for (final v in receipt.bundle.vaults) v.name].join(', ')}.',
       );
       widget.onSetUp();
+    } on TomSecretsRelayException catch (e) {
+      setState(
+        () => _error =
+            'The relay ${e.relay} failed: ${e.message}. Pair on the same '
+            'network or over the VPN, or open a new pairing on the desktop.',
+      );
     } on TomSecretsPairingException catch (e) {
       setState(
         () => _error = switch (e.failure) {
@@ -179,31 +280,26 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
   }
 
   /// The desktop's QR code read by the camera: its address (the one
-  /// nearest this device) and code fill the fields.
+  /// nearest this device), code and relay fill the fields.
   Future<void> _scan(TomSecretsCodeScanner scanner) async {
     final text = await scanner.scan(context, title: 'Scan the desktop\'s code');
     if (text == null || !mounted) return;
     try {
       final invitation = TomSecretsPairingInvitation.parse(text);
-      if (invitation.addresses.isEmpty) {
-        // A pairing on a relay alone (part-relay): a phone pairs on the
-        // same network or over the VPN.
-        setState(
-          () => _error =
-              'That desktop pairs through the relay '
-              '${invitation.relay?.text} only. Open a pairing there that '
-              'listens on the network too, and pair on the same network or '
-              'over the VPN.',
-        );
-        return;
-      }
-      final address = invitation.addressFor(await widget.ownAddresses());
+      // A pairing on a relay alone (part-relay) has no address: the phone
+      // pairs through the relay with its own token.
+      final address = invitation.addresses.isEmpty
+          ? null
+          : invitation.addressFor(await widget.ownAddresses());
       if (!mounted) return;
       setState(() {
-        _address.text = address.contains(':')
+        _address.text = address == null
+            ? ''
+            : address.contains(':')
             ? '[$address]:${invitation.port}'
             : '$address:${invitation.port}';
         _code.text = invitation.code.text;
+        _relay.text = invitation.relay?.text ?? '';
         _error = null;
         _scanned = true;
       });
@@ -285,9 +381,13 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
                   onPressed: _busy ? null : () => _scan(scanner),
                 ),
                 if (_scanned)
-                  const Text(
-                    'Read from the desktop\'s code: tap Pair.',
-                    key: Key('tsm-mobile-setup-scanned'),
+                  Text(
+                    _relay.text.isEmpty
+                        ? 'Read from the desktop\'s code: tap Pair.'
+                        : 'Read from the desktop\'s code: it also pairs '
+                              'through ${_relay.text}. Paste this device\'s '
+                              'token for that repository, then tap Pair.',
+                    key: const Key('tsm-mobile-setup-scanned'),
                   ),
               ],
               TextField(
@@ -306,6 +406,32 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
                 controller: _code,
                 decoration: const InputDecoration(labelText: 'Code'),
               ),
+              TextField(
+                key: const Key('tsm-mobile-setup-relay'),
+                controller: _relay,
+                autocorrect: false,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Relay (optional, e.g. github:owner/repo)',
+                  helperText:
+                      'When the desktop names one and this device is neither '
+                      'on its network nor on the VPN.',
+                ),
+              ),
+              if (_relay.text.trim().isNotEmpty)
+                TextField(
+                  key: const Key('tsm-mobile-setup-relay-token'),
+                  controller: _relayToken,
+                  obscureText: true,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText:
+                        'This device\'s GitHub token for that repository',
+                    helperText:
+                        'A fine-grained token (contents read and write); it '
+                        'also opens the vaults there.',
+                  ),
+                ),
               const SizedBox(height: 16),
               FilledButton(
                 key: const Key('tsm-mobile-setup-pair'),

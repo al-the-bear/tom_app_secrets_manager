@@ -68,6 +68,17 @@ The first screen is "Set up Tom Secrets Manager".
    fine-grained token with read and write access to the vault repository,
    so you can revoke the phone alone. "Pair *name*" sends them.
 
+**Through a GitHub repository.** When the phone is neither on the desktop's
+network nor on the VPN, the pairing can go through one of your vault
+repositories on GitHub: on the desktop choose it under "Also through a
+relay" before "Pair a device". Its QR code then names the relay; scanning it
+fills the "Relay" field (`github:<owner>/<repo>`), or type it. Paste
+**"This device's GitHub token for that repository"** — the phone needs one
+anyway — and tap "Pair". With an address too, the address is tried first.
+The phone keeps that token for the repository, so the desktop need not
+paste one there; the pairing takes some seconds longer than over the
+network.
+
 **"By hand"**: for a primary without a key file or outer encryption, type its
 location (`github:owner/repository/primary.kdbx`) and a GitHub token, then
 **"Set up"**. A primary with a key file or an outer encryption needs the

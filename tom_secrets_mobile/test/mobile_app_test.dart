@@ -90,14 +90,20 @@ void main() {
     documents = FakeDocuments();
   });
 
-  Future<({String giver, TomSecretsPairingBundle bundle})> receive({
-    required String address,
-    required int port,
+  Future<TomSecretsMobileReceived> receive({
+    String? address,
+    int? port,
+    TomSecretsRelayId? relay,
+    String? relayToken,
     required TomSecretsPairingCode code,
     required String device,
   }) async {
-    paired.add('$device@$address:$port');
+    paired.add(
+      address != null ? '$device@$address:$port' : '$device@${relay!.text}',
+    );
     codes.add(code.text);
+    // Through the relay the desktop pasted no token: the phone's own is
+    // kept for the repository.
     return (
       giver: 'mbp',
       bundle: TomSecretsPairingBundle(
@@ -110,10 +116,15 @@ void main() {
           ),
         ],
         giverKeys: giverKeys,
-        tokens: const [
-          TomSecretsPairingToken(repository: demoRepo, token: demoToken),
-        ],
+        tokens: relay != null
+            ? const []
+            : const [
+                TomSecretsPairingToken(repository: demoRepo, token: demoToken),
+              ],
       ),
+      ownTokens: relay == null
+          ? const <String, String>{}
+          : {relay.address: relayToken!},
     );
   }
 
@@ -426,6 +437,53 @@ void main() {
     await wait(tester, 6);
     expect(paired, ['iphone@10.8.0.2:47900']);
     expect(codes, [code.text]);
+    expect(find.byKey(const Key('tsm-unlock-passphrase')), findsOneWidget);
+  });
+
+  testWidgets('a desktop\'s QR code for a pairing on a GitHub relay alone '
+      '(part-relay): the code and relay filled, the phone\'s own token asked '
+      'for, the pairing through the relay, that token kept', (tester) async {
+    size(tester, const Size(400, 860));
+    await nameDevice(tester);
+    final code = TomSecretsPairingCode(42, ['guitar', 'orbit']);
+    scanner.next = TomSecretsPairingInvitation(
+      addresses: const [],
+      port: 0,
+      code: code,
+      relay: TomSecretsRelayId.parse('github:$demoRepo'),
+    ).text;
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-scan')));
+    await wait(tester, 2);
+    String field(String key) =>
+        tester.widget<TextField>(find.byKey(Key(key))).controller!.text;
+    expect(field('tsm-mobile-setup-address'), isEmpty);
+    expect(field('tsm-mobile-setup-code'), code.text);
+    expect(field('tsm-mobile-setup-relay'), 'github:$demoRepo');
+    expect(find.textContaining('also pairs through github:'), findsOneWidget);
+    expect(
+      find.byKey(const Key('tsm-mobile-setup-relay-token')),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.byKey(const Key('tsm-mobile-setup-pair')));
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-pair')));
+    await wait(tester, 2);
+    expect(find.textContaining('needs this device\'s token'), findsOneWidget);
+    expect(paired, isEmpty);
+
+    await tester.enterText(
+      find.byKey(const Key('tsm-mobile-setup-relay-token')),
+      'github_pat_demo_phone',
+    );
+    await tester.ensureVisible(find.byKey(const Key('tsm-mobile-setup-pair')));
+    await tester.tap(find.byKey(const Key('tsm-mobile-setup-pair')));
+    await wait(tester, 6);
+    expect(paired, ['iphone@github:$demoRepo']);
+    expect(codes, [code.text]);
+    final [owner, repository] = demoRepo.split('/');
+    expect(
+      await keychain.read(tomSecretsGitHubTokenHandle(owner, repository)),
+      'github_pat_demo_phone',
+    );
     expect(find.byKey(const Key('tsm-unlock-passphrase')), findsOneWidget);
   });
 

@@ -39,13 +39,17 @@ final class TomSecretsMobileSetup {
   /// Whether the phone is set up.
   bool get isSetUp => primaryLocator != null && device != null;
 
-  /// Keeps what [receipt] delivered as device [device]: every vault's key
-  /// file and repository key, every token, then the primary's locator.
-  /// Throws [ArgumentError] for a bundle without the primary (refused before
-  /// by `tomSecretsReceivePairingForSetup`).
+  /// Keeps what [bundle] delivered as device [device]: every vault's key
+  /// file and repository key, every token, then the primary's locator; and
+  /// [ownTokens], the tokens this phone brought itself (by `owner/name`, a
+  /// pairing through a GitHub relay, part-relay), for the repositories the
+  /// bundle carries no token for. Throws [ArgumentError] for a bundle
+  /// without the primary (refused before by
+  /// `tomSecretsReceivePairingForSetup`).
   Future<void> applyPairing(
     TomSecretsPairingBundle bundle, {
     required String device,
+    Map<String, String> ownTokens = const {},
   }) async {
     final primary = bundle.vaults.where((v) => v.primary).firstOrNull;
     if (primary == null) {
@@ -76,6 +80,15 @@ final class TomSecretsMobileSetup {
       } else {
         expiries.remove(t.repository);
       }
+    }
+    for (final MapEntry(key: slug, value: token) in ownTokens.entries) {
+      if (bundle.tokens.any((t) => t.repository == slug)) continue;
+      final [owner, repository] = slug.split('/');
+      await keychain.write(
+        tomSecretsGitHubTokenHandle(owner, repository),
+        token,
+      );
+      expiries.remove(slug);
     }
     await settings.setPairedTokenExpiries(expiries);
     await preferences.write(TomSecretsMobileKeys.device, device);
