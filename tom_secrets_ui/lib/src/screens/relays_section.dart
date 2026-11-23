@@ -123,7 +123,9 @@ class _RelaysState extends State<TomSecretsRelaysSection> {
           'reaches it, and the approval link when neither the network nor '
           'the VPN connects two paired machines',
     TomSecretsRelayKind.wormhole =>
-      'a magic-wormhole server: not usable in this version',
+      'a magic-wormhole mailbox server: pairing with any machine that '
+          'reaches it (the code lives 10 minutes; no mailbox, no approval '
+          'link)',
   };
 
   @override
@@ -227,7 +229,12 @@ class _RelaysState extends State<TomSecretsRelaysSection> {
                 controller: _add,
                 autocorrect: false,
                 decoration: const InputDecoration(
-                  labelText: 'A relay: github:owner/repo, tsm:https://…',
+                  labelText:
+                      'A relay: github:owner/repo, tsm:https://…, '
+                      'wormhole:wss://…',
+                  helperText:
+                      'The magic-wormhole project\'s public mailbox server: '
+                      '$tomSecretsWormholePublicServer',
                 ),
                 onSubmitted: (_) => unawaited(_addRelay()),
               ),

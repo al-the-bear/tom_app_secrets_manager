@@ -195,14 +195,6 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         fail(e.message);
         return;
       }
-      if (relayId.kind == TomSecretsRelayKind.wormhole) {
-        fail(
-          'Pairing through ${relayId.text} is not available in this version: '
-          'pair through a relay server or a GitHub repository, on the same '
-          'network or over the VPN.',
-        );
-        return;
-      }
       if (tomSecretsRelayNeedsToken(relayId) && pairRelayToken.trim().isEmpty) {
         fail(
           'A pairing through GitHub needs this machine to reach '

@@ -308,13 +308,16 @@ void main() {
         expect(m.listening, isNotEmpty);
         expect(m.invitation!.relay, isNull);
 
+        // A magic-wormhole server is tried: one that does not answer is
+        // said by name, and the window still opens on the LAN.
+        final silent = 'wormhole:ws://127.0.0.1:${await _closedPort()}/v1';
         final wormhole = model([InternetAddress.loopbackIPv4])
-          ..pairingRelay = TomSecretsRelayId.parse(
-            'wormhole:wss://relay.example',
-          );
+          ..pairingRelay = TomSecretsRelayId.parse(silent);
         addTearDown(wormhole.dispose);
         await wormhole.open();
-        expect(wormhole.relayProblem, contains('not available'));
+        expect(wormhole.stage, TomSecretsPairingStage.waiting);
+        expect(wormhole.relayProblem, contains(silent));
+        expect(wormhole.relayProblem, contains('not reachable'));
       },
     );
 
@@ -353,6 +356,11 @@ void main() {
       firstRun: firstRun,
       connection: connection,
       relayFor: (id, token, host) {
+        // A magic-wormhole server: built as the app builds it, no token.
+        if (id.kind == TomSecretsRelayKind.wormhole) {
+          expect(token, isNull);
+          return tomSecretsRelayFor(id, device: host);
+        }
         // A relay server needs no token; the rendezvous is the map
         // folder's, which carries the same channel.
         expect(
@@ -458,17 +466,19 @@ void main() {
       );
     });
 
-    test('no token, a relay kind not available, a pairing that is not there: '
-        'said, naming the relay', () async {
+    test('no token, a wormhole server that does not answer, a pairing that '
+        'is not there: said, naming the relay', () async {
       final m = firstRunModel()..byPairing = true;
       m
         ..pairCode = '42-guitar-orbit'
         ..pairRelay = 'github:al-the-bear/demo-vaults';
       await m.receive();
       expect(m.error, contains('token'));
-      m.pairRelay = 'wormhole:wss://relay.example';
+      final silent = 'wormhole:ws://127.0.0.1:${await _closedPort()}/v1';
+      m.pairRelay = silent;
       await m.receive();
-      expect(m.error, contains('not available'));
+      expect(m.error, contains(silent));
+      expect(m.receipt, isNull);
       m
         ..pairRelay = 'github:al-the-bear/demo-vaults'
         ..pairRelayToken = 'github_pat_demo_own';
@@ -478,7 +488,7 @@ void main() {
     });
   });
 
-  test('a relay server is reached directly, a wormhole server not', () async {
+  test('a relay server and a wormhole server are reached directly', () async {
     final service = FakeService(await demoStores());
     final connection = TomSecretsServiceConnection(FakeHost(service));
     expect(
@@ -490,18 +500,12 @@ void main() {
       isA<TomSecretsServerRelay>(),
     );
     expect(
-      () => tomSecretsAppRelay(
-        TomSecretsRelayId.parse('wormhole:wss://relay.example'),
+      tomSecretsAppRelay(
+        TomSecretsRelayId.parse('wormhole:wss://relay.example/v1'),
         connection,
         stores: const [],
       ),
-      throwsA(
-        isA<TomSecretsRelayException>().having(
-          (e) => e.unsupported,
-          'unsupported',
-          isTrue,
-        ),
-      ),
+      isA<TomSecretsWormholeRelay>(),
     );
   });
 
@@ -525,4 +529,12 @@ void main() {
       );
     },
   );
+}
+
+/// A loopback port nothing listens on.
+Future<int> _closedPort() async {
+  final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+  final port = probe.port;
+  await probe.close();
+  return port;
 }

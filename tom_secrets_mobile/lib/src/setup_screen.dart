@@ -191,15 +191,6 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
         setState(() => _error = e.message);
         return;
       }
-      if (relay.kind == TomSecretsRelayKind.wormhole) {
-        setState(
-          () => _error =
-              'Pairing through ${relay!.text} is not available in this '
-              'version: pair through a relay server or a GitHub repository, '
-              'on the same network or over the VPN.',
-        );
-        return;
-      }
       if (tomSecretsRelayNeedsToken(relay) && _relayToken.text.trim().isEmpty) {
         setState(
           () => _error =

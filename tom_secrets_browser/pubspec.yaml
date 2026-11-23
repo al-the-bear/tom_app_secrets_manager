@@ -17,7 +17,7 @@ executables:
 dependencies:
   # The client protocol, and the extension ids and distribution layout the
   # host shares with the app's manifests.
-  tom_secrets_client: ^0.2.12
+  tom_secrets_client: ^0.2.15
 
 dev_dependencies:
   lints: ^6.0.0

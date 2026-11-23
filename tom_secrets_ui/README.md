@@ -370,7 +370,8 @@ offering the import and the pairing.
   and port, the window as a QR code for a phone to scan
   (`TomSecretsPairingInvitation`, drawn by `TomSecretsQrCode`; with a relay it
   names it), the window also waiting on the relay chosen above the button
-  (part-relay: `TomSecretsPairingModel.pairingRelay`, a relay server reached
+  (part-relay: `TomSecretsPairingModel.pairingRelay`, a relay server or a
+  magic-wormhole mailbox server (`TomSecretsWormholeRelay`) reached
   directly or a GitHub repository reached through the service's `relay.*`
   requests, by `tomSecretsAppRelay` and `TomSecretsAdminRelayFolder`; the code's number is the relay's nameplate; a
   relay that cannot host or fails is said, `relayProblem`), the countdown

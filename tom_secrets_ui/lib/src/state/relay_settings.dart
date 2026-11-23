@@ -160,9 +160,10 @@ Future<void> tomSecretsKeepRelayToken(
 /// The relay [id] for this app: a relay server (`tsm:<url>`) reached
 /// directly (pairing needs no instance token), or GitHub over the service
 /// [connection], through the `relay.*` requests of the served store
-/// [stores] names in that repository (`(store, location)`). A
-/// magic-wormhole server, or a repository this machine serves no vault of,
-/// throws [TomSecretsRelayException] naming it.
+/// [stores] names in that repository (`(store, location)`), or a
+/// magic-wormhole mailbox server (`wormhole:<url>`: pairing only) reached
+/// directly. A repository this machine serves no vault of throws
+/// [TomSecretsRelayException] naming it.
 TomSecretsRelay tomSecretsAppRelay(
   TomSecretsRelayId id,
   TomSecretsServiceConnection connection, {
@@ -198,13 +199,7 @@ TomSecretsRelay tomSecretsAppRelay(
     case TomSecretsRelayKind.server:
       return TomSecretsServerRelay(id);
     case TomSecretsRelayKind.wormhole:
-      throw TomSecretsRelayException(
-        id.text,
-        'a magic-wormhole server is not available as a relay in this '
-        'version; pair through a relay server or a GitHub repository, on the '
-        'same network or over the VPN',
-        unsupported: true,
-      );
+      return TomSecretsWormholeRelay(id);
   }
 }
 

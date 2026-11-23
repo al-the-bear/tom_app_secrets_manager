@@ -173,7 +173,8 @@ the wizard's first step, choose "Pair with another desktop" and give:
   screen also names a relay and this machine is neither on its network nor
   on the VPN. The pairing then goes through that relay; with an address
   typed too, the address is tried first. A relay server
-  (`tsm:https://…`) needs nothing more. A GitHub repository
+  (`tsm:https://…`) or a magic-wormhole server (`wormhole:ws(s)://…`) needs
+  nothing more. A GitHub repository
   (`github:<owner>/<repo>`) needs **"This machine's GitHub token for that
   repository"**, a fine-grained token with contents read and write: the
   repository must be reachable before the pairing starts. The same token
@@ -818,7 +819,10 @@ from the [Relays](#relays) list (the default for pairing is preselected;
 "None" pairs on the network and the VPN only). With a relay server as the
 relay, the pairing also waits there for any machine that reaches the
 server: the server gives the code's number and carries the pairing's
-encrypted messages between the two machines over a WebSocket. With a GitHub
+encrypted messages between the two machines over a WebSocket. A
+magic-wormhole server does the same in a mailbox it keeps while both sides
+are there: it gives the code's number, the pairing's messages are its
+mailbox messages, and the pairing waits there 10 minutes. With a GitHub
 repository as the relay, the pairing also waits there, for a machine that
 reaches neither this network nor the VPN but reaches the repository with
 its own token. The
@@ -1021,8 +1025,14 @@ machine knows, in order of preference, each with what it offers:
   The key button keeps the relay's **instance token**, which its operator
   gives your team: kept in this machine's keychain, never shown again;
   "Remove the token" forgets it. The row says whether a token is kept.
-- **A magic-wormhole server**, `wormhole:wss://…`: listed, but not usable in
-  this version.
+- **A magic-wormhole server**, `wormhole:ws://…` or `wormhole:wss://…`:
+  pairing with any machine that reaches it, nothing else (no approval link,
+  no mailbox). The magic-wormhole project runs a public one,
+  `wormhole:ws://relay.magic-wormhole.io:4000/v1` (shown under the field);
+  a team may run its own `magic-wormhole-mailbox-server`. The app uses its
+  own application id there, so the `wormhole` command neither sees nor
+  joins its pairings. A public `ws://` server shows a network observer that
+  a pairing happened and its size, never its content.
 
 Type a relay's id and choose **"Add"**; the arrows change the order, the
 bin removes it. The star makes a relay **the default for pairing** (the
