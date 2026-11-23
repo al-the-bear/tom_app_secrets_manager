@@ -464,6 +464,26 @@ gets it from then on without asking) or "None". When git saw a new
 password work, it is offered to the app as a proposal (see
 [Proposals](#proposals)); a password the vaults hold already is not.
 
+### AWS, Docker and kubectl
+
+- **AWS:** keep an AWS key in an API token entry: the access key id in
+  User name, the secret access key in Password, for temporary credentials
+  the session token in a field `SessionToken`, and the expiry in Expires.
+  Under Settings › Integrations, name a profile (`default` for the default
+  one) and the reference of its entry and choose "Add": the profile's
+  `credential_process` in `~/.aws/config` runs `tsm aws-credentials`, and
+  every AWS tool of that profile takes its keys from the vaults. The first
+  read asks for an approval like any program's.
+- **Docker:** name a registry (`ghcr.io`, `registry.example:5000`) and
+  choose "Add", or tick "For every registry": Docker asks
+  `docker-credential-tsm` for the registry's login, a login entry whose URL
+  has the registry's host. The first time, "A tool asks for a login" lists
+  them, as for git. `docker login` offers a new credential as a proposal.
+- **kubectl:** a kubeconfig user runs `tsm kube-credential <reference>` as
+  its exec plugin (the tsm user guide shows the lines): a token entry gives
+  its Password, a certificate entry its certificate and key. The app does
+  not write the kubeconfig.
+
 ## System secrets
 
 System secrets are the secrets programs ask for: API tokens, database
@@ -1234,9 +1254,14 @@ auto-type](#quick-access-and-auto-type)).
 uses the ssh-agent" (`IdentityAgent` in `~/.ssh/config`; "For the hosts"
 takes ssh `Host` patterns, "Apply" writes them) and "git asks Tom Secrets
 Manager for credentials" (`credential.helper tsm` in `~/.gitconfig`, and
-`git-credential-tsm` beside `tsm`). Each is a block between
-`# >>> tom secrets >>>` and `# <<< tom secrets <<<`; switching off removes
-it, and nothing outside it changes. What is not right is said, for example
+`git-credential-tsm` beside `tsm`), "AWS profiles take their keys from
+Tom Secrets Manager" (a profile and the reference of its key entry, "Add";
+each profile listed with its reference and a button to remove it) and
+"Docker asks Tom Secrets Manager for registry logins" (a registry, "Add",
+"For every registry"; `docker-credential-tsm` beside `tsm`). Each is a block
+between `# >>> tom secrets >>>` and `# <<< tom secrets <<<` (Docker's JSON
+has no comments: there the app's own entries are its block); switching off
+removes it, and nothing outside it changes. What is not right is said, for example
 that the folder of `tsm` is not on `PATH`, so git does not find the helper.
 At every start the app checks that the blocks still name this machine's
 agent and helper, rewrites one that does not, and tells you.

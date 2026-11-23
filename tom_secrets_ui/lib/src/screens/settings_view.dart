@@ -35,7 +35,8 @@ import 'package:tom_secrets_client/admin.dart'
         TomSecretsBrowser,
         TomSecretsBrowserHostState,
         TomSecretsIntegration,
-        TomSecretsIntegrationState;
+        TomSecretsIntegrationState,
+        TomSecretsIntegrations;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../host_bridge.dart' show TomSecretsHostPreferenceKeys;
@@ -70,6 +71,9 @@ class _SettingsState extends State<TomSecretsSettingsView> {
   String? _configError;
   final _link = TextEditingController();
   final _sshHosts = TextEditingController(text: '*');
+  final _awsProfile = TextEditingController();
+  final _awsRef = TextEditingController();
+  final _dockerRegistry = TextEditingController();
   Map<TomSecretsIntegration, TomSecretsIntegrationState>? _integrations;
   String? _integrationError;
 
@@ -99,6 +103,9 @@ class _SettingsState extends State<TomSecretsSettingsView> {
     _config.dispose();
     _link.dispose();
     _sshHosts.dispose();
+    _awsProfile.dispose();
+    _awsRef.dispose();
+    _dockerRegistry.dispose();
     super.dispose();
   }
 
@@ -148,9 +155,37 @@ class _SettingsState extends State<TomSecretsSettingsView> {
     });
   }
 
-  Future<void> _switchIntegration(
-    TomSecretsIntegration integration,
-    bool on,
+  Future<void> _switchIntegration(TomSecretsIntegration integration, bool on) =>
+      _changeIntegrations((integrations) async {
+        if (!on) {
+          await integrations.uninstall(integration);
+          return;
+        }
+        final hosts = _sshHosts.text.trim();
+        final profile = _awsProfile.text.trim();
+        final ref = _awsRef.text.trim();
+        final registry = _dockerRegistry.text.trim();
+        await integrations.install(
+          integration,
+          hosts: integration == TomSecretsIntegration.ssh && hosts.isNotEmpty
+              ? hosts
+              : null,
+          awsProfiles: {if (profile.isNotEmpty && ref.isNotEmpty) profile: ref},
+          dockerRegistries: [if (registry.isNotEmpty) registry],
+        );
+        if (integration == TomSecretsIntegration.aws) {
+          _awsProfile.clear();
+          _awsRef.clear();
+        }
+        if (integration == TomSecretsIntegration.docker) {
+          _dockerRegistry.clear();
+        }
+      });
+
+  /// Runs [change] on this user's integrations, says what failed, and reads
+  /// their states again.
+  Future<void> _changeIntegrations(
+    Future<void> Function(TomSecretsIntegrations integrations) change,
   ) async {
     final integrations = await tomSecretsIntegrationsOf(
       context.read<TomSecretsHost>(),
@@ -158,18 +193,10 @@ class _SettingsState extends State<TomSecretsSettingsView> {
     );
     if (integrations == null) return;
     try {
-      if (on) {
-        final hosts = _sshHosts.text.trim();
-        await integrations.install(
-          integration,
-          hosts: integration == TomSecretsIntegration.ssh && hosts.isNotEmpty
-              ? hosts
-              : null,
-        );
-      } else {
-        await integrations.uninstall(integration);
-      }
+      await change(integrations);
       if (mounted) setState(() => _integrationError = null);
+    } on StateError catch (e) {
+      if (mounted) setState(() => _integrationError = e.message);
     } on Object catch (e) {
       if (mounted) setState(() => _integrationError = '$e');
     }
@@ -838,6 +865,150 @@ class _SettingsState extends State<TomSecretsSettingsView> {
           'credential.helper tsm in ~/.gitconfig and git-credential-tsm '
               'beside tsm: git takes the login of its host from the vaults.',
         ),
+        const SizedBox(height: 8),
+        row(
+          TomSecretsIntegration.aws,
+          'AWS profiles take their keys from Tom Secrets Manager',
+          'credential_process in ~/.aws/config: tsm aws-credentials reads an '
+              "API token entry's access key id (UserName), secret (Password), "
+              'SessionToken and Expires.',
+        ),
+        for (final MapEntry(key: name, value: ref)
+            in (states?[TomSecretsIntegration.aws]?.profiles ??
+                    const <String, String>{})
+                .entries)
+          ListTile(
+            key: Key('tsm-integration-aws-profile-$name'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text('profile $name'),
+            subtitle: Text(ref),
+            trailing: IconButton(
+              key: Key('tsm-integration-aws-remove-$name'),
+              tooltip: 'Remove the profile',
+              icon: const Icon(Icons.close_rounded),
+              onPressed: () => unawaited(
+                _changeIntegrations(
+                  (i) =>
+                      i.uninstall(TomSecretsIntegration.aws, awsProfile: name),
+                ),
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('tsm-integration-aws-name'),
+                controller: _awsProfile,
+                decoration: const InputDecoration(
+                  labelText: 'Profile (default for the default one)',
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: TextField(
+                key: const Key('tsm-integration-aws-ref'),
+                controller: _awsRef,
+                decoration: const InputDecoration(
+                  labelText: 'Reference of its key entry',
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const Key('tsm-integration-aws-add'),
+              onPressed: () => unawaited(
+                _switchIntegration(TomSecretsIntegration.aws, true),
+              ),
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        row(
+          TomSecretsIntegration.docker,
+          'Docker asks Tom Secrets Manager for registry logins',
+          'credHelpers (or credsStore) in ~/.docker/config.json and '
+              'docker-credential-tsm beside tsm: Docker takes the login of a '
+              'registry from the vaults.',
+        ),
+        for (final registry
+            in states?[TomSecretsIntegration.docker]?.registries ??
+                const <String>[])
+          ListTile(
+            key: Key('tsm-integration-docker-registry-$registry'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(registry),
+            trailing: IconButton(
+              key: Key('tsm-integration-docker-remove-$registry'),
+              tooltip: 'Remove the registry',
+              icon: const Icon(Icons.close_rounded),
+              onPressed: () => unawaited(
+                _changeIntegrations(
+                  (i) => i.uninstall(
+                    TomSecretsIntegration.docker,
+                    dockerRegistry: registry,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('tsm-integration-docker-name'),
+                controller: _dockerRegistry,
+                decoration: const InputDecoration(
+                  labelText: 'A registry (ghcr.io, registry.example:5000)',
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const Key('tsm-integration-docker-add'),
+              onPressed: () => unawaited(
+                _switchIntegration(TomSecretsIntegration.docker, true),
+              ),
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+        CheckboxListTile(
+          key: const Key('tsm-integration-docker-every'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text("For every registry (Docker's credsStore)"),
+          value: states?[TomSecretsIntegration.docker]?.everyRegistry ?? false,
+          onChanged: states == null
+              ? null
+              : (v) => unawaited(
+                  _changeIntegrations(
+                    (i) => v ?? false
+                        ? i.install(
+                            TomSecretsIntegration.docker,
+                            dockerEveryRegistry: true,
+                          )
+                        : _dropEveryRegistry(i),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'kubectl: a kubeconfig user runs the exec plugin itself — '
+          'exec: {apiVersion: client.authentication.k8s.io/v1, command: '
+          'tsm, args: [kube-credential, <reference>]}; a token entry gives '
+          'its Password, a certificate entry its certificate and key.',
+          key: const Key('tsm-integration-kubectl'),
+          style: theme.textTheme.bodySmall,
+        ),
         ..._browserRows(theme),
         if (_integrationError != null)
           Text(
@@ -1165,5 +1336,15 @@ class _AutoTypeSettingsState extends State<_AutoTypeSettings> {
           ),
       ],
     );
+  }
+}
+
+/// Docker's helper no longer the store for every registry, its registries
+/// kept: everything removed, then the registries written again.
+Future<void> _dropEveryRegistry(TomSecretsIntegrations i) async {
+  final registries = (await i.status(TomSecretsIntegration.docker)).registries;
+  await i.uninstall(TomSecretsIntegration.docker);
+  if (registries.isNotEmpty) {
+    await i.install(TomSecretsIntegration.docker, dockerRegistries: registries);
   }
 }

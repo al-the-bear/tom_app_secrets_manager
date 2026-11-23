@@ -23,7 +23,7 @@ dependencies:
   # runs on a phone (part-mobile).
   tom_secrets_service: ^0.25.2
   tom_secrets_core: ^0.2.25
-  tom_secrets_client: ^0.2.15
+  tom_secrets_client: ^0.2.16
   tom_core_storage: ^0.1.3
   # The keychain items (key files, repository keys, GitHub tokens) and the
   # gated item of the biometric unlock.

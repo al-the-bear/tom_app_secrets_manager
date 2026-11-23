@@ -245,9 +245,93 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.ensureVisible(find.byKey(const Key('tsm-integration-ssh')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tsm-integration-ssh')));
     await wait(tester);
     expect(config.readAsStringSync(), isEmpty);
+  });
+
+  testWidgets('Settings › Integrations: an AWS profile and Docker registries '
+      'added and removed, every registry switched, the files written', (
+    tester,
+  ) async {
+    await unlocked(tester);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await wait(tester);
+    // On without a profile: said, nothing written.
+    await tester.ensureVisible(find.byKey(const Key('tsm-integration-aws')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tsm-integration-aws')));
+    await wait(tester);
+    expect(find.byKey(const Key('tsm-integration-error')), findsOneWidget);
+    final aws = File('${home.path}/.aws/config');
+    expect(aws.existsSync(), isFalse);
+    await tester.enterText(
+      find.byKey(const Key('tsm-integration-aws-name')),
+      'ci',
+    );
+    await tester.enterText(
+      find.byKey(const Key('tsm-integration-aws-ref')),
+      'team/Cloud/AWS ci',
+    );
+    await tester.tap(find.byKey(const Key('tsm-integration-aws-add')));
+    await wait(tester);
+    expect(
+      aws.readAsStringSync(),
+      contains("credential_process = $tsm aws-credentials 'team/Cloud/AWS ci'"),
+    );
+    expect(
+      find.byKey(const Key('tsm-integration-aws-profile-ci')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('tsm-integration-aws-remove-ci')));
+    await wait(tester);
+    expect(aws.readAsStringSync(), isEmpty);
+
+    await tester.ensureVisible(
+      find.byKey(const Key('tsm-integration-docker-name')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('tsm-integration-docker-name')),
+      'ghcr.io',
+    );
+    await tester.tap(find.byKey(const Key('tsm-integration-docker-add')));
+    await wait(tester);
+    final docker = File('${home.path}/.docker/config.json');
+    expect(jsonDecode(docker.readAsStringSync()), {
+      'credHelpers': {'ghcr.io': 'tsm'},
+    });
+    expect(Link('${home.path}/bin/docker-credential-tsm').targetSync(), tsm);
+    await tester.ensureVisible(
+      find.byKey(const Key('tsm-integration-docker-every')),
+    );
+    await tester.tap(find.byKey(const Key('tsm-integration-docker-every')));
+    await wait(tester);
+    expect((jsonDecode(docker.readAsStringSync()) as Map)['credsStore'], 'tsm');
+    await tester.tap(find.byKey(const Key('tsm-integration-docker-every')));
+    await wait(tester);
+    expect(jsonDecode(docker.readAsStringSync()), {
+      'credHelpers': {'ghcr.io': 'tsm'},
+    });
+    await tester.ensureVisible(
+      find.byKey(const Key('tsm-integration-docker-remove-ghcr.io')),
+    );
+    await tester.tap(
+      find.byKey(const Key('tsm-integration-docker-remove-ghcr.io')),
+    );
+    await wait(tester);
+    expect(jsonDecode(docker.readAsStringSync()), isEmpty);
+    expect(
+      FileSystemEntity.typeSync(
+        '${home.path}/bin/docker-credential-tsm',
+        followLinks: false,
+      ),
+      FileSystemEntityType.notFound,
+    );
+    expect(find.byKey(const Key('tsm-integration-kubectl')), findsOneWidget);
   });
 
   testWidgets('at every start an ssh block naming another agent is written '

@@ -270,8 +270,11 @@ offering the import and the pairing.
   exclude a window), start at login, stopping the service. Shared: `tsm.config`
   in the primary vault, checked before it is saved.; Integrations (with
   `TomSecretsHost.integrationPaths`): ssh using the agent and git's credential
-  helper, switched on and off, their host patterns and problems, checked and
-  repaired at every start (`tomSecretsCheckIntegrations`)
+  helper, switched on and off, their host patterns and problems; **[C]** AWS
+  profiles (a profile and the reference of its key entry added, each removed)
+  and Docker registries (added, removed, or every registry), with the
+  kubectl exec stanza named; checked and repaired at every start
+  (`tomSecretsCheckIntegrations`)
 - `TomSecretsImportView`: The export (1Password 1PUX or CSV, Enpass JSON or CSV,
   Bitwarden JSON — a password-protected one opened with its password —, a
   browser's CSV; the format by extension, and by content where several fit
