@@ -1032,7 +1032,10 @@ machine knows, in order of preference, each with what it offers:
   a team may run its own `magic-wormhole-mailbox-server`. The app uses its
   own application id there, so the `wormhole` command neither sees nor
   joins its pairings. A public `ws://` server shows a network observer that
-  a pairing happened and its size, never its content.
+  a pairing happened and its size, never its content. The public server is
+  run by volunteers and is not always up: when it does not answer (the
+  Pairing screen says so in red), pair through a relay server or a GitHub
+  repository instead.
 
 Type a relay's id and choose **"Add"**; the arrows change the order, the
 bin removes it. The star makes a relay **the default for pairing** (the

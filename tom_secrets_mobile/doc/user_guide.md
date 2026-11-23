@@ -75,7 +75,9 @@ QR code then names the relay; scanning it fills the "Relay" field
 (`tsm:https://…`), or type it, and tap "Pair". No token is needed for the
 pairing itself; the desktop includes the GitHub token the phone uses for
 the vaults. A magic-wormhole server (`wormhole:ws://…`, for example the
-public `wormhole:ws://relay.magic-wormhole.io:4000/v1`) works the same way.
+public `wormhole:ws://relay.magic-wormhole.io:4000/v1`) works the same way;
+the public one is run by volunteers and is not always up, so when it does
+not answer, pair through a relay server instead.
 
 **Through a GitHub repository.** When the phone is neither on the desktop's
 network nor on the VPN, the pairing can go through one of your vault
