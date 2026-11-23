@@ -45,12 +45,15 @@ The apps reach it as the relay `tsm:<url>` (`tom_secrets_core`'s
   start-up.
 - **Address filters:** a deny and an allow list of CIDR ranges, IPv4 and
   IPv6, checked first (403).
-- **Denial of service:** an address making more than 2 requests in a
-  second, 100 in a minute or 500 in a day is blocked: its connections are
+- **Denial of service:** an address making more than 10 requests in a
+  second, 120 in a minute or 2,000 in a day is blocked: its connections are
   closed without an answer, 24 hours the first time, 48 the second, a week
   the third, each further block twice the one before. The block list is
   kept in the storage directory, so a restart lifts no block. `/health`
-  and `/ready` are not counted.
+  and `/ready` are not counted. The client (`tom_secrets_core`'s
+  `TomSecretsServerRelay`) paces itself at about half of that (5 a second,
+  60 a minute, 1,000 a day per relay and process), so a device's normal
+  use never comes near a block.
 - **Limits** (429 with `Retry-After`): 10 nameplates per address per hour,
   64 KB per frame and 1 MB per pairing channel; 10 open links per token,
   64 KB per frame; 30 puts per token (open mode: per address) per hour,

@@ -541,10 +541,11 @@ void main() {
       }
     }
 
-    test('a third request in a second: closed without an answer', () async {
+    test('an eleventh request in a second: closed without an answer', () async {
       await start(const TomSecretsRelayConfig());
-      expect(await answered('198.51.100.30'), isTrue);
-      expect(await answered('198.51.100.30'), isTrue);
+      for (var i = 0; i < 10; i++) {
+        expect(await answered('198.51.100.30'), isTrue);
+      }
       expect(await answered('198.51.100.30'), isFalse);
       // Blocked for 24 hours, not longer.
       now = now.add(const Duration(hours: 23));

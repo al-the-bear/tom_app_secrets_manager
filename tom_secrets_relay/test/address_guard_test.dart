@@ -98,10 +98,11 @@ void main() {
       clock: () => now,
     );
 
-    test('a third request in one second blocks the address', () async {
+    test('an eleventh request in one second blocks the address', () async {
       final g = guard();
-      expect(await g.check('198.51.100.1'), TomSecretsRelayVerdict.serve);
-      expect(await g.check('198.51.100.1'), TomSecretsRelayVerdict.serve);
+      for (var i = 0; i < 10; i++) {
+        expect(await g.check('198.51.100.1'), TomSecretsRelayVerdict.serve);
+      }
       expect(await g.check('198.51.100.1'), TomSecretsRelayVerdict.ignore);
       expect(
         g.blockedUntil('198.51.100.1'),
@@ -114,16 +115,16 @@ void main() {
     // The three limits are checked together on sliding windows, so at a
     // steady pace the second's limit trips first; each limit is shown alone
     // with the others raised.
-    test('101 requests in a minute block the address', () async {
+    test('121 requests in a minute block the address', () async {
       final g = guard(const TomSecretsRelayConfig(requestsPerSecond: 1000));
-      for (var i = 0; i < 100; i++) {
+      for (var i = 0; i < 120; i++) {
         expect(await g.check('198.51.100.3'), TomSecretsRelayVerdict.serve);
         now = now.add(const Duration(milliseconds: 100));
       }
       expect(await g.check('198.51.100.3'), TomSecretsRelayVerdict.ignore);
     });
 
-    test('501 requests in a day block the address', () async {
+    test('2,001 requests in a day block the address', () async {
       final g = guard(
         const TomSecretsRelayConfig(
           requestsPerSecond: 1000,
@@ -132,13 +133,13 @@ void main() {
       );
       var verdict = TomSecretsRelayVerdict.serve;
       var n = 0;
-      while (verdict == TomSecretsRelayVerdict.serve && n < 700) {
+      while (verdict == TomSecretsRelayVerdict.serve && n < 2500) {
         verdict = await g.check('198.51.100.4');
         now = now.add(const Duration(seconds: 1));
         n++;
       }
       expect(verdict, TomSecretsRelayVerdict.ignore);
-      expect(n, 501);
+      expect(n, 2001);
     });
 
     test('blocks escalate: 24 h, 48 h, a week, then doubling', () async {

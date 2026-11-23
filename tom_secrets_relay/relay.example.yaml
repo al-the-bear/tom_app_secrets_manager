@@ -23,9 +23,9 @@ relay:
   trustedProxies: [127.0.0.1, '::1']
   storage: relay-data      # the mailbox and the block list
   dos:                     # per address; a request over any blocks it
-    perSecond: 2
-    perMinute: 100
-    perDay: 500
+    perSecond: 10
+    perMinute: 120
+    perDay: 2000
     blockHours: [24, 48, 168]   # then twice the one before
     rememberDays: 90       # how long a past block counts
   pairing:

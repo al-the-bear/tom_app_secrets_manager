@@ -12,7 +12,7 @@ void main() {
       expect(c.tokens, isEmpty);
       expect(
         [c.requestsPerSecond, c.requestsPerMinute, c.requestsPerDay],
-        [2, 100, 500],
+        [10, 120, 2000],
       );
       expect(c.nameplatesPerHour, 10);
       expect(c.nameplateLifetime, const Duration(minutes: 10));

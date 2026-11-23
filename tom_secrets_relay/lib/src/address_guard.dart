@@ -8,7 +8,7 @@
 /// - **Filters:** an address in a deny range is refused; when allow ranges
 ///   are set, only addresses inside one are served.
 /// - **Blocks:** an address that makes more requests than any of three
-///   limits allows (2 in a second, 100 in a minute, 500 in a day) is
+///   limits allows (10 in a second, 120 in a minute, 2,000 in a day) is
 ///   blocked: 24 hours the first time, 48 the second, a week the third,
 ///   each further block twice the one before. A blocked address is ignored
 ///   (its connection closed without an answer). The block list is kept in

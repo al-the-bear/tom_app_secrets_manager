@@ -41,9 +41,9 @@ final class TomSecretsRelayConfig {
     this.allow = const [],
     this.trustedProxies = const ['127.0.0.1', '::1'],
     this.storageDirectory = 'relay-data',
-    this.requestsPerSecond = 2,
-    this.requestsPerMinute = 100,
-    this.requestsPerDay = 500,
+    this.requestsPerSecond = 10,
+    this.requestsPerMinute = 120,
+    this.requestsPerDay = 2000,
     this.blockDurations = const [
       Duration(hours: 24),
       Duration(hours: 48),

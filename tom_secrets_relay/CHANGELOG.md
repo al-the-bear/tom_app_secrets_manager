@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- The per-address denial-of-service defaults are 10 requests a second, 120
+  a minute and 2,000 a day (were 2, 100 and 500, which a single mailbox
+  read of the client blocked for a day); `tom_secrets_core` 0.2.24's client
+  paces itself at about half of them. A test runs a device's normal use
+  (shares to six members, a mailbox read, a pairing, a link) against the
+  default limits, paced and unpaced.
+
 ## 0.2.0
 
 - The container image (`Dockerfile`): the AOT bundle on `scratch` with the
