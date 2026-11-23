@@ -1,0 +1,49 @@
+# The relay's configuration: copy to relay.yaml (or name it with
+# config=<file> or TSM_RELAY_CONFIG). tom_core_server's own keys sit at the
+# top level; the relay's under `relay:`. The environment and key=value
+# arguments override them. Every value shown is the default unless marked.
+
+port: 47910
+# host: 127.0.0.1          # the reverse proxy reaches it on the loopback
+logLevel: production      # info, warnings, errors (the names are tom_basics' TomLogLevel)
+
+relay:
+  # token (the default): mailbox puts and approval links need an instance
+  # token; open: anyone may send, limited per address and recipient.
+  mode: token
+  # One token per team or user (at least 16 characters); the names are
+  # what the logs and the per-token limits use. A token can be a secret
+  # reference instead of the value, e.g. secret:local:relay/team-a#Password.
+  tokens:
+    team-a: replace-with-a-long-random-token   # example, not a default
+  # Address ranges (CIDR, IPv4 and IPv6), checked before anything else.
+  deny: []
+  allow: []                # empty: every address not denied
+  # The reverse proxies whose X-Forwarded-For names the client.
+  trustedProxies: [127.0.0.1, '::1']
+  storage: relay-data      # the mailbox and the block list
+  dos:                     # per address; a request over any blocks it
+    perSecond: 2
+    perMinute: 100
+    perDay: 500
+    blockHours: [24, 48, 168]   # then twice the one before
+    rememberDays: 90       # how long a past block counts
+  pairing:
+    nameplatesPerHour: 10
+    minutes: 10
+    frameBytes: 65536
+    channelBytes: 1048576
+  link:
+    perToken: 10
+    frameBytes: 65536
+    aloneHours: 24
+  mailbox:
+    putsPerHour: 30
+    itemBytes: 1048576
+    itemsPerRecipient: 200
+    bytesPerRecipient: 52428800
+    maxExpiryDays: 30
+  proof:
+    challengesPerHour: 20
+    minutes: 5
+  expiryMinutes: 10

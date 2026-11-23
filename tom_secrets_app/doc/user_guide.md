@@ -170,13 +170,16 @@ the wizard's first step, choose "Pair with another desktop" and give:
   the link at once. Left empty, this machine has no approval link.
 - **"This machine's name"**.
 - **"The relay it names (optional)"**: when the other machine's Pairing
-  screen also names a relay, `github:<owner>/<repo>`, and this machine is
-  neither on its network nor on the VPN. The pairing then goes through that
-  GitHub repository; with an address typed too, the address is tried first.
-  It needs **"This machine's GitHub token for that repository"**, a
-  fine-grained token with contents read and write: the repository must be
-  reachable before the pairing starts. The same token opens the primary
-  when the primary lives in that repository.
+  screen also names a relay and this machine is neither on its network nor
+  on the VPN. The pairing then goes through that relay; with an address
+  typed too, the address is tried first. A relay server
+  (`tsm:https://…`) needs nothing more. A GitHub repository
+  (`github:<owner>/<repo>`) needs **"This machine's GitHub token for that
+  repository"**, a fine-grained token with contents read and write: the
+  repository must be reachable before the pairing starts. The same token
+  opens the primary when the primary lives in that repository; through a
+  relay server the other machine must include the primary's token in what
+  it gives, when the primary is on GitHub.
 
 Choose "Pair". While it says "Waiting for the other machine…", confirm on the
 other machine what this one gets. The wizard then lists what it was given
@@ -812,8 +815,11 @@ Defender Firewall asks whether the app may accept connections: allow it.
 
 **Through a relay.** "Also through a relay" above the button picks a relay
 from the [Relays](#relays) list (the default for pairing is preselected;
-"None" pairs on the network and the VPN only). With a GitHub repository as
-the relay, the pairing also waits there, for a machine that reaches neither
+"None" pairs on the network and the VPN only). With a relay server as the
+relay, the pairing also waits there for any machine that reaches the
+server: the server gives the code's number and carries the pairing's
+encrypted messages between the two machines over a WebSocket. With a GitHub
+repository as the relay, the pairing also waits there, for a machine that reaches neither
 this network nor the VPN but reaches the repository with its own token. The
 code's number is then the pairing's number in the repository, and the
 screen and the QR code name the relay. The pairing's messages travel as
@@ -990,8 +996,11 @@ machine knows, in order of preference, each with what it offers:
   that reaches the repository with its own token, and the mailbox of a
   shared vault in it (its inbox folders). This machine must serve a vault
   from that repository.
-- **A relay server**, `tsm:https://…`, and **a magic-wormhole server**,
-  `wormhole:wss://…`: listed, but not usable in this version.
+- **A relay server**, `tsm:https://…` (`tom_secrets_relay`): pairing with
+  any machine that reaches it. It offers the mailbox and the approval link
+  too, which this version does not use yet.
+- **A magic-wormhole server**, `wormhole:wss://…`: listed, but not usable in
+  this version.
 
 Type a relay's id and choose **"Add"**; the arrows change the order, the
 bin removes it. The star makes a relay **the default for pairing** (the

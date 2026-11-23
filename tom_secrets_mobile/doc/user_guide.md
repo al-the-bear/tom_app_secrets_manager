@@ -68,6 +68,14 @@ The first screen is "Set up Tom Secrets Manager".
    fine-grained token with read and write access to the vault repository,
    so you can revoke the phone alone. "Pair *name*" sends them.
 
+**Through a relay server.** When the phone is neither on the desktop's
+network nor on the VPN, the pairing can go through a relay server: on the
+desktop choose it under "Also through a relay" before "Pair a device". Its
+QR code then names the relay; scanning it fills the "Relay" field
+(`tsm:https://…`), or type it, and tap "Pair". No token is needed for the
+pairing itself; the desktop includes the GitHub token the phone uses for
+the vaults.
+
 **Through a GitHub repository.** When the phone is neither on the desktop's
 network nor on the VPN, the pairing can go through one of your vault
 repositories on GitHub: on the desktop choose it under "Also through a

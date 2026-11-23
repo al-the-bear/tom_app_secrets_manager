@@ -74,7 +74,8 @@ class _RelaysState extends State<TomSecretsRelaysSection> {
       'a GitHub repository: pairing with a machine that reaches it with its '
           'own token; the mailbox of a shared vault in it',
     TomSecretsRelayKind.server =>
-      'a relay server (tom_secrets_relay): not usable in this version',
+      'a relay server (tom_secrets_relay): pairing with any machine that '
+          'reaches it; this version uses it for pairing only',
     TomSecretsRelayKind.wormhole =>
       'a magic-wormhole server: not usable in this version',
   };

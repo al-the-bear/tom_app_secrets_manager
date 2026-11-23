@@ -348,11 +348,13 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
           enabled: receipt == null && !m.receiving,
           autocorrect: false,
           decoration: const InputDecoration(
-            labelText: 'The relay it names (optional, e.g. github:owner/repo)',
+            labelText:
+                'The relay it names (optional, e.g. tsm:https://relay.example '
+                'or github:owner/repo)',
             helperText:
                 'When the other machine is not on this network or the VPN: '
-                'the pairing goes through that GitHub repository instead '
-                '(tried after the address).',
+                'the pairing goes through that relay server or GitHub '
+                'repository instead (tried after the address).',
             prefixIcon: Icon(Icons.hub_outlined),
           ),
           onChanged: (v) {
@@ -360,7 +362,7 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
             m.changed();
           },
         ),
-        if (_pairRelay.text.trim().isNotEmpty) ...[
+        if (_pairRelay.text.trim().startsWith('github:')) ...[
           const SizedBox(height: 8),
           TextField(
             key: const Key('tsm-fr-pair-relay-token'),

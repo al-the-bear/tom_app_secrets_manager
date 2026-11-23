@@ -261,11 +261,13 @@ void main() {
         expect(m.listening, isNotEmpty);
         expect(m.invitation!.relay, isNull);
 
-        final server = model([InternetAddress.loopbackIPv4])
-          ..pairingRelay = TomSecretsRelayId.parse('tsm:https://relay.example');
-        addTearDown(server.dispose);
-        await server.open();
-        expect(server.relayProblem, contains('not available'));
+        final wormhole = model([InternetAddress.loopbackIPv4])
+          ..pairingRelay = TomSecretsRelayId.parse(
+            'wormhole:wss://relay.example',
+          );
+        addTearDown(wormhole.dispose);
+        await wormhole.open();
+        expect(wormhole.relayProblem, contains('not available'));
       },
     );
 
@@ -304,9 +306,16 @@ void main() {
       firstRun: firstRun,
       connection: connection,
       relayFor: (id, token, host) {
-        expect(token, 'github_pat_demo_own');
+        // A relay server needs no token; the rendezvous is the map
+        // folder's, which carries the same channel.
+        expect(
+          token,
+          id.kind == TomSecretsRelayKind.server
+              ? isNull
+              : 'github_pat_demo_own',
+        );
         return TomSecretsGitHubRelay(
-          id,
+          id.kind == TomSecretsRelayKind.server ? _repo : id,
           _MapFolder(repository),
           pollInterval: _fast,
         );
@@ -385,6 +394,23 @@ void main() {
       },
     );
 
+    test('through a relay server: no token asked, none kept, so a primary '
+        'on GitHub without its token is refused', () async {
+      final (window, code) = await give();
+      final m = firstRunModel()..byPairing = true;
+      m
+        ..pairCode = code.text
+        ..pairRelay = 'tsm:https://relay.example';
+      await m.receive();
+      expect(m.receipt, isNull);
+      expect(m.error, contains('no GitHub token for this machine'));
+      // The giving side hears the refusal too.
+      await expectLater(
+        window.result,
+        throwsA(isA<TomSecretsPairingException>()),
+      );
+    });
+
     test('no token, a relay kind not available, a pairing that is not there: '
         'said, naming the relay', () async {
       final m = firstRunModel()..byPairing = true;
@@ -393,7 +419,7 @@ void main() {
         ..pairRelay = 'github:al-the-bear/demo-vaults';
       await m.receive();
       expect(m.error, contains('token'));
-      m.pairRelay = 'tsm:https://relay.example';
+      m.pairRelay = 'wormhole:wss://relay.example';
       await m.receive();
       expect(m.error, contains('not available'));
       m
@@ -403,6 +429,33 @@ void main() {
       expect(m.error, contains('github:al-the-bear/demo-vaults'));
       expect(m.receipt, isNull);
     });
+  });
+
+  test('a relay server is reached directly, a wormhole server not', () async {
+    final service = FakeService(await demoStores());
+    final connection = TomSecretsServiceConnection(FakeHost(service));
+    expect(
+      tomSecretsAppRelay(
+        TomSecretsRelayId.parse('tsm:https://relay.example'),
+        connection,
+        stores: const [],
+      ),
+      isA<TomSecretsServerRelay>(),
+    );
+    expect(
+      () => tomSecretsAppRelay(
+        TomSecretsRelayId.parse('wormhole:wss://relay.example'),
+        connection,
+        stores: const [],
+      ),
+      throwsA(
+        isA<TomSecretsRelayException>().having(
+          (e) => e.unsupported,
+          'unsupported',
+          isTrue,
+        ),
+      ),
+    );
   });
 
   test(

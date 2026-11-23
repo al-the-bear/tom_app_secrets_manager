@@ -31,6 +31,9 @@ A package that adds a shipped dependency adds its row here.
 | [qr](https://pub.dev/packages/qr) | BSD-3-Clause | `tom_secrets_ui`: the pairing window's QR code on the desktop's Pairing screen |
 | [url_launcher](https://pub.dev/packages/url_launcher) | BSD-3-Clause | `tom_secrets_desktop`: GitHub's token pages in the system browser |
 | [printing](https://pub.dev/packages/printing) | Apache-2.0 | `tom_secrets_desktop`: the system print dialog for the emergency sheet; on Windows and Linux its build downloads the PDFium library (BSD-3-Clause and Apache-2.0, [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries), version 5200), which the application then bundles |
+| [tom_core_server](https://pub.dev/packages/tom_core_server) | BSD-3-Clause | `tom_secrets_relay`: the server (endpoints, WebSockets, configuration, rate limiter, blob store), with [tom_core_kernel](https://pub.dev/packages/tom_core_kernel) (BSD-3-Clause, the scheduler) and [tom_reflection](https://pub.dev/packages/tom_reflection) (BSD-3-Clause) |
+| [tom_secrets_age](https://pub.dev/packages/tom_secrets_age) | BSD-3-Clause | `tom_secrets_relay`: the recipient's proof (a token encrypted with `age` to the member key) |
+| [shelf](https://pub.dev/packages/shelf), [crypto](https://pub.dev/packages/crypto), [path](https://pub.dev/packages/path) | BSD-3-Clause | `tom_secrets_relay`: requests and responses, the proof tokens' hashes, the storage paths |
 
 The app's distribution also carries the command line `tsm` and the secrets
 service (its `tsm` folder), built from the product's other two repositories

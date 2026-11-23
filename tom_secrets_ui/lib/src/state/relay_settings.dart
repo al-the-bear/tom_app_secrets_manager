@@ -4,8 +4,9 @@
 /// **[C]** The relay settings (part-relay, the Sharing screen): the relays
 /// this device knows in order of preference, each with the services it
 /// offers, and the default relay for pairing; and the relay a pairing goes
-/// through in the app — GitHub reached through the service's `relay.*`
-/// requests (`TomSecretsAdminRelayFolder`). A shared vault's mailbox relay
+/// through in the app — a relay server (`tsm:<url>`) reached directly, or
+/// GitHub reached through the service's `relay.*` requests
+/// (`TomSecretsAdminRelayFolder`). A shared vault's mailbox relay
 /// is kept in the vault's metadata (`tsm.mailbox-relay`), so every member
 /// reads the same one (the session's `setVaultMailboxRelay`).
 library;
@@ -128,11 +129,12 @@ class TomSecretsRelaySettings extends ChangeNotifier {
   }
 }
 
-/// The relay [id] for this app, over the service [connection]: GitHub
-/// through the `relay.*` requests of the served store [stores] names in
-/// that repository (`(store, location)`). A relay kind this version does
-/// not carry yet, or a repository this machine serves no vault of, throws
-/// [TomSecretsRelayException] naming it.
+/// The relay [id] for this app: a relay server (`tsm:<url>`) reached
+/// directly (pairing needs no instance token), or GitHub over the service
+/// [connection], through the `relay.*` requests of the served store
+/// [stores] names in that repository (`(store, location)`). A
+/// magic-wormhole server, or a repository this machine serves no vault of,
+/// throws [TomSecretsRelayException] naming it.
 TomSecretsRelay tomSecretsAppRelay(
   TomSecretsRelayId id,
   TomSecretsServiceConnection connection, {
@@ -166,12 +168,13 @@ TomSecretsRelay tomSecretsAppRelay(
         pollInterval: pollInterval,
       );
     case TomSecretsRelayKind.server:
+      return TomSecretsServerRelay(id);
     case TomSecretsRelayKind.wormhole:
       throw TomSecretsRelayException(
         id.text,
-        'a ${id.kind == TomSecretsRelayKind.server ? 'relay server' : 'magic-wormhole server'} '
-        'is not available as a relay in this version; pair through a GitHub '
-        'repository, on the same network or over the VPN',
+        'a magic-wormhole server is not available as a relay in this '
+        'version; pair through a relay server or a GitHub repository, on the '
+        'same network or over the VPN',
         unsupported: true,
       );
   }

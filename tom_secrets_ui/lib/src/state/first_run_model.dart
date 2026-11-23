@@ -67,13 +67,13 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
     required this.connection,
     this.discovery,
     Future<List<InternetAddress>> Function()? ownAddresses,
-    TomSecretsRelay Function(TomSecretsRelayId id, String token, String host)?
+    TomSecretsRelay Function(TomSecretsRelayId id, String? token, String host)?
     relayFor,
   }) : _ownAddresses = ownAddresses ?? tomSecretsPairingAddresses,
        _relayFor =
            relayFor ??
            ((id, token, host) =>
-               TomSecretsGitHubRelay.withToken(id, token, device: host)),
+               tomSecretsRelayFor(id, token: token, device: host)),
        localPath = _join(
          _join(firstRun.dataDirectory, 'vaults'),
          'primary.kdbx',
@@ -92,11 +92,11 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
 
   final Future<List<InternetAddress>> Function() _ownAddresses;
 
-  /// The relay a pairing goes through: GitHub reached with this machine's
-  /// own token (part-relay).
+  /// The relay a pairing goes through (part-relay): a relay server, or
+  /// GitHub reached with this machine's own token.
   final TomSecretsRelay Function(
     TomSecretsRelayId id,
-    String token,
+    String? token,
     String host,
   )
   _relayFor;
@@ -131,14 +131,16 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   /// The code its Pairing screen shows.
   String pairCode = '';
 
-  /// The relay its Pairing screen names (`github:<owner>/<repo>`), when it
-  /// pairs through one too; empty: none (part-relay). Tried after the
-  /// address, or alone when no address is given.
+  /// The relay its Pairing screen names (`tsm:<url>` or
+  /// `github:<owner>/<repo>`), when it pairs through one too; empty: none
+  /// (part-relay). Tried after the address, or alone when no address is
+  /// given.
   String pairRelay = '';
 
-  /// This machine's own GitHub token for the relay's repository (a
+  /// This machine's own GitHub token for a GitHub relay's repository (a
   /// pairing through GitHub needs the repository reachable before it
-  /// starts); it also opens the primary when that is in the repository.
+  /// starts); it also opens the primary when that is in the repository. A
+  /// relay server needs none.
   String pairRelayToken = '';
 
   String? _pairedThrough;
@@ -188,15 +190,15 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         fail(e.message);
         return;
       }
-      if (relayId.kind != TomSecretsRelayKind.github) {
+      if (relayId.kind == TomSecretsRelayKind.wormhole) {
         fail(
           'Pairing through ${relayId.text} is not available in this version: '
-          'pair through a GitHub repository, on the same network or over the '
-          'VPN.',
+          'pair through a relay server or a GitHub repository, on the same '
+          'network or over the VPN.',
         );
         return;
       }
-      if (pairRelayToken.trim().isEmpty) {
+      if (tomSecretsRelayNeedsToken(relayId) && pairRelayToken.trim().isEmpty) {
         fail(
           'A pairing through GitHub needs this machine to reach '
           '${relayId.address} first: paste a token for it (contents read and '
@@ -244,9 +246,10 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         }
       }
       final token = pairRelayToken.trim();
+      final needsToken = tomSecretsRelayNeedsToken(relayId);
       final receipt = await tomSecretsReceivePairingForSetup(
-        relay: _relayFor(relayId, token, host),
-        ownTokens: {relayId.address: token},
+        relay: _relayFor(relayId, needsToken ? token : null, host),
+        ownTokens: needsToken ? {relayId.address: token} : const {},
         code: code,
         device: host,
         linkAddress: link,

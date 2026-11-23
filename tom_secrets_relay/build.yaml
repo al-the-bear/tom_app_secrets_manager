@@ -1,0 +1,12 @@
+targets:
+  $default:
+    builders:
+      tom_reflection_generator:reflection_generator:
+        generate_for:
+          # The reflection root: the generator follows its import graph to
+          # the configuration class and the endpoint service, and through
+          # the tom_core_server barrel to the framework's own reflected
+          # types. Emits bin/tom_secrets_relay.reflection.dart.
+          - bin/tom_secrets_relay.dart
+        options:
+          formatted: true

@@ -37,10 +37,14 @@ void main() {
     github = FakeGitHubServer()..commitFiles(_slug, {'README.md': 'demo'});
   });
 
-  TomSecretsRelay relay(TomSecretsRelayId id, String token, String device) =>
+  TomSecretsRelay relay(TomSecretsRelayId id, String? token, String device) =>
       TomSecretsGitHubRelay.withToken(
-        id,
-        token,
+        // A relay server's rendezvous is the GitHub fake's here, which
+        // carries the same channel.
+        id.kind == TomSecretsRelayKind.server
+            ? TomSecretsRelayId.parse('github:$_slug')
+            : id,
+        token ?? 'demo-relay-server-transport',
         device: device,
         httpClient: github.client,
         baseUrl: FakeGitHubServer.baseUrl,
@@ -125,6 +129,36 @@ void main() {
     );
     expect(received.giver, 'mbp');
     expect((await window.result).receiver, 'iphone');
+  });
+
+  test('through a relay server: no token passed, none kept, so a primary '
+      'on GitHub without its token is refused', () async {
+    final (window, code) = await desktop();
+    String? passed = 'unset';
+    await expectLater(
+      tomSecretsMobileReceive(
+        relay: TomSecretsRelayId.parse('tsm:https://relay.example'),
+        code: code,
+        device: 'iphone',
+        relayFor: (id, token, device) {
+          passed = token;
+          return relay(id, token, device);
+        },
+      ),
+      throwsA(
+        isA<TomSecretsPairingException>().having(
+          (e) => e.message,
+          'message',
+          contains('token'),
+        ),
+      ),
+    );
+    expect(passed, isNull);
+    // The giving side hears the refusal too.
+    await expectLater(
+      window.result,
+      throwsA(isA<TomSecretsPairingException>()),
+    );
   });
 
   test('no pairing waits on the relay: the error names it', () async {

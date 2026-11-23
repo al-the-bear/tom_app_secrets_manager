@@ -46,9 +46,9 @@ typedef TomSecretsMobileReceive =
 
 /// The real pairing: `tomSecretsReceivePairingForSetup` (which refuses a
 /// bundle without the primary or its token): at [address]:[port] when
-/// given, else (or when nothing answers there) through [relay], a GitHub
-/// repository reached with [relayToken] ([relayFor] builds it; a test
-/// hands in its own). The phone keeps no trust material: it approves
+/// given, else (or when nothing answers there) through [relay]: a relay
+/// server, or a GitHub repository reached with [relayToken] ([relayFor]
+/// builds it; a test hands in its own). The phone keeps no trust material: it approves
 /// nothing and is not an approval link's peer.
 Future<TomSecretsMobileReceived> tomSecretsMobileReceive({
   String? address,
@@ -57,7 +57,7 @@ Future<TomSecretsMobileReceived> tomSecretsMobileReceive({
   String? relayToken,
   required TomSecretsPairingCode code,
   required String device,
-  TomSecretsRelay Function(TomSecretsRelayId id, String token, String device)?
+  TomSecretsRelay Function(TomSecretsRelayId id, String? token, String device)?
   relayFor,
 }) async {
   if (address != null && port != null) {
@@ -80,16 +80,20 @@ Future<TomSecretsMobileReceived> tomSecretsMobileReceive({
       }
     }
   }
-  if (relay == null || relayToken == null) {
-    throw ArgumentError('an address and port, or a relay with its token');
+  if (relay == null ||
+      (tomSecretsRelayNeedsToken(relay) && (relayToken ?? '').isEmpty)) {
+    throw ArgumentError(
+      'an address and port, or a relay (GitHub with its token)',
+    );
   }
+  final needsToken = tomSecretsRelayNeedsToken(relay);
   final build =
       relayFor ??
       (id, token, device) =>
-          TomSecretsGitHubRelay.withToken(id, token, device: device);
+          tomSecretsRelayFor(id, token: token, device: device);
   final receipt = await tomSecretsReceivePairingForSetup(
-    relay: build(relay, relayToken, device),
-    ownTokens: {relay.address: relayToken},
+    relay: build(relay, needsToken ? relayToken : null, device),
+    ownTokens: needsToken ? {relay.address: relayToken!} : const {},
     code: code,
     device: device,
   );
@@ -187,16 +191,16 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
         setState(() => _error = e.message);
         return;
       }
-      if (relay.kind != TomSecretsRelayKind.github) {
+      if (relay.kind == TomSecretsRelayKind.wormhole) {
         setState(
           () => _error =
               'Pairing through ${relay!.text} is not available in this '
-              'version: pair through a GitHub repository, on the same '
-              'network or over the VPN.',
+              'version: pair through a relay server or a GitHub repository, '
+              'on the same network or over the VPN.',
         );
         return;
       }
-      if (_relayToken.text.trim().isEmpty) {
+      if (tomSecretsRelayNeedsToken(relay) && _relayToken.text.trim().isEmpty) {
         setState(
           () => _error =
               'Pairing through GitHub needs this device\'s token for '
@@ -239,7 +243,9 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
         address: at?.$1,
         port: at?.$2,
         relay: relay,
-        relayToken: relay == null ? null : _relayToken.text.trim(),
+        relayToken: relay == null || !tomSecretsRelayNeedsToken(relay)
+            ? null
+            : _relayToken.text.trim(),
         code: code,
         device: device,
       );
@@ -382,7 +388,7 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
                 ),
                 if (_scanned)
                   Text(
-                    _relay.text.isEmpty
+                    !_relay.text.startsWith('github:')
                         ? 'Read from the desktop\'s code: tap Pair.'
                         : 'Read from the desktop\'s code: it also pairs '
                               'through ${_relay.text}. Paste this device\'s '
@@ -412,13 +418,15 @@ class _SetupState extends State<TomSecretsMobileSetupScreen> {
                 autocorrect: false,
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
-                  labelText: 'Relay (optional, e.g. github:owner/repo)',
+                  labelText:
+                      'Relay (optional, e.g. tsm:https://relay.example or '
+                      'github:owner/repo)',
                   helperText:
                       'When the desktop names one and this device is neither '
                       'on its network nor on the VPN.',
                 ),
               ),
-              if (_relay.text.trim().isNotEmpty)
+              if (_relay.text.trim().startsWith('github:'))
                 TextField(
                   key: const Key('tsm-mobile-setup-relay-token'),
                   controller: _relayToken,
