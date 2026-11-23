@@ -69,6 +69,9 @@ final class _ExpireCommand extends TomCommand {
   }
 }
 
+/// The paths whose `Authorization` header is the relay's own credential.
+const String tomSecretsRelayCredentialPath = '/v1/';
+
 /// A running relay.
 final class TomSecretsRelayApp {
   TomSecretsRelayApp._(this.state, this.server, this.http, this._scheduler);
@@ -88,6 +91,10 @@ final class TomSecretsRelayApp {
     // framework would mount without a declaration stays closed (the guard
     // answers 404 for it besides).
     TomResourceKeyProtection.globalSettingProtectionDefault = true;
+    // `Authorization: Bearer` under /v1 is the relay's own credential (an
+    // instance token or a recipient's proof), never a framework JWT: claimed,
+    // so the framework does not try to verify it and warn on every request.
+    TomEndpointCredentials.claim(tomSecretsRelayCredentialPath);
     if (settings.mode == TomSecretsRelayMode.token && settings.tokens.isEmpty) {
       tomLog.warn(
         'relay: token mode without instance tokens: every mailbox put and '
@@ -140,6 +147,7 @@ final class TomSecretsRelayApp {
   /// Stops it: the channels closed, the socket closed.
   Future<void> stop() async {
     await _scheduler.close();
+    TomEndpointCredentials.release(tomSecretsRelayCredentialPath);
     state.close();
     await http.close(force: true);
   }

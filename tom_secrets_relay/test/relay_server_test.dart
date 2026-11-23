@@ -377,6 +377,32 @@ void main() {
       );
     });
 
+    test('the relay\'s tokens and proofs are not read as framework JWTs: no '
+        'bearer warning per request', () async {
+      await start();
+      final captured = _Captured();
+      final previous = tomLog.logOutput;
+      tomLog.logOutput = captured;
+      addTearDown(() => tomLog.logOutput = previous);
+      final r = await h.send(
+        'PUT',
+        '/v1/mailbox/${me.recipient.fingerprint}/x',
+        body: [1],
+        headers: {..._token, 'tsm-expires': expiresIn(const Duration(days: 1))},
+      );
+      expect(r.status, 201);
+      final listed = await h.send(
+        'GET',
+        '/v1/mailbox/${me.recipient.fingerprint}',
+        headers: {'authorization': 'Bearer not-a-proof'},
+      );
+      expect(listed.status, 401);
+      expect(
+        captured.messages.where((m) => m.contains('bearer token')),
+        isEmpty,
+      );
+    });
+
     test('open mode takes puts without a token', () async {
       await start(
         const TomSecretsRelayConfig(

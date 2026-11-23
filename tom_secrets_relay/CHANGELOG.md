@@ -7,6 +7,9 @@
   health check the new `health` mode (`tom_secrets_relay health`, which asks
   the running relay's `/health` and exits 0 or 1;
   `tomSecretsRelayHealthCheck`, `tomSecretsRelayHealthUrl`).
+- The `Authorization` header under `/v1/` is claimed as the relay's own
+  credential (`TomEndpointCredentials`): an instance token or a proof is no
+  longer read as a framework JWT, which logged a warning per request.
 
 ## 0.1.0
 

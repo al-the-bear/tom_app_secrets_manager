@@ -26,7 +26,8 @@ The apps reach it as the relay `tsm:<url>` (`tom_secrets_core`'s
 - `<recipient>` is the member's fingerprint: the base32 SHA-256 of the
   hybrid recipient string, 52 lower-case characters.
 - The instance token and the proof travel as `Authorization: Bearer`. A
-  proof is valid for 5 minutes.
+  proof is valid for 5 minutes. The relay claims the header under `/v1/`,
+  so `tom_core_server` never reads it as one of its own JWTs.
 - A refusal answers `{"error": "…"}` with its status; a 429 carries
   `Retry-After`. A WebSocket the relay ends gets a close code from 4000:
   4000 the other side left, 4400 a frame that is not binary, 4401 no
