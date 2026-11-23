@@ -820,6 +820,26 @@ final class FakeService implements TomSecretsAdminChannel {
           relayTokens[relay] = token;
         }
         return {'op': 'ok'};
+      case 'relay.put':
+        final refusal = relayPutRefusal;
+        if (refusal != null) {
+          throw TomSecretsAdminException(
+            'unavailable',
+            refusal,
+            details: {'reason': 'relay', 'relay': args['relay']},
+          );
+        }
+        final name = tomSecretsNewInboxName();
+        final members = (args['members']! as List).cast<String>();
+        final bytes = base64.decode(args['bytes']! as String);
+        relayPuts.add((
+          relay: args['relay']! as String,
+          members: members,
+          name: name,
+          bytes: bytes,
+        ));
+        await onRelayPut?.call(args['relay']! as String, members, name, bytes);
+        return {'op': 'relayPut', 'name': name};
       case 'relay.token.list':
         return {
           'op': 'relayTokens',
@@ -1290,6 +1310,24 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// This device's public keys (`pair.identity`), set by a pairing test.
   Map<String, Object?>? pairIdentity;
+
+  /// The shares put on relay servers (`relay.put`).
+  final List<
+    ({String relay, List<String> members, String name, Uint8List bytes})
+  >
+  relayPuts = [];
+
+  /// Called at each `relay.put` (a test's relay takes the items).
+  Future<void> Function(
+    String relay,
+    List<String> members,
+    String name,
+    Uint8List bytes,
+  )?
+  onRelayPut;
+
+  /// When set, `relay.put` is refused with this message (the relay's).
+  String? relayPutRefusal;
 
   /// The relay servers' instance tokens kept (`relay.token.set`).
   final Map<String, String> relayTokens = {};

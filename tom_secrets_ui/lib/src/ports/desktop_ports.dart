@@ -19,7 +19,7 @@ import 'package:tom_credentials_ui/tom_credentials_ui.dart'
     show TomKeyFilePicker;
 import 'package:tom_host_ui/tom_host_ui.dart' show TomFlutterClipboardPort;
 import 'package:tom_secrets_core/tom_secrets_core.dart'
-    show TomSecretsBreachCheck;
+    show TomSecretsBreachCheck, TomSecretsRelay, TomSecretsRelayId;
 
 import '../state/auto_type.dart';
 import '../state/autofill.dart';
@@ -317,6 +317,7 @@ final class TomSecretsHost {
     this.hotkeys,
     this.macOS = false,
     this.sendsShares = true,
+    this.mailboxRelayFor,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -342,6 +343,10 @@ final class TomSecretsHost {
 
   /// The global hotkeys of quick access and auto-type, or null.
   final TomSecretsHotkeys? hotkeys;
+
+  /// **[C]** Builds the relay server a shared vault's mailbox is on (a test
+  /// hands in its own); null: `TomSecretsServerRelay` (part-relay).
+  final TomSecretsRelay Function(TomSecretsRelayId id)? mailboxRelayFor;
 
   /// Whether the app runs on macOS (the default hotkeys use Cmd).
   final bool macOS;

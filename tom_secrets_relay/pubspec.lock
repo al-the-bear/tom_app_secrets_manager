@@ -1117,10 +1117,10 @@ packages:
     dependency: "direct dev"
     description:
       name: tom_secrets_service
-      sha256: "3d7ff43ed2e7de14b7e5e2ed80f03fcee84cd3278b0d9e26618e81711a7e87e1"
+      sha256: db578f22e33d9db6043777e1393f999ce11ce2b2deed2b70df1f74461130abc0
       url: "https://pub.dev"
     source: hosted
-    version: "0.24.0"
+    version: "0.25.0"
   tuple:
     dependency: transitive
     description:

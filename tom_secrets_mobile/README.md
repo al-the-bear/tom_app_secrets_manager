@@ -52,7 +52,9 @@ A phone runs no secrets service and keeps no copy of a vault:
   engine answers `inbox.list`, `inbox.read` and `inbox.delete`, so the
   packages in the user's inbox folders of shared vaults are found at each
   unlock and refresh (a banner names them), imported and deleted, and
-  packages older than 30 days deleted; `inbox.put` is refused.
+  packages older than 30 days deleted; `inbox.put` is refused. A shared
+  vault whose mailbox is a relay server is read on the relay instead, with
+  the member keys' proof, and its packages deleted there.
 - **Guided rotations** (phase C, part-key-rotation): the phone is a device
   like the desktops. At each unlock, refresh and save of the primary its
   engine takes the next keys a guided rotation wrote into the primary: the

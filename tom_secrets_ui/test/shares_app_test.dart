@@ -30,9 +30,52 @@ final class _Clipboard implements TomClipboardPort {
   Future<bool> clearIfHolding(TomClipboardReceipt receipt) async => true;
 }
 
+/// A relay server's mailbox in memory: each recipient reads only its own
+/// items (the proof is the member key handed in).
+final class _MemoryMailbox implements TomSecretsRelay {
+  _MemoryMailbox(this.id);
+
+  @override
+  final TomSecretsRelayId id;
+
+  /// The items by recipient and item id.
+  final Map<String, Map<String, Uint8List>> items = {};
+
+  @override
+  Set<TomSecretsRelayService> get services => id.services;
+
+  @override
+  Future<List<TomSecretsMailboxEntry>> list(TomSecretsMemberKey me) async => [
+    for (final e in (items[me.recipient.fingerprint] ?? const {}).entries)
+      TomSecretsMailboxEntry(itemId: e.key, size: e.value.length),
+  ];
+
+  @override
+  Future<Uint8List> fetch(TomSecretsMemberKey me, String itemId) async =>
+      items[me.recipient.fingerprint]![itemId]!;
+
+  @override
+  Future<void> delete(TomSecretsMemberKey me, String itemId) async =>
+      items[me.recipient.fingerprint]?.remove(itemId);
+
+  @override
+  Future<void> put(TomSecretsMailboxItem item) async =>
+      (items[item.recipient] ??= {})[item.itemId] = item.bytes;
+
+  @override
+  Future<TomSecretsPairingChannel> host() => throw UnimplementedError();
+  @override
+  Future<TomSecretsPairingChannel> join(String nameplate) =>
+      throw UnimplementedError();
+  @override
+  Future<TomSecretsPairingChannel> link(String linkId) =>
+      throw UnimplementedError();
+}
+
 void main() {
   late FakeService service;
   late TomSecretsHost host;
+  late _MemoryMailbox mailbox;
   late TomSecretsMemberKey bob;
 
   setUpAll(() async => bob = await TomSecretsMemberKey.generate());
@@ -43,10 +86,20 @@ void main() {
       addEntry(f, 'Servers/Box', password: 'demo-box-pw');
     });
     service = FakeService([FakeStore('primary', demoPassword, primary)]);
+    mailbox = _MemoryMailbox(
+      TomSecretsRelayId.parse('tsm:https://relay.example'),
+    );
+    // The service's relay.put lands in the same mailbox the app reads.
+    service.onRelayPut = (relay, members, name, bytes) async {
+      for (final m in members) {
+        (mailbox.items[m] ??= {})[name] = bytes;
+      }
+    };
     host = TomSecretsHost(
       service: FakeHost(service),
       preferences: TomSecretsMemoryPreferences(),
       clipboard: _Clipboard(),
+      mailboxRelayFor: (id) => mailbox,
     );
   });
 
@@ -351,6 +404,142 @@ void main() {
     expect(service.inboxes['crew'], isEmpty);
     expect(find.text('Shares'), findsOneWidget);
     expect(session.index.any((v) => v.title == 'Unwanted'), isFalse);
+  });
+
+  testWidgets('a vault whose mailbox is a relay server: the share goes to '
+      'Bob\'s mailbox there through the service; a refused put is said', (
+    tester,
+  ) async {
+    final session = await sharing(tester);
+    await crew(tester);
+    await tester.runAsync(
+      () => session.setVaultMailboxRelay(
+        'crew',
+        TomSecretsRelayId.parse('tsm:https://relay.example'),
+      ),
+    );
+    await wait(tester, 5);
+    await tester.tap(find.text('Vaults'));
+    await wait(tester, 5);
+    session.toggleMarked(box(session));
+    await tester.pump();
+    await tap(tester, find.byKey(const Key('tsm-share-marked')));
+    await wait(tester, 2);
+    await tap(
+      tester,
+      find.byKey(Key('tsm-share-member-${bob.recipient.fingerprint}')),
+    );
+    await tester.pump();
+    await tap(tester, find.byKey(const Key('tsm-share-make')));
+    await wait(tester, 15);
+    expect(
+      find.text('Put into the mailboxes of crew (tsm:https://relay.example)'),
+      findsOneWidget,
+    );
+
+    // Refused by the relay (no instance token): said in the dialog.
+    service.relayPutRefusal =
+        'the relay tsm:https://relay.example: it did not take the package: '
+        'this relay accepts mailbox items only from holders of an instance '
+        'token';
+    await tap(tester, find.byKey(const Key('tsm-share-inbox-crew')));
+    await wait(tester, 5);
+    expect(find.textContaining('instance token'), findsOneWidget);
+    expect(find.byKey(const Key('tsm-share-sent')), findsNothing);
+    expect(mailbox.items, isEmpty);
+
+    service.relayPutRefusal = null;
+    await tap(tester, find.byKey(const Key('tsm-share-inbox-crew')));
+    await wait(tester, 5);
+    expect(find.byKey(const Key('tsm-share-sent')), findsOneWidget);
+    expect(find.textContaining('In the mailboxes of crew'), findsOneWidget);
+    final put = service.relayPuts.single;
+    expect(put.relay, 'tsm:https://relay.example');
+    expect(put.members, [bob.recipient.fingerprint]);
+    expect(service.inboxes['crew'] ?? const {}, isEmpty);
+    final bytes = mailbox.items[bob.recipient.fingerprint]![put.name]!;
+    final read = await tester.runAsync(
+      () => tomSecretsReadShare(bytes, [TomSecretsAgeHybridIdentity(bob)]),
+    );
+    expect(read!.entries.single.title, 'Box');
+  });
+
+  testWidgets('a vault whose mailbox is a relay server: Alice\'s items read '
+      'there with her key, one imported and one declined, both deleted '
+      'there; Bob\'s items and the inbox folders not read', (tester) async {
+    final session = await sharing(tester);
+    await crew(tester);
+    await tester.runAsync(
+      () => session.setVaultMailboxRelay(
+        'crew',
+        TomSecretsRelayId.parse('tsm:https://relay.example'),
+      ),
+    );
+    await wait(tester, 5);
+    final alice = session.memberKeyRecipient!;
+    Future<Uint8List> fromBob(String title) async => (await tester.runAsync(
+      () => tomSecretsWriteShare(
+        TomSecretsShare(
+          created: DateTime.utc(2026, 11, 20),
+          from: (name: 'Bob', fingerprint: bob.recipient.fingerprint),
+          entries: [
+            TomSecretsSharedEntry(
+              fields: {
+                'Title': (value: title, protected: false),
+                'Password': (value: 'demo-$title', protected: true),
+              },
+            ),
+          ],
+        ),
+        recipients: [alice],
+      ),
+    ))!;
+    final first = tomSecretsNewInboxName();
+    final second = tomSecretsNewInboxName();
+    mailbox.items[alice.fingerprint] = {
+      first: await fromBob('Api key'),
+      second: await fromBob('Unwanted'),
+    };
+    mailbox.items[bob.recipient.fingerprint] = {
+      tomSecretsNewInboxName(): Uint8List.fromList([1, 2, 3]),
+    };
+    // A package in the inbox folder is not read for this vault.
+    service.inboxes['crew'] = {
+      '${alice.fingerprint}/${tomSecretsNewInboxName()}': await fromBob(
+        'Folder',
+      ),
+    };
+
+    await tester.runAsync(session.checkInbox);
+    await wait(tester, 5);
+    expect(session.inbox, hasLength(2));
+    expect(session.inbox.map((p) => p.relay).toSet(), {
+      'tsm:https://relay.example',
+    });
+    final apiKey = session.inbox.firstWhere(
+      (p) => p.share!.entries.single.title == 'Api key',
+    );
+    await tap(tester, find.byKey(Key('tsm-inbox-open-${apiKey.name}')));
+    await wait(tester, 2);
+    await tap(tester, find.byKey(const Key('tsm-import-share-go')));
+    await wait(tester, 2);
+    await tap(tester, find.byKey(const Key('tsm-pick-group-crew')));
+    await wait(tester, 10);
+    expect(
+      session.index.any((v) => v.ref.store == 'crew' && v.title == 'Api key'),
+      isTrue,
+    );
+    expect(mailbox.items[alice.fingerprint]!.keys, [second]);
+
+    final unwanted = session.inbox.single;
+    await tap(tester, find.byKey(Key('tsm-inbox-open-${unwanted.name}')));
+    await wait(tester, 2);
+    await tap(tester, find.byKey(const Key('tsm-import-share-decline')));
+    await wait(tester, 5);
+    expect(session.inbox, isEmpty);
+    expect(mailbox.items[alice.fingerprint], isEmpty);
+    // Bob's mailbox untouched.
+    expect(mailbox.items[bob.recipient.fingerprint], hasLength(1));
   });
 
   testWidgets('a phone does not share: no Share action', (tester) async {

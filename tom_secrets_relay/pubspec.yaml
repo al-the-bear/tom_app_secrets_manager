@@ -32,7 +32,7 @@ dev_dependencies:
   tom_secrets_core: ^0.2.23
   # Two real secrets services pairing their approval link through this
   # relay (the end-to-end test of the link).
-  tom_secrets_service: ^0.24.0
+  tom_secrets_service: ^0.25.0
   tom_secrets_client: ^0.2.14
   tom_core_storage: ^0.1.2
   lints: ^6.0.0

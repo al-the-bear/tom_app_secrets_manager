@@ -327,7 +327,10 @@ void main() {
       find.byKey(const Key('tsm-shared-mailbox-note-crew')),
       findsOneWidget,
     );
-    expect(find.textContaining('read once the relay server'), findsOneWidget);
+    expect(
+      find.textContaining('go to their mailboxes on tsm:https://relay.example'),
+      findsOneWidget,
+    );
     // A GitHub repository is not offered as another vault's mailbox.
     await tap(tester, find.byKey(const Key('tsm-shared-mailbox-crew')));
     await tester.pumpAndSettle();

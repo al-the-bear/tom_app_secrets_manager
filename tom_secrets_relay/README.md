@@ -86,7 +86,9 @@ public, are served.
   (`--check` verifies it).
 - The tests (`testkit :test`) start the relay in the test's process:
   pairing, links, the mailbox with the proof, both modes, the filters and
-  the blocks.
+  the blocks; with two real secrets services, the approval link through
+  the relay, and a share put by a service's `relay.put` into members'
+  mailboxes and read there with their keys.
 
 ## Licence
 

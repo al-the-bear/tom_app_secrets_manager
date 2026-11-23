@@ -248,11 +248,12 @@ from the desktop app; its user guide has the details). Settings ›
 The dialog says who sent it, and **"Import into…"** puts its entries into
 the vault and group you pick.
 
-Shares put into your inbox in a shared vault are found when the phone
+Shares put into your inbox in a shared vault, or into your mailbox on the
+relay server a shared vault names as its mailbox, are found when the phone
 unlocks or refreshes: a banner names them ("1 entry from Bob") with
 **"Open"**, and the Shares page lists them. **"Open…"** › **"Import
-into…"** imports one and deletes it from the inbox; **"Decline"** deletes
-it. Packages older than 30 days are deleted on their own.
+into…"** imports one and deletes it from the inbox or the relay;
+**"Decline"** deletes it. Packages older than 30 days are deleted on their own.
 
 ## Settings
 

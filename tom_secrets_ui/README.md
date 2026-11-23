@@ -339,7 +339,11 @@ offering the import and the pairing.
   history); the Shares section (`TomSecretsSharesSection`, single-entry
   exports): "Import a share…" and the packages of the user's inbox folders
   (`TomSecretsSession.inbox`, read at each load by `checkInbox`, which also
-  deletes every package older than 30 days). A store whose key changed on
+  deletes every package older than 30 days); a shared vault whose mailbox
+  is a relay server is read on the relay instead
+  (`TomSecretsServerRelay` list, fetch and delete with each member key's
+  proof, the relay built by `TomSecretsHost.mailboxRelayFor`; the package's
+  `TomSecretsInboxPackage.relay`). A store whose key changed on
   another device is served read-only from its old copy
   (`TomSecretsStoreState.keyChanged`).
 - `tomSecretsShowShareDialog`, `tomSecretsShowImportShareDialog`:
@@ -350,13 +354,15 @@ offering the import and the pairing.
   (`TomSecretsSession.writeShare`), shown as armoured text to copy, a QR
   code while it fits (`tomSecretsShareFitsQr`, level L), a `.tsmshare` file,
   or put into the inbox of a shared vault every recipient is a member of
-  (`inboxVaultsFor`, `putIntoInbox`, `inbox.put`). Import a share: pasted,
+  (`inboxVaultsFor`, `putIntoInbox`: `inbox.put`, or `relay.put` into the
+  members' mailboxes on the vault's mailbox relay server, with the instance
+  token the service keeps). Import a share: pasted,
   opened, scanned or from the inbox (`TomSecretsInboxPackage`), the
   passphrase asked when it has one (`readShare`), its sender named as a
   member when the fingerprint matches, its entries imported as new entries
   into a picked group (`importShare`, `tomSecretsPickGroup`), an inbox
   package deleted after (`acceptInboxPackage`) or declined
-  (`declineInboxPackage`).
+  (`declineInboxPackage`), on the relay for a relay's package.
 - `TomSecretsPairingView`: The giving side of a pairing (part-sharing), over
   `TomSecretsPairingModel`: "Pair a device" opens a `TomSecretsPairingWindow` on
   this machine's LAN and VPN addresses (`tomSecretsPairingAddresses`, or the

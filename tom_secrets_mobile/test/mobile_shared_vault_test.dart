@@ -13,6 +13,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tom_core_storage/settings.dart';
@@ -86,7 +87,9 @@ void main() {
 
   /// The phone's app: an engine, the connection and the session over it,
   /// unlocked and loaded.
-  Future<(TomSecretsMobileEngine, TomSecretsSession)> unlock() async {
+  Future<(TomSecretsMobileEngine, TomSecretsSession)> unlock({
+    TomSecretsRelay Function(TomSecretsRelayId id)? mailboxRelayFor,
+  }) async {
     final engine = TomSecretsMobileEngine(
       primaryLocator: demoPrimary,
       device: 'demo-phone',
@@ -107,6 +110,7 @@ void main() {
       connection,
       TomSecretsMemoryPreferences(),
       systemVaultsReadOnly: true,
+      mailboxRelayFor: mailboxRelayFor,
     );
     addTearDown(session.dispose);
     await session.load();
@@ -256,4 +260,78 @@ void main() {
       ),
     );
   });
+
+  test('a vault whose mailbox is a relay server: the phone reads its items '
+      'there with its member key, imports one and deletes it there', () async {
+    final mailbox = _MemoryMailbox(
+      TomSecretsRelayId.parse('tsm:https://relay.example'),
+    );
+    final share = await tomSecretsWriteShare(
+      TomSecretsShare(
+        created: DateTime.utc(2026, 11, 20),
+        from: (name: 'Bob', fingerprint: bob.recipient.fingerprint),
+        entries: const [
+          TomSecretsSharedEntry(
+            fields: {
+              'Title': (value: 'Gate code', protected: false),
+              'Password': (value: 'demo-0815', protected: true),
+            },
+          ),
+        ],
+      ),
+      recipients: [phone.recipient],
+    );
+    final name = tomSecretsNewInboxName();
+    final mine = phone.recipient.fingerprint;
+    mailbox.items[mine] = {name: share};
+    final (_, session) = await unlock(mailboxRelayFor: (id) => mailbox);
+    await session.setVaultMailboxRelay('crew', mailbox.id);
+    await session.checkInbox();
+    final package = session.inbox.single;
+    expect(package.relay, 'tsm:https://relay.example');
+    expect(package.title, '1 entry from Bob');
+    await session.acceptInboxPackage(package, 'crew', null);
+    expect(holds(session, 'crew', 'Gate code'), isTrue);
+    expect(session.inbox, isEmpty);
+    expect(mailbox.items[mine], isEmpty);
+  });
+}
+
+/// A relay server's mailbox in memory: each recipient reads only its own
+/// items (the proof is the member key handed in).
+final class _MemoryMailbox implements TomSecretsRelay {
+  _MemoryMailbox(this.id);
+
+  @override
+  final TomSecretsRelayId id;
+
+  final Map<String, Map<String, Uint8List>> items = {};
+
+  @override
+  Set<TomSecretsRelayService> get services => id.services;
+
+  @override
+  Future<List<TomSecretsMailboxEntry>> list(TomSecretsMemberKey me) async => [
+    for (final e in (items[me.recipient.fingerprint] ?? const {}).entries)
+      TomSecretsMailboxEntry(itemId: e.key, size: e.value.length),
+  ];
+
+  @override
+  Future<Uint8List> fetch(TomSecretsMemberKey me, String itemId) async =>
+      items[me.recipient.fingerprint]![itemId]!;
+
+  @override
+  Future<void> delete(TomSecretsMemberKey me, String itemId) async =>
+      items[me.recipient.fingerprint]?.remove(itemId);
+
+  @override
+  Future<void> put(TomSecretsMailboxItem item) => throw UnimplementedError();
+  @override
+  Future<TomSecretsPairingChannel> host() => throw UnimplementedError();
+  @override
+  Future<TomSecretsPairingChannel> join(String nameplate) =>
+      throw UnimplementedError();
+  @override
+  Future<TomSecretsPairingChannel> link(String linkId) =>
+      throw UnimplementedError();
 }

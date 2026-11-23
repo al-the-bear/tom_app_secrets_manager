@@ -24,9 +24,15 @@ final class TomSecretsInboxPackage {
     this.share,
     this.passphrase = false,
     this.problem,
+    this.relay,
   });
 
-  /// The shared vault whose folder holds it.
+  /// **[C]** The relay server whose mailbox holds it (`tsm:<url>`), or null:
+  /// the inbox folder beside [store] (part-relay).
+  final String? relay;
+
+  /// The shared vault whose folder holds it (for a package on a relay
+  /// server, a shared vault whose mailbox is that relay).
   final String store;
 
   /// The member id of the folder (the user's member key's fingerprint).

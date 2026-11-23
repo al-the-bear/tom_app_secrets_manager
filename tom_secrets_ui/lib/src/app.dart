@@ -50,6 +50,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
     _connection,
     widget.host.preferences,
     systemVaultsReadOnly: widget.host.systemVaultsReadOnly,
+    mailboxRelayFor: widget.host.mailboxRelayFor,
   );
   late final TomProtectedClipboard _clipboard = TomProtectedClipboard(
     port: widget.host.clipboard,

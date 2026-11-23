@@ -970,7 +970,11 @@ expiry, never the vault's history.
    (`<entry>.tsmshare`), or let the recipient's phone scan the **QR code**
    (shown while it fits: one password for one member, not a certificate).
    For members, **"Put into the inbox of <vault>"** commits it into the
-   inbox of a shared vault every recipient is a member of.
+   inbox of a shared vault every recipient is a member of; when that
+   vault's mailbox is a relay server, the button reads **"Put into the
+   mailboxes of <vault> (<relay>)"** and puts it into each recipient's
+   mailbox there, with the relay's instance token. A relay that refuses it
+   (no token kept, its limits) says why in the dialog.
 
 The `age` command line (v1.3.0 or later) opens a share too: with the
 member's key, or `age -d` asking for the passphrase.
@@ -992,8 +996,11 @@ deleted by whichever member's app syncs next. The folder names show who
 receives shares and when, never what. A shared vault's row shows its
 **"Mailbox"**: "This vault's repository" (its inbox folders), or a relay
 server from the Relays list. The choice is kept in the vault, so every
-member's app reads the same one; this version reads the inbox folders
-either way.
+member's app sends and reads the same way. With a relay server, shares to
+the vault's members go into their mailboxes on the relay (kept 30 days)
+instead of the inbox folders; at each sync the app reads yours there with
+your member key, which only you hold, and lists them in the Shares section
+like the inbox's. Importing or declining one deletes it on the relay.
 
 ### Relays
 
@@ -1009,7 +1016,8 @@ machine knows, in order of preference, each with what it offers:
 - **A relay server**, `tsm:https://…` (`tom_secrets_relay`): pairing with
   any machine that reaches it, and the approval link between two paired
   machines that do not reach each other on the network or the VPN (see
-  below). It offers the mailbox too, which this version does not use yet.
+  below), and the mailbox of a shared vault that names it (see The
+  inbox above).
   The key button keeps the relay's **instance token**, which its operator
   gives your team: kept in this machine's keychain, never shown again;
   "Remove the token" forgets it. The row says whether a token is kept.

@@ -141,6 +141,12 @@ class _ShareDialogState extends State<_ShareDialog> {
     );
   }
 
+  /// The relay server [store]'s shares go to, or null (its inbox folders).
+  TomSecretsRelayId? _relayOf(String store) {
+    final relay = context.read<TomSecretsSession>().mailboxRelayOf(store);
+    return relay?.kind == TomSecretsRelayKind.server ? relay : null;
+  }
+
   Future<void> _toInbox(String store) async {
     final session = context.read<TomSecretsSession>();
     setState(() {
@@ -386,7 +392,12 @@ class _ShareDialogState extends State<_ShareDialog> {
               OutlinedButton.icon(
                 key: Key('tsm-share-inbox-$store'),
                 icon: const Icon(Icons.move_to_inbox_outlined),
-                label: Text('Put into the inbox of $store'),
+                label: Text(
+                  _relayOf(store) == null
+                      ? 'Put into the inbox of $store'
+                      : 'Put into the mailboxes of $store '
+                            '(${_relayOf(store)!.text})',
+                ),
                 onPressed: _busy || _sentTo != null
                     ? null
                     : () => unawaited(_toInbox(store)),
@@ -397,7 +408,7 @@ class _ShareDialogState extends State<_ShareDialog> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              'In the inbox of $_sentTo: the recipients\' apps find it at '
+              'In the ${_relayOf(_sentTo!) == null ? 'inbox' : 'mailboxes'} of $_sentTo: the recipients\' apps find it at '
               'their next sync.',
               key: const Key('tsm-share-sent'),
             ),

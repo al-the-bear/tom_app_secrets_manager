@@ -203,7 +203,8 @@ class TomSecretsSession extends ChangeNotifier {
     this.connection,
     this.preferences, {
     this.systemVaultsReadOnly = false,
-  }) {
+    TomSecretsRelay Function(TomSecretsRelayId id)? mailboxRelayFor,
+  }) : _buildMailboxRelay = mailboxRelayFor ?? TomSecretsServerRelay.new {
     _listView = preferences.read(TomSecretsPreferenceKeys.view) == 'list';
     _vaultAware =
         preferences.read(TomSecretsPreferenceKeys.vaults) != 'uniform';
@@ -220,6 +221,16 @@ class TomSecretsSession extends ChangeNotifier {
   /// Whether system vaults are read-only on this device (mobile, BP-40):
   /// shown with their keys and overlays, never edited.
   final bool systemVaultsReadOnly;
+
+  /// **[C]** Builds the relay server a shared vault's mailbox is on, for
+  /// reading this device's items with the member key (no instance token is
+  /// needed to read; a put goes through the service, `relay.put`).
+  final TomSecretsRelay Function(TomSecretsRelayId id) _buildMailboxRelay;
+  final Map<TomSecretsRelayId, TomSecretsRelay> _mailboxRelays = {};
+
+  /// The relay server [id], made once per session (its proofs are cached).
+  TomSecretsRelay _mailboxRelayFor(TomSecretsRelayId id) =>
+      _mailboxRelays.putIfAbsent(id, () => _buildMailboxRelay(id));
 
   late final StreamSubscription<Map<String, Object?>> _events;
   final Map<String, TomSecretsOpenVault> _vaults = {};
@@ -2777,12 +2788,25 @@ class TomSecretsSession extends ChangeNotifier {
   }
 
   /// Puts the share [bytes] into the inbox folder of each of [recipients]
-  /// beside the shared vault [store]. Answers the package's name.
+  /// beside the shared vault [store] — **[C]** or, when the vault's mailbox
+  /// relay is a relay server, into their mailboxes there through the
+  /// service (`relay.put`, with the instance token it keeps; a refusal is
+  /// thrown as the service's `unavailable` with the relay's reason). Answers
+  /// the package's name.
   Future<String> putIntoInbox(
     String store,
     List<TomSecretsAgeRecipient> recipients,
     Uint8List bytes,
   ) async {
+    final relay = mailboxRelayOf(store);
+    if (relay != null && relay.kind == TomSecretsRelayKind.server) {
+      final answer = await connection.request('relay.put', {
+        'relay': relay.text,
+        'members': [for (final r in recipients) r.fingerprint],
+        'bytes': base64.encode(bytes),
+      });
+      return answer['name']! as String;
+    }
     final answer = await connection.request('inbox.put', {
       'store': store,
       'members': [for (final r in recipients) r.fingerprint],
@@ -2814,10 +2838,26 @@ class TomSecretsSession extends ChangeNotifier {
           ?tomSecretsMemberKeyRecipientOf(e)?.fingerprint,
       };
       final known = {
-        for (final p in _inbox) '${p.store}/${p.member}/${p.name}',
+        for (final p in _inbox) '${p.relay ?? p.store}/${p.member}/${p.name}',
       };
       final found = <TomSecretsInboxPackage>[];
+      // [C] The vaults whose mailbox is a relay server: read there, once
+      // per relay, with the member keys (part-relay).
+      final relays = <String, String>{};
       for (final store in sharedVaults) {
+        final relay = mailboxRelayOf(store);
+        if (relay != null && relay.kind == TomSecretsRelayKind.server) {
+          relays.putIfAbsent(relay.text, () => store);
+        }
+      }
+      for (final MapEntry(key: relay, value: store) in relays.entries) {
+        found.addAll(await _checkRelayMailbox(relay, store, known));
+      }
+      for (final store in sharedVaults) {
+        final mailbox = mailboxRelayOf(store);
+        if (mailbox != null && mailbox.kind == TomSecretsRelayKind.server) {
+          continue;
+        }
         final List<Map<Object?, Object?>> files;
         try {
           final answer = await connection.request('inbox.list', {
@@ -2854,7 +2894,9 @@ class TomSecretsSession extends ChangeNotifier {
           if (known.contains(key)) {
             found.add(
               _inbox.firstWhere(
-                (p) => '${p.store}/${p.member}/${p.name}' == key,
+                (p) =>
+                    p.relay == null &&
+                    '${p.store}/${p.member}/${p.name}' == key,
               ),
             );
             continue;
@@ -2870,19 +2912,94 @@ class TomSecretsSession extends ChangeNotifier {
     }
   }
 
+  /// The member keys of the primary, disposed after [use].
+  Future<T> _withMemberKeyPairs<T>(
+    Future<T> Function(List<TomSecretsMemberKey> keys) use,
+  ) async {
+    final file = _primaryFile;
+    final keys = <TomSecretsMemberKey>[
+      if (file != null)
+        for (final e in tomSecretsMemberKeyEntries(file))
+          await tomSecretsMemberKeyOf(e),
+    ];
+    try {
+      return await use(keys);
+    } finally {
+      for (final k in keys) {
+        k.dispose();
+      }
+    }
+  }
+
+  /// **[C]** The items waiting for this device's member keys on the relay
+  /// server [relay] (the mailbox of [store] and of every shared vault on
+  /// it), read with each key's proof; [known] are kept as read before. A
+  /// relay it cannot reach now is left for the next load.
+  Future<List<TomSecretsInboxPackage>> _checkRelayMailbox(
+    String relay,
+    String store,
+    Set<String> known,
+  ) async {
+    final TomSecretsRelay r;
+    try {
+      r = _mailboxRelayFor(TomSecretsRelayId.parse(relay));
+    } on Object {
+      return const [];
+    }
+    return _withMemberKeyPairs((keys) async {
+      final out = <TomSecretsInboxPackage>[];
+      for (final key in keys) {
+        final member = key.recipient.fingerprint;
+        final List<TomSecretsMailboxEntry> entries;
+        try {
+          entries = await r.list(key);
+        } on Object {
+          continue;
+        }
+        for (final e in entries) {
+          final id = '$relay/$member/${e.itemId}';
+          if (known.contains(id)) {
+            out.add(
+              _inbox.firstWhere(
+                (p) => '${p.relay ?? p.store}/${p.member}/${p.name}' == id,
+              ),
+            );
+            continue;
+          }
+          out.add(
+            await _readInboxPackage(
+              store,
+              member,
+              e.itemId,
+              relay: relay,
+              read: () => r.fetch(key, e.itemId),
+            ),
+          );
+        }
+      }
+      return out;
+    });
+  }
+
   Future<TomSecretsInboxPackage> _readInboxPackage(
     String store,
     String member,
-    String name,
-  ) async {
+    String name, {
+    String? relay,
+    Future<Uint8List> Function()? read,
+  }) async {
     final Uint8List bytes;
     try {
-      final read = await connection.request('inbox.read', {
-        'store': store,
-        'member': member,
-        'name': name,
-      });
-      bytes = base64.decode(read['bytes']! as String);
+      if (read != null) {
+        bytes = await read();
+      } else {
+        final answer = await connection.request('inbox.read', {
+          'store': store,
+          'member': member,
+          'name': name,
+        });
+        bytes = base64.decode(answer['bytes']! as String);
+      }
     } on Object catch (e) {
       return TomSecretsInboxPackage(
         store: store,
@@ -2890,6 +3007,7 @@ class TomSecretsSession extends ChangeNotifier {
         name: name,
         bytes: Uint8List(0),
         problem: 'it cannot be read now (${_describe(e)})',
+        relay: relay,
       );
     }
     if (tomSecretsAgeIsPassphrase(bytes)) {
@@ -2899,6 +3017,7 @@ class TomSecretsSession extends ChangeNotifier {
         name: name,
         bytes: bytes,
         passphrase: true,
+        relay: relay,
       );
     }
     try {
@@ -2908,6 +3027,7 @@ class TomSecretsSession extends ChangeNotifier {
         name: name,
         bytes: bytes,
         share: await readShare(bytes),
+        relay: relay,
       );
     } on TomSecretsAgeException catch (e) {
       return TomSecretsInboxPackage(
@@ -2916,6 +3036,7 @@ class TomSecretsSession extends ChangeNotifier {
         name: name,
         bytes: bytes,
         problem: e.message,
+        relay: relay,
       );
     } on TomSecretsShareException catch (e) {
       return TomSecretsInboxPackage(
@@ -2924,6 +3045,7 @@ class TomSecretsSession extends ChangeNotifier {
         name: name,
         bytes: bytes,
         problem: e.message,
+        relay: relay,
       );
     }
   }
@@ -2944,14 +3066,28 @@ class TomSecretsSession extends ChangeNotifier {
     return refs;
   }
 
-  /// Deletes the inbox [package] from its folder without importing it.
+  /// Deletes the inbox [package] from its folder — **[C]** or from its
+  /// mailbox on the relay server, with the member key's proof — without
+  /// importing it.
   Future<void> declineInboxPackage(TomSecretsInboxPackage package) async {
-    await connection.request('inbox.delete', {
-      'store': package.store,
-      'files': [
-        {'member': package.member, 'name': package.name},
-      ],
-    });
+    final relay = package.relay;
+    if (relay != null) {
+      final r = _mailboxRelayFor(TomSecretsRelayId.parse(relay));
+      await _withMemberKeyPairs((keys) async {
+        for (final key in keys) {
+          if (key.recipient.fingerprint == package.member) {
+            await r.delete(key, package.name);
+          }
+        }
+      });
+    } else {
+      await connection.request('inbox.delete', {
+        'store': package.store,
+        'files': [
+          {'member': package.member, 'name': package.name},
+        ],
+      });
+    }
     _inbox = [
       for (final p in _inbox)
         if (!identical(p, package)) p,

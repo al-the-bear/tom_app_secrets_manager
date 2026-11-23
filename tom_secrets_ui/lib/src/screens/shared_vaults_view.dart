@@ -509,9 +509,10 @@ class _SharedVaultsState extends State<TomSecretsSharedVaultsSection> {
             current == null
                 ? 'Shares to its members wait in the inbox folders beside '
                       'the vault.'
-                : 'Recorded for every member. This version reads the inbox '
-                      'folders beside the vault; ${current.text} is read once '
-                      'the relay server is supported.',
+                : 'Recorded for every member: shares to its members go to '
+                      'their mailboxes on ${current.text} (with the relay\'s '
+                      'instance token, Relays above), read there with each '
+                      'member key.',
             key: Key('tsm-shared-mailbox-note-$store'),
             style: theme.textTheme.bodySmall,
           ),
