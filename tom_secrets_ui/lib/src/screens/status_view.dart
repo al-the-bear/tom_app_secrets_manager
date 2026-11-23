@@ -27,6 +27,10 @@ class TomSecretsStatusView extends StatelessWidget {
     final service = (report['service'] as Map?)?.cast<String, Object?>();
     final start = service?['start'];
     final hardening = (report['hardening'] as Map?)?.cast<String, Object?>();
+    final links = [
+      for (final l in (report['links'] as List? ?? const []))
+        if (l is Map) l.cast<String, Object?>(),
+    ];
     return ListView(
       key: const Key('tsm-status'),
       padding: const EdgeInsets.all(16),
@@ -106,6 +110,28 @@ class TomSecretsStatusView extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 12),
+        Text('Approval links', style: Theme.of(context).textTheme.titleLarge),
+        if (links.isEmpty)
+          const ListTile(
+            key: Key('tsm-status-links-none'),
+            title: Text('No paired device to approve for or from.'),
+          ),
+        for (final l in links)
+          ListTile(
+            key: Key('tsm-status-link-${l['role']}-${l['device']}'),
+            leading: Icon(switch (l['state']) {
+              'connected' => Icons.link,
+              'waiting' || 'connecting' => Icons.hourglass_empty,
+              _ => Icons.link_off,
+            }),
+            title: Text(
+              l['role'] == 'host'
+                  ? 'Approving for ${l['device']}'
+                  : '${l['device']} approves for this machine',
+            ),
+            subtitle: Text(tomSecretsLinkStateText(l)),
+          ),
+        const SizedBox(height: 12),
         Text('Hardening', style: Theme.of(context).textTheme.titleLarge),
         if (hardening == null || hardening.isEmpty)
           const ListTile(title: Text('—')),
@@ -123,4 +149,22 @@ class TomSecretsStatusView extends StatelessWidget {
       ],
     );
   }
+}
+
+/// An approval link's state as the Status view says it (part-relay): a
+/// link the relay refused (no instance token, too many links) reads as an
+/// unreachable link, with the relay's reason.
+String tomSecretsLinkStateText(Map<String, Object?> link) {
+  final via = switch (link['via']) {
+    'relay' => ' through the relay server',
+    'address' => ' over the network or the VPN',
+    _ => '',
+  };
+  final reason = link['reason'];
+  return switch (link['state']) {
+    'connected' => 'connected$via',
+    'waiting' => 'waiting$via for the other device',
+    'connecting' => 'connecting…',
+    _ => 'unreachable$via${reason is String ? ': $reason' : ''}',
+  };
 }

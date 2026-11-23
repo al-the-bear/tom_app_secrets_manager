@@ -101,6 +101,11 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
   )
   _relayFor;
 
+  /// The relay server the approval link may also go through: the one the
+  /// pairing names, when it is a relay server (part-relay).
+  static String? _linkRelay(TomSecretsRelayId? relay) =>
+      relay?.kind == TomSecretsRelayKind.server ? relay!.text : null;
+
   static String _join(String a, String b) =>
       '$a${Platform.isWindows ? r'\' : '/'}$b';
 
@@ -231,6 +236,7 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
             code: code,
             device: host,
             linkAddress: link,
+            linkRelay: _linkRelay(relayId),
           );
           _update(() {
             _receipt = receipt;
@@ -253,6 +259,7 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         code: code,
         device: host,
         linkAddress: link,
+        linkRelay: _linkRelay(relayId),
       );
       _update(() {
         _receipt = receipt;

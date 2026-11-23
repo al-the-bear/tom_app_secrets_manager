@@ -819,8 +819,9 @@ from the [Relays](#relays) list (the default for pairing is preselected;
 relay, the pairing also waits there for any machine that reaches the
 server: the server gives the code's number and carries the pairing's
 encrypted messages between the two machines over a WebSocket. With a GitHub
-repository as the relay, the pairing also waits there, for a machine that reaches neither
-this network nor the VPN but reaches the repository with its own token. The
+repository as the relay, the pairing also waits there, for a machine that
+reaches neither this network nor the VPN but reaches the repository with
+its own token. The
 code's number is then the pairing's number in the repository, and the
 screen and the QR code name the relay. The pairing's messages travel as
 files under `relay/pair/<number>/` in the repository, polled every two
@@ -830,6 +831,15 @@ one after an hour). Whichever comes first, the network or the relay, takes
 the code. A relay that cannot carry the pairing is said in red ("The relay
 … cannot host: …"); the window then waits on the network and the VPN only,
 and the app never switches to another relay by itself.
+
+**The approval link through the relay server.** When you pair through a
+relay server, it is also offered for the approval link: later, when the
+two machines do not reach each other on the network or the VPN, this
+machine's prompts and answers to the other go through the relay, and the
+other way round. The address is always tried first. A relay in token mode
+needs its instance token on both machines (Sharing › Relays, the key
+button; on a server, `tsm pair … --token-env`); Status › Approval links
+says how each link goes.
 
 On the other machine, use the First run wizard's "Pair with another desktop"
 ([Setting up by pairing](#setting-up-by-pairing)); a phone or tablet uses the
@@ -997,8 +1007,12 @@ machine knows, in order of preference, each with what it offers:
   shared vault in it (its inbox folders). This machine must serve a vault
   from that repository.
 - **A relay server**, `tsm:https://…` (`tom_secrets_relay`): pairing with
-  any machine that reaches it. It offers the mailbox and the approval link
-  too, which this version does not use yet.
+  any machine that reaches it, and the approval link between two paired
+  machines that do not reach each other on the network or the VPN (see
+  below). It offers the mailbox too, which this version does not use yet.
+  The key button keeps the relay's **instance token**, which its operator
+  gives your team: kept in this machine's keychain, never shown again;
+  "Remove the token" forgets it. The row says whether a token is kept.
 - **A magic-wormhole server**, `wormhole:wss://…`: listed, but not usable in
   this version.
 
@@ -1284,8 +1298,16 @@ stores:
 
 **Status** shows the service ("Running since", "Version and protocol",
 "Lock mode", "Admins attached"), each vault with its state, source, last
-fetch and changes not yet on GitHub, and the hardening the service
-achieved. "Fetch every vault now" pulls the GitHub vaults at once.
+fetch and changes not yet on GitHub, the approval links, and the hardening
+the service achieved. "Fetch every vault now" pulls the GitHub vaults at
+once.
+
+**Approval links** lists every paired machine this one approves for
+("Approving for bigbeast") and every machine that approves for this one
+("server1 approves for this machine"), each connected, waiting or
+unreachable, over the network or the VPN or through the relay server. A
+relay that refuses the link (no instance token, or too many links for the
+token) reads as unreachable, with the relay's reason.
 
 ## Troubleshooting
 

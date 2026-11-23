@@ -209,6 +209,53 @@ void main() {
           ),
         );
 
+    test('through a relay server: the identity names it for the approval '
+        'link, and the record keeps the link both sides agreed on', () async {
+      final server = TomSecretsRelayId.parse('tsm:https://relay.example');
+      final m = TomSecretsPairingModel(
+        connection,
+        addresses: () async => const [],
+        allowLoopback: true,
+        // The relay server's rendezvous: the map folder's, which carries the
+        // same channel.
+        relayFor: (id, stores, device) => TomSecretsGitHubRelay(
+          _repo,
+          _MapFolder(service.relayFiles),
+          pollInterval: _fast,
+        ),
+      )..pairingRelay = server;
+      addTearDown(m.dispose);
+      await m.open();
+      expect(m.stage, TomSecretsPairingStage.waiting, reason: '${m.message}');
+      final identity = service.requests.lastWhere(
+        (r) => r['op'] == 'pair.identity',
+      );
+      expect(identity['relay'], 'tsm:https://relay.example');
+      final received = tomSecretsReceivePairingVia(
+        TomSecretsGitHubRelay(
+          _repo,
+          _MapFolder(service.relayFiles),
+          pollInterval: _fast,
+        ),
+        code: m.invitation!.code,
+        device: 'bigbeast',
+        keysFor: (_, bundle) async {
+          // The giver's keys name the relay link.
+          expect(bundle.giverKeys.linkRelay, 'tsm:https://relay.example');
+          expect(bundle.giverKeys.linkId, 'giver-link-0123456789');
+          return receiverKeys;
+        },
+      );
+      await _until(() => m.stage == TomSecretsPairingStage.choosing);
+      m.confirm();
+      await received;
+      await _until(() => m.stage == TomSecretsPairingStage.paired);
+      expect(service.pairRecords.last['link'], {
+        'relay': 'tsm:https://relay.example',
+        'linkId': 'giver-link-0123456789',
+      });
+    });
+
     test('the window waits on the repository through relay.*; a new machine '
         'pairs through it; the folder is gone afterwards', () async {
       final m = model(const [])..pairingRelay = _repo;

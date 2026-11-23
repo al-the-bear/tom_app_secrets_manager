@@ -274,6 +274,41 @@ void main() {
     await wait(tester, 2);
     expect(settings.pairingRelay?.text, 'tsm:https://relay.example');
 
+    // A relay server's instance token: kept through the service, never on
+    // the screen; a GitHub repository has no token field.
+    expect(find.textContaining('no instance token'), findsOneWidget);
+    expect(
+      find.byKey(const Key('tsm-relay-token-github:al-the-bear/demo-vaults')),
+      findsNothing,
+    );
+    await tap(
+      tester,
+      find.byKey(const Key('tsm-relay-token-tsm:https://relay.example')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('tsm-relay-token-text')),
+      'team-token-0123456789',
+    );
+    await tap(tester, find.byKey(const Key('tsm-relay-token-keep')));
+    await wait(tester, 4);
+    expect(service.relayTokens, {
+      'tsm:https://relay.example': 'team-token-0123456789',
+    });
+    await tester.pumpAndSettle();
+    expect(find.textContaining('instance token kept'), findsOneWidget);
+    expect(find.byKey(const Key('tsm-relay-token-text')), findsNothing);
+    expect(find.textContaining('team-token-0123456789'), findsNothing);
+    await tap(
+      tester,
+      find.byKey(const Key('tsm-relay-token-tsm:https://relay.example')),
+    );
+    await tester.pumpAndSettle();
+    await tap(tester, find.byKey(const Key('tsm-relay-token-remove')));
+    await wait(tester, 4);
+    expect(service.relayTokens, isEmpty);
+    expect(find.textContaining('no instance token'), findsOneWidget);
+
     // The vault's mailbox relay: its own repository first, a relay server
     // chosen, kept in the metadata (and saved).
     await tap(tester, find.byKey(const Key('tsm-shared-crew')));

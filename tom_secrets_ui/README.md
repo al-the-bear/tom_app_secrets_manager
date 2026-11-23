@@ -323,7 +323,9 @@ offering the import and the pairing.
   (`TomSecretsSession.setVaultMailboxRelay`, `tsm.mailbox-relay` in the
   vault's metadata), the relay settings (`TomSecretsRelaysSection` over
   `TomSecretsRelaySettings`: the relays in order with their services, the
-  default for pairing), and per vault its members from the recipients file
+  default for pairing, a relay server's instance token kept in the keychain
+  through the service, `tomSecretsKeepRelayToken` /
+  `tomSecretsRelayTokensKept`), and per vault its members from the recipients file
   (`readSharedVault`), a member added (`addSharedVaultMember`) or removed
   (`removeSharedVaultMember`: new keys listed in the primary, the vault
   re-keyed with its recipients file in one commit) with the offer to rotate
@@ -450,7 +452,8 @@ offering the import and the pairing.
   out of screen capture (on by default, DP-33), start at login switched on at
   the first start (DP-30).
 - `TomSecretsStatusView`: The service, its stores with state, source and last
-  fetch, the hardening achieved.
+  fetch, the approval links with their state and way (**[C]** through a
+  relay server; `tomSecretsLinkStateText`), the hardening achieved.
 
 ## Ports
 

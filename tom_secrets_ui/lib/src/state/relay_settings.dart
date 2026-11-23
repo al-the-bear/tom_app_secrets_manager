@@ -4,7 +4,8 @@
 /// **[C]** The relay settings (part-relay, the Sharing screen): the relays
 /// this device knows in order of preference, each with the services it
 /// offers, and the default relay for pairing; and the relay a pairing goes
-/// through in the app — a relay server (`tsm:<url>`) reached directly, or
+/// through in the app — a relay server (`tsm:<url>`) reached directly (its
+/// instance token kept in the keychain through the service), or
 /// GitHub reached through the service's `relay.*` requests
 /// (`TomSecretsAdminRelayFolder`). A shared vault's mailbox relay
 /// is kept in the vault's metadata (`tsm.mailbox-relay`), so every member
@@ -128,6 +129,33 @@ class TomSecretsRelaySettings extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+/// **[C]** Which of [relays] (relay servers) have an instance token kept
+/// in the keychain through the service (`relay.token.list`); a token is
+/// never answered.
+Future<Map<TomSecretsRelayId, bool>> tomSecretsRelayTokensKept(
+  TomSecretsServiceConnection connection,
+  List<TomSecretsRelayId> relays,
+) async {
+  if (relays.isEmpty) return const {};
+  final answer = await connection.request('relay.token.list', {
+    'relays': [for (final r in relays) r.text],
+  });
+  final kept = (answer['relays'] as Map?) ?? const {};
+  return {for (final r in relays) r: kept[r.text] == true};
+}
+
+/// **[C]** Keeps [token] as the instance token of the relay server [relay]
+/// in the keychain through the service (`relay.token.set`); null or empty
+/// removes it. The service uses it for approval links through the relay.
+Future<void> tomSecretsKeepRelayToken(
+  TomSecretsServiceConnection connection,
+  TomSecretsRelayId relay,
+  String? token,
+) => connection.request('relay.token.set', {
+  'relay': relay.text,
+  if (token != null && token.isNotEmpty) 'token': token,
+});
 
 /// The relay [id] for this app: a relay server (`tsm:<url>`) reached
 /// directly (pairing needs no instance token), or GitHub over the service

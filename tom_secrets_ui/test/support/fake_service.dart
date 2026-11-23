@@ -376,6 +376,7 @@ final class FakeService implements TomSecretsAdminChannel {
                   'daysLeft': k['daysLeft'],
                 },
           ],
+          if (!locked) 'links': links,
         };
       case 'unlock':
         if (args['password'] != demoPassword) {
@@ -793,7 +794,40 @@ final class FakeService implements TomSecretsAdminChannel {
         };
       case 'pair.identity':
         _unlocked();
-        return {'op': 'pairIdentity', 'device': 'mbp', ...?pairIdentity};
+        final relay = args['relay'] as String?;
+        return {
+          'op': 'pairIdentity',
+          'device': 'mbp',
+          ...?pairIdentity,
+          if (relay != null) ...{
+            'linkRelay': relay,
+            'linkId': 'giver-link-0123456789',
+          },
+        };
+      case 'relay.token.set':
+        final relay = args['relay']! as String;
+        if (!relay.startsWith('tsm:')) {
+          throw TomSecretsAdminException(
+            'malformed',
+            'not a relay server',
+            details: {'reason': 'relay'},
+          );
+        }
+        final token = args['token'] as String?;
+        if (token == null || token.isEmpty) {
+          relayTokens.remove(relay);
+        } else {
+          relayTokens[relay] = token;
+        }
+        return {'op': 'ok'};
+      case 'relay.token.list':
+        return {
+          'op': 'relayTokens',
+          'relays': {
+            for (final r in (args['relays']! as List).cast<String>())
+              r: relayTokens.containsKey(r),
+          },
+        };
       case 'pair.record':
         _unlocked();
         pairRecords.add(args);
@@ -1256,6 +1290,12 @@ final class FakeService implements TomSecretsAdminChannel {
 
   /// This device's public keys (`pair.identity`), set by a pairing test.
   Map<String, Object?>? pairIdentity;
+
+  /// The relay servers' instance tokens kept (`relay.token.set`).
+  final Map<String, String> relayTokens = {};
+
+  /// The approval links `status` reports (`statusReport.links`).
+  List<Map<String, Object?>> links = [];
 
   /// The `pair.record` requests.
   final List<Map<String, Object?>> pairRecords = [];

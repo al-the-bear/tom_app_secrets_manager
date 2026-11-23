@@ -270,7 +270,14 @@ class TomSecretsPairingModel extends ChangeNotifier {
     _message = null;
     _receiver = null;
     tokens.clear();
-    final identity = await connection.request('pair.identity');
+    // A relay server chosen for the pairing is offered for the approval
+    // link too (part-relay): the identity names it with a fresh link id.
+    final linkRelay = pairingRelay?.kind == TomSecretsRelayKind.server
+        ? pairingRelay!.text
+        : null;
+    final identity = await connection.request('pair.identity', {
+      'relay': ?linkRelay,
+    });
     _identity = TomSecretsPairingPeerKeys.fromJson(identity);
     final device = identity['device']! as String;
     await _readChoices();
@@ -488,6 +495,10 @@ class TomSecretsPairingModel extends ChangeNotifier {
           'linkKey': keys.linkKey.toJson(),
         },
       'record': {'keyIds': keyIds},
+      // The relay link both sides agreed on (part-relay).
+      if (_identity != null)
+        if (tomSecretsPairingLink(_identity!, keys) case final link?)
+          'link': {'relay': link.relay, 'linkId': link.linkId},
     });
     _stage = TomSecretsPairingStage.paired;
     _message =
