@@ -41,7 +41,7 @@ function documentWith(source, { id = '1-demo', title = 'A demo diagram' } = {}) 
     '',
     `<!-- diagram ${id}`,
     '```mermaid',
-    source,
+    source.replace(/>/g, '&gt;'),
     '```',
     '-->',
     '',
@@ -65,6 +65,14 @@ describe('reading a document', () => {
       parsed.links.map((l) => l.target),
       ['images/diagrams/demo/1-demo.svg'],
     );
+  });
+
+  test('a raw "-->" in a diagram comment, which GitHub ends there, is a problem', () => {
+    const escaped = parseDocument(documentWith(good));
+    assert.equal(escaped.diagrams[0].rawArrowLine, undefined);
+    const raw = parseDocument(documentWith(good).replace('--&gt;', '-->'));
+    assert.equal(raw.diagrams[0].rawArrowLine, 10);
+    assert.equal(raw.diagrams[0].source, good);
   });
 
   test('long lines: tables, code, comments and lines holding only an image '

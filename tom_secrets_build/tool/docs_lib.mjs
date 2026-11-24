@@ -7,7 +7,9 @@
 // - a diagram is its exported SVG in the document, an image whose alt text is
 //   its title, with its Mermaid source in an HTML comment right after it
 //   (`<!-- diagram <n>-<slug>` ... a ```mermaid fence ... `-->`), which GitHub
-//   does not render; the paragraph before the image says what it shows;
+//   does not render; every `>` of the source is written `&gt;`, since a line
+//   holding `-->` ends the comment; the paragraph before the image says what
+//   it shows;
 // - the export renders the source with the light theme of enterprise-flutter.dev's
 //   diagrams and post-processes the SVG (the panel, the fonts, `<title>`,
 //   `<desc>`, the source's hash);
@@ -181,7 +183,9 @@ function escapeXml(text) {
 /**
  * The parts of a Markdown document the tools read:
  * - `diagrams`: `{id, title, desc, source, handDrawn, image, line}` per
- *   `<!-- diagram <id> [hand-drawn]` comment holding a ```mermaid fence;
+ *   `<!-- diagram <id> [hand-drawn]` comment holding a ```mermaid fence,
+ *   its `&gt;` read as `>` (and `rawArrowLine`, a line of the fence holding
+ *   `-->`, which would end the comment on GitHub);
  * - `fences`: the other ```mermaid fences `{source, line}`;
  * - `links`: `{target, line}` of every relative link and image outside code
  *   and comments;
@@ -229,7 +233,10 @@ export function parseDocument(text) {
         continue;
       }
       if (inCode) {
-        codeLines.push(line);
+        // GitHub ends an HTML comment at the first line holding `-->`, a
+        // fence's too, so the source writes every `>` as `&gt;`.
+        if (comment && line.includes('-->')) comment.rawArrowLine ??= lineNo;
+        codeLines.push(codeLang === 'mermaid' ? line.replace(/&gt;/g, '>') : line);
         continue;
       }
       if (line.includes('-->')) {
@@ -384,6 +391,12 @@ export function staticProblems(file, parsed) {
     if (d.missingSource) {
       problems.push(`${at(d.line)}: diagram ${d.id} has no mermaid fence in its comment`);
       continue;
+    }
+    if (d.rawArrowLine) {
+      problems.push(
+        `${at(d.rawArrowLine)}: diagram ${d.id}'s source holds "-->", which ends ` +
+          'its comment on GitHub: write every ">" of the source as "&gt;"',
+      );
     }
     if (!d.image || !d.title) {
       problems.push(`${at(d.line)}: diagram ${d.id} is not right after its image ![title](...)`);
