@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Vaults of any size: a save over 64 KiB and a vault over 1 MiB cross the
+  admin endpoint as chunks (`tom_secrets_client` 0.2.19,
+  `tom_secrets_service` 0.25.6), so a large import no longer hangs; a
+  failed save is reported at once.
+
 ## 0.1.0
 
 - The AutoFill provider signs in with passkeys and makes them (macOS 14,
