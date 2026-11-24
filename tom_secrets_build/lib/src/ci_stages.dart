@@ -80,7 +80,10 @@ const Map<String, String> secretsCiStageDescriptions = {
       'after npm ci): over tom_secrets_manager/doc and the user guides of the '
       'app, the mobile app and tsm, every diagram\'s Mermaid source renders '
       '(@mermaid-js/mermaid-cli), its exported SVG and PNG are there and '
-      'current, every relative link resolves, no line is over 80 characters',
+      'current, every relative link resolves, no line is over 80 characters; '
+      'and the configuration reference (tool/check_configuration.mjs): every '
+      'environment variable and setting key the three repositories read is in '
+      'tom_secrets_manager/doc/configuration.md',
   'release':
       'the release for this platform (not part of :all): the service bundle, '
       'tsm, the browser host, the app built with them in its tsm folder, the app and tools-only '
@@ -117,6 +120,10 @@ List<String> secretsDocsRoots(SecretsCiWorkspace workspace) => [
     'tsm_user_guide.md',
   ),
 ];
+
+/// The configuration reference the completeness check holds to the code.
+String secretsConfigurationReference(SecretsCiWorkspace workspace) =>
+    p.join(workspace.managerRoot, 'doc', 'configuration.md');
 
 /// The test tag of the licence-boundary check, run by `:licences` only.
 const String secretsCiBoundaryTag = 'licence-boundary';
@@ -533,6 +540,13 @@ class SecretsCiStages {
           CiCommand('node', [
             p.join('tool', 'check_docs.mjs'),
             ...secretsDocsRoots(workspace),
+          ], workingDirectory: workspace.buildPackageDir),
+          CiCommand('node', [
+            p.join('tool', 'check_configuration.mjs'),
+            secretsConfigurationReference(workspace),
+            workspace.managerRoot,
+            workspace.clientsRoot,
+            workspace.repoRoot,
           ], workingDirectory: workspace.buildPackageDir),
         ]);
       case 'release':

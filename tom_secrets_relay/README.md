@@ -70,7 +70,9 @@ The apps reach it as the relay `tsm:<url>` (`tom_secrets_core`'s
 dart run bin/tom_secrets_relay.dart config=relay.yaml
 ```
 
-`relay.example.yaml` lists every setting with its default:
+`relay.example.yaml` lists every setting with its default, and the
+[configuration reference](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/configuration.md#the-relay-servers-relayyaml)
+explains each:
 `tom_core_server`'s keys at the top (`port`, `host`, `logLevel`; use
 `production` for info, warnings and errors), the relay's under `relay:`.
 The environment and `key=value` arguments override the file. The relay

@@ -2,14 +2,14 @@
   "name": "tom-secrets-build-docs",
   "version": "0.1.0",
   "private": true,
-  "description": "The documentation tooling of the Tom Secrets Manager's manual CI: the :docs check (Mermaid sources rendered, links, line lengths, the exported diagrams current) and the diagram export to SVG and PNG in the project's website style.",
+  "description": "The documentation tooling of the Tom Secrets Manager's manual CI: the :docs check (Mermaid sources rendered, links, line lengths, the exported diagrams current, the configuration reference complete) and the diagram export to SVG and PNG in the project's website style.",
   "license": "BSD-3-Clause",
   "homepage": "https://enterprise-flutter.dev",
   "author": "Peter Nicolai Alexis Kyaw",
   "type": "module",
   "scripts": {
-    "build": "node --check tool/check_docs.mjs && node --check tool/render_diagrams.mjs && node --check tool/docs_lib.mjs && node --check tool/mermaid_render.mjs",
-    "test": "node --test tool/test/docs.test.mjs"
+    "build": "node --check tool/check_docs.mjs && node --check tool/render_diagrams.mjs && node --check tool/docs_lib.mjs && node --check tool/mermaid_render.mjs && node --check tool/check_configuration.mjs && node --check tool/config_lib.mjs",
+    "test": "node --test tool/test/docs.test.mjs tool/test/config.test.mjs"
   },
   "devDependencies": {
     "@mermaid-js/mermaid-cli": "^12.2.0",
