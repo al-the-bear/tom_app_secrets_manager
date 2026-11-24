@@ -219,7 +219,26 @@ class SecretsCiStages {
             _python(['-m', 'compileall', '-q', 'src', 'tests'], dir),
           ]);
         }
-        if (Platform.isMacOS) await _autofillBuild(run, stage);
+        if (Platform.isMacOS) {
+          await _extensionTargetBuild(
+            run,
+            stage,
+            target: 'TomSecretsAutofill',
+            label: 'TomSecretsAutofill (macOS AutoFill provider)',
+            log: 'analyze.autofill.log',
+            out: 'autofill',
+          );
+          // The Safari extension carries the extension's Safari build,
+          // which the npm step above made (dist/safari).
+          await _extensionTargetBuild(
+            run,
+            stage,
+            target: 'TomSecretsSafari',
+            label: 'TomSecretsSafari (Safari Web Extension)',
+            log: 'analyze.safari.log',
+            out: 'safari',
+          );
+        }
       case 'test':
         for (final pkg in packages) {
           final noSuite = secretsCiNoSuiteReason(pkg.directory);
@@ -348,6 +367,16 @@ class SecretsCiStages {
           await run.step(stage, workspace.relative(kit), 'autofill_kit.log', [
             CiCommand('swift', const ['test'], workingDirectory: kit),
           ]);
+          // The Safari extension's handler core: the bridge to the host.
+          final safariKit = p.join(_appMacos, 'TomSecretsSafariKit');
+          await run.step(
+            stage,
+            workspace.relative(safariKit),
+            'safari_kit.log',
+            [
+              CiCommand('swift', const ['test'], workingDirectory: safariKit),
+            ],
+          );
         }
       case 'integration':
         for (final pkg in packages) {
@@ -490,40 +519,47 @@ extension on SecretsCiStages {
   String get _appMacos =>
       p.join(workspace.repoRoot, 'tom_secrets_app', 'macos');
 
-  /// The macOS AutoFill provider's extension target compiled, unsigned
-  /// (its entitlements need the team; the team-signed build embeds it):
-  /// Flutter's generated Swift package first, which the Xcode project
-  /// resolves.
-  Future<void> _autofillBuild(CiRun run, String stage) async {
+  /// An app extension target of the macOS app (the AutoFill provider, the
+  /// Safari Web Extension) compiled, unsigned (their entitlements need the
+  /// team; the team-signed build embeds them): Flutter's generated Swift
+  /// package first, which the Xcode project resolves.
+  Future<void> _extensionTargetBuild(
+    CiRun run,
+    String stage, {
+    required String target,
+    required String label,
+    required String log,
+    required String out,
+  }) async {
     final app = CiPackage(
       name: workspace.relative(p.join(workspace.repoRoot, 'tom_secrets_app')),
       directory: p.join(workspace.repoRoot, 'tom_secrets_app'),
       isFlutter: true,
     );
-    final out = p.join(app.directory, 'build', 'autofill');
+    final symroot = p.join(app.directory, 'build', out);
     await run.step(
       stage,
-      'TomSecretsAutofill (macOS AutoFill provider)',
-      'analyze.autofill.log',
+      label,
+      log,
       [
         run.tool(app, ['build', 'macos', '--config-only']),
         CiCommand('xcodebuild', [
           '-project',
           'Runner.xcodeproj',
           '-target',
-          'TomSecretsAutofill',
+          target,
           '-configuration',
           'Release',
           'CODE_SIGNING_ALLOWED=NO',
-          'SYMROOT=$out',
+          'SYMROOT=$symroot',
           'build',
         ], workingDirectory: _appMacos),
       ],
       needsFlutter: true,
       produces: p.join(
-        out,
+        symroot,
         'Release',
-        'TomSecretsAutofill.appex',
+        '$target.appex',
         'Contents',
         'Info.plist',
       ),

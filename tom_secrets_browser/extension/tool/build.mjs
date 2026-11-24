@@ -1,7 +1,9 @@
 // Copyright (c) 2026 Peter Nicolai Alexis Kyaw
 // SPDX-License-Identifier: BSD-3-Clause
 
-// Builds the extension per browser family into dist/<family>/: the scripts
+// Builds the extension per browser family into dist/<family>/ (chromium,
+// firefox, and safari, which the macOS app's Safari Web Extension carries):
+// the scripts
 // bundled by esbuild (a content script cannot load modules), the static
 // pages, the icons (tool/icon.ts) and the manifest from src/manifest.ts;
 // then the store packages into dist/packages/: one ZIP per family, its
@@ -79,16 +81,26 @@ const entries = {
   webauthn: 'webauthn-main.ts',
 };
 
-for (const family of ['chromium', 'firefox']) {
+/** The scripts of [family]: Safari's background reaches the host through
+ *  the app's handler, and Safari has no page-world WebAuthn script. */
+function entriesOf(family) {
+  if (family !== 'safari') return entries;
+  const { webauthn: _, ...rest } = entries;
+  return { ...rest, background: 'background-safari.ts' };
+}
+
+const targets = { chromium: 'chrome111', firefox: 'firefox128', safari: 'safari17' };
+
+for (const family of ['chromium', 'firefox', 'safari']) {
   const out = join(root, 'dist', family);
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  for (const [name, entry] of Object.entries(entries)) {
+  for (const [name, entry] of Object.entries(entriesOf(family))) {
     await build({
       entryPoints: [join(root, 'src', entry)],
       bundle: true,
       format: 'iife',
-      target: family === 'chromium' ? 'chrome111' : 'firefox128',
+      target: targets[family],
       outfile: join(out, `${name}.js`),
       legalComments: 'none',
       logLevel: 'warning',
@@ -105,6 +117,8 @@ for (const family of ['chromium', 'firefox']) {
     `${JSON.stringify(manifest(family, version), null, 2)}\n`,
   );
   process.stdout.write(`built dist/${family}\n`);
+  // Safari's build goes into the macOS app, not into a store package.
+  if (family === 'safari') continue;
   const files = filesOf(out);
   files.set(
     'manifest.json',

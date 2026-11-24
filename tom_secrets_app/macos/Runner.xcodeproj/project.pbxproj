@@ -22,8 +22,9 @@
 
 /* Begin PBXBuildFile section */
 		003BBDE9B8A7F728C8D1425A /* Totp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9BF9820BF000FA6A95B779 /* Totp.swift */; };
-		5A55C0DE7E11A2B3C4D5E6F7 /* Passkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A55C0DE7E11A2B3C4D5E6F8 /* Passkey.swift */; };
 		01084FC19C29152D53576CD8 /* Matching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9230F5A66D8661C67E002808 /* Matching.swift */; };
+		09E58E2ACAFF1CA299F2F384 /* HostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA9ADA10C8BB7F28E7291AD /* HostSession.swift */; };
+		18D100034A55723E96DCB38B /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1B9CB076BB74E8DA672FE42C /* Cocoa.framework */; };
 		2493F2FDD1062545E46CF934 /* AutofillListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D243E963246C2DC7D51C0A7 /* AutofillListView.swift */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
@@ -31,11 +32,14 @@
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
+		5A55C0DE7E11A2B3C4D5E6F7 /* Passkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A55C0DE7E11A2B3C4D5E6F8 /* Passkey.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		9D0AEEC259D20ABBE240EC70 /* SnapshotReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09740225ED7A115CB5A3A8F /* SnapshotReader.swift */; };
 		AA6A13E030A013912DB80F4C /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1B9CB076BB74E8DA672FE42C /* Cocoa.framework */; };
 		B50BB27F5C1E94503C3C4261 /* CredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00690F4C96DE4D0C3C9549BE /* CredentialProviderViewController.swift */; };
 		D6546F937E8AB3BD3D28717A /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABAAA09D28D448281CEAC02 /* Snapshot.swift */; };
+		D80092E8551F0D512A275EDE /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35BD8663CED049274F03249C /* SafariWebExtensionHandler.swift */; };
+		EDD85805D34B9D5C9F6D7DBE /* SafariBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B67F236124229422B2C325A /* SafariBridge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -77,7 +81,7 @@
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		333000ED22D3DE5D00554162 /* Warnings.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Warnings.xcconfig; sourceTree = "<group>"; };
 		335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GeneratedPluginRegistrant.swift; sourceTree = "<group>"; };
-		33CC10ED2044A3C60003C045 /* tom_secrets_app.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "tom_secrets_app.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		33CC10ED2044A3C60003C045 /* tom_secrets_app.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = tom_secrets_app.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		33CC10F02044A3C60003C045 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		33CC10F22044A3C60003C045 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Runner/Assets.xcassets; sourceTree = "<group>"; };
 		33CC10F52044A3C60003C045 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
@@ -89,9 +93,13 @@
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
+		35BD8663CED049274F03249C /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		415D42613EF892D3F0DF2A5C /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5213BDA67BBA45957D2FF6A5 /* TomSecretsAutofill.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = TomSecretsAutofill.entitlements; sourceTree = "<group>"; };
-		6B9BF9820BF000FA6A95B779 /* Totp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Totp.swift; sourceTree = "<group>"; };
 		5A55C0DE7E11A2B3C4D5E6F8 /* Passkey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Passkey.swift; sourceTree = "<group>"; };
+		5B67F236124229422B2C325A /* SafariBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SafariBridge.swift; sourceTree = "<group>"; };
+		6B9BF9820BF000FA6A95B779 /* Totp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Totp.swift; sourceTree = "<group>"; };
+		6CF59F23F7C4B0CDCC7C0B39 /* TomSecretsSafari.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TomSecretsSafari.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7949DD53BAC68F14438EB114 /* TomSecretsAutofill.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TomSecretsAutofill.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7ABAAA09D28D448281CEAC02 /* Snapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
@@ -99,7 +107,9 @@
 		9230F5A66D8661C67E002808 /* Matching.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Matching.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		9D243E963246C2DC7D51C0A7 /* AutofillListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AutofillListView.swift; sourceTree = "<group>"; };
+		A464D16DBEAAA6CE0CEE8EA2 /* TomSecretsSafari.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = TomSecretsSafari.entitlements; sourceTree = "<group>"; };
 		D09740225ED7A115CB5A3A8F /* SnapshotReader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotReader.swift; sourceTree = "<group>"; };
+		EBA9ADA10C8BB7F28E7291AD /* HostSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -115,6 +125,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5201D79A1C793DF754031F2E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				18D100034A55723E96DCB38B /* Cocoa.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -159,6 +177,8 @@
 				D73912EC22F37F3D000D13A0 /* Frameworks */,
 				5F7FDED66D10443ABD554E4A /* TomSecretsAutofill */,
 				D6E50BFDE2EDB7CDD409DF09 /* TomSecretsAutofillKit */,
+				F38A4EB4D04EE66D757E1A41 /* TomSecretsSafari */,
+				3EF91EB30B707F62F81EBD77 /* TomSecretsSafariKit */,
 			);
 			sourceTree = "<group>";
 		};
@@ -168,6 +188,7 @@
 				33CC10ED2044A3C60003C045 /* tom_secrets_app.app */,
 				331C80D5294CF71000263BE5 /* RunnerTests.xctest */,
 				7949DD53BAC68F14438EB114 /* TomSecretsAutofill.appex */,
+				6CF59F23F7C4B0CDCC7C0B39 /* TomSecretsSafari.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -206,6 +227,16 @@
 				33BA886A226E78AF003329D5 /* Configs */,
 			);
 			path = Runner;
+			sourceTree = "<group>";
+		};
+		3EF91EB30B707F62F81EBD77 /* TomSecretsSafariKit */ = {
+			isa = PBXGroup;
+			children = (
+				EBA9ADA10C8BB7F28E7291AD /* HostSession.swift */,
+				5B67F236124229422B2C325A /* SafariBridge.swift */,
+			);
+			name = TomSecretsSafariKit;
+			path = TomSecretsSafariKit/Sources/TomSecretsSafariKit;
 			sourceTree = "<group>";
 		};
 		5F7FDED66D10443ABD554E4A /* TomSecretsAutofill */ = {
@@ -247,6 +278,17 @@
 				742387B699677CD127EB08DC /* OS X */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		F38A4EB4D04EE66D757E1A41 /* TomSecretsSafari */ = {
+			isa = PBXGroup;
+			children = (
+				35BD8663CED049274F03249C /* SafariWebExtensionHandler.swift */,
+				415D42613EF892D3F0DF2A5C /* Info.plist */,
+				A464D16DBEAAA6CE0CEE8EA2 /* TomSecretsSafari.entitlements */,
+			);
+			name = TomSecretsSafari;
+			path = TomSecretsSafari;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -310,6 +352,24 @@
 			productReference = 7949DD53BAC68F14438EB114 /* TomSecretsAutofill.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		9242BF1ACB688BBB126A4439 /* TomSecretsSafari */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F6C811F1484A0A221F3DD316 /* Build configuration list for PBXNativeTarget "TomSecretsSafari" */;
+			buildPhases = (
+				194023A38F37AD3B2947EEE4 /* Sources */,
+				5201D79A1C793DF754031F2E /* Frameworks */,
+				41BD2CDE7D95965C2EC82815 /* Resources */,
+				94E1A8B708A9949A292438F2 /* Copy the Safari extension build */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TomSecretsSafari;
+			productName = TomSecretsSafari;
+			productReference = 6CF59F23F7C4B0CDCC7C0B39 /* TomSecretsSafari.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -361,6 +421,7 @@
 				331C80D4294CF70F00263BE5 /* RunnerTests */,
 				33CC111A2044C6BA0003C045 /* Flutter Assemble */,
 				4A324575360729E4A38D4512 /* TomSecretsAutofill */,
+				9242BF1ACB688BBB126A4439 /* TomSecretsSafari */,
 			);
 		};
 /* End PBXProject section */
@@ -379,6 +440,13 @@
 			files = (
 				33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */,
 				33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		41BD2CDE7D95965C2EC82815 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -430,9 +498,38 @@
 			shellPath = /bin/sh;
 			shellScript = "\"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh && touch Flutter/ephemeral/tripwire";
 		};
+		94E1A8B708A9949A292438F2 /* Copy the Safari extension build */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy the Safari extension build";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# The Safari build of the browser extension (tom_secrets_browser/extension,\n# `npm ci && npm run build`: dist/safari) into the extension's resources.\nset -e\nsrc=\"${SRCROOT}/../../tom_secrets_browser/extension/dist/safari\"\ndst=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nif [ ! -f \"${src}/manifest.json\" ]; then\n  echo \"error: build the extension first: npm ci && npm run build in tom_secrets_browser/extension\" >&2\n  exit 1\nfi\nmkdir -p \"${dst}\"\nrsync -a --delete \"${src}/\" \"${dst}/\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		194023A38F37AD3B2947EEE4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D80092E8551F0D512A275EDE /* SafariWebExtensionHandler.swift in Sources */,
+				09E58E2ACAFF1CA299F2F384 /* HostSession.swift in Sources */,
+				EDD85805D34B9D5C9F6D7DBE /* SafariBridge.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		331C80D1294CF70F00263BE5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -493,6 +590,34 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		2D792DC695FD4DD115543F4B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TomSecretsSafari/TomSecretsSafari.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(TSM_TEAM_ID)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TomSecretsSafari/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.althebear.tomSecretsApp.safari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		331C80DB294CF71000263BE5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -798,6 +923,34 @@
 			};
 			name = Profile;
 		};
+		8D452464CAAAB80C55664B1E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TomSecretsSafari/TomSecretsSafari.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(TSM_TEAM_ID)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TomSecretsSafari/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.althebear.tomSecretsApp.safari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
 		A449ABD761428EB639988FF7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */;
@@ -852,6 +1005,34 @@
 			};
 			name = Debug;
 		};
+		FD2268A49DAAA07DB9856B35 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2D288D9F829FB2B8CDD97219 /* Autofill.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TomSecretsSafari/TomSecretsSafari.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(TSM_TEAM_ID)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TomSecretsSafari/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.althebear.tomSecretsApp.safari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Profile;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -901,6 +1082,16 @@
 				33CC111C2044C6BA0003C045 /* Debug */,
 				33CC111D2044C6BA0003C045 /* Release */,
 				338D0CEB231458BD00FA5F75 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F6C811F1484A0A221F3DD316 /* Build configuration list for PBXNativeTarget "TomSecretsSafari" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2D792DC695FD4DD115543F4B /* Release */,
+				8D452464CAAAB80C55664B1E /* Debug */,
+				FD2268A49DAAA07DB9856B35 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

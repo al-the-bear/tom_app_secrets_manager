@@ -267,6 +267,22 @@ void main() {
       expect(firefox.isProducts, isTrue);
     });
 
+    test('Safari: the macOS app\'s handler passes the extension\'s origin', () {
+      final safari = TomSecretsBrowserCaller.fromArguments([
+        '$tomSecretsSafariOriginScheme$tomSecretsSafariExtensionId/',
+      ])!;
+      expect(safari.family, TomSecretsBrowserFamily.safari);
+      expect(safari.extensionId, tomSecretsSafariExtensionId);
+      expect(safari.isProducts, isTrue);
+      expect(safari.clientName, contains('in Safari'));
+      expect(
+        TomSecretsBrowserCaller.fromArguments([
+          '${tomSecretsSafariOriginScheme}com.example.other',
+        ])!.isProducts,
+        isFalse,
+      );
+    });
+
     test('another extension, or no browser at all, is not served', () {
       expect(
         TomSecretsBrowserCaller.fromArguments([

@@ -2,6 +2,13 @@
 
 ## 0.1.0
 
+- Safari (part-browser): the extension's Safari build (`dist/safari`,
+  Safari 17), carried by the macOS app's Safari Web Extension; its
+  background reaches the host through the app's Swift handler
+  (`browser.runtime.sendNativeMessage`, one host process per session).
+  The host serves the Safari extension's origin
+  (`safari-web-extension://com.althebear.tomSecretsApp.safari/`).
+
 - Passkeys (DP-120, protocol.md 5.8): the host's `passkeys`, `passkeyGet`
   and `passkeyCreate` over the service's; the extension takes over a page's
   WebAuthn calls in the page's world (`webauthn.js`, `world: "MAIN"`), lists

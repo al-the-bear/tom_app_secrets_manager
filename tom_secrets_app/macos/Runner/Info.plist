@@ -28,6 +28,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Tom Secrets Manager announces and finds pairing windows on your local network, so another of your machines can be paired by its code alone.</string>
+	<key>TSMAppGroup</key>
+	<string>$(TSM_APP_GROUP)</string>
 	<key>TSMAutofillAppGroup</key>
 	<string>$(TSM_AUTOFILL_APP_GROUP)</string>
 	<key>TSMAutofillKeychainGroup</key>

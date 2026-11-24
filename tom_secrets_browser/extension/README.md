@@ -130,14 +130,21 @@ npm run build
 ```
 
 This type-checks the source and bundles it with esbuild into
-`dist/chromium/` and `dist/firefox/`, each with its own `manifest.json`
-(Chromium's background is a service worker, Firefox's a background script;
-Firefox 115 or later, Chromium 110 or later) and its icons (16, 32, 48 and
+`dist/chromium/`, `dist/firefox/` and `dist/safari/`, each with its own
+`manifest.json` (Chromium's and Safari's background is a service worker,
+Firefox's a background script; Chromium 111, Firefox 128 and Safari 17 or
+later) and its icons (16, 32, 48 and
 128 pixels, drawn by `tool/icon.ts`: the repository holds no image). It
 then writes the store packages into `dist/packages/`:
 `tom-secrets-browser-extension-<version>-chromium.zip` and `-firefox.zip`,
 whose manifest has no development `key` (the store gives the id). The ZIPs
-are deterministic (`tool/zip.ts`). `tom_secrets_build`'s `ci.sh :release`
+are deterministic (`tool/zip.ts`). The Safari build has no ZIP: the macOS
+app's Safari Web Extension carries it
+(`tom_secrets_app/macos/TomSecretsSafari`). In Safari the background
+reaches the host through the app's handler (`src/safari.ts`,
+`browser.runtime.sendNativeMessage`, one session per operation); passkeys
+in Safari go through the app's AutoFill provider, so the Safari build has
+no page-world WebAuthn script. `tom_secrets_build`'s `ci.sh :release`
 copies them beside the release archives, listed in `SHA256SUMS`.
 
 The extension has no runtime dependency: the small `browser ?? chrome` shim in `src/api.ts` takes the
@@ -177,8 +184,10 @@ The tests (node:test, with jsdom for the page) cover:
   (an excluded credential), the browser's own WebAuthn when nothing is
   there, the page script's take-over (conditional requests left alone) and
   the credential objects;
-- the generator, both manifests, the icons and the store packages read
-  back.
+- the generator, the three manifests, the icons and the store packages
+  read back;
+- Safari's port through the app's handler: one session, the answers back,
+  close, an unreachable app said.
 
 `tom_secrets_build`'s `ci.sh` runs `npm ci`, `npm run build` (`:analyze`)
 and `npm test` (`:test`), and checks the dependency closure from
@@ -197,7 +206,7 @@ and `npm test` (`:test`), and checks the dependency closure from
 - A page whose permissions policy forbids `clipboard-write` to its frames
   blocks Copy code in the in-page list; the popup's Copy code still works.
   The copied code stays on the clipboard until something else is copied.
-- Safari is phase C.
+- Safari needs the team-signed macOS app, which carries the extension.
 - Passkeys need Chrome 111 or Firefox 128 at least (`world: "MAIN"` content
   scripts). While Tom Secrets Manager is locked a page's passkeys are the
   browser's own; the extension does not ask for an unlock then.

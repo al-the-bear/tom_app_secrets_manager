@@ -8,6 +8,7 @@
 import 'dart:io';
 
 import 'package:test/test.dart';
+import 'package:tom_secrets_browser/tom_secrets_browser.dart';
 import 'package:tom_secrets_client/admin.dart';
 
 String _source(String name) => File('extension/src/$name').readAsStringSync();
@@ -41,6 +42,16 @@ void main() {
     expect(
       _constant(manifest, 'firefoxExtensionId'),
       tomSecretsFirefoxExtensionId,
+    );
+  });
+
+  test('the Safari id is the bundle id of the app\'s Safari extension', () {
+    final project = File(
+      '../tom_secrets_app/macos/Runner.xcodeproj/project.pbxproj',
+    ).readAsStringSync();
+    expect(
+      project,
+      contains('PRODUCT_BUNDLE_IDENTIFIER = $tomSecretsSafariExtensionId;'),
     );
   });
 }

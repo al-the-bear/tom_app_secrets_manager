@@ -112,5 +112,9 @@ and `propose` against the real service are the service's own tests
 - The extension ids of the Chrome Web Store and Edge Add-ons are added when
   the extension is published there; until then the development build's id
   (fixed by its key) is the only Chromium id served.
-- Safari has no stdio host: its extension is answered by a Swift handler in
-  the macOS app (phase C).
+- Safari has no stdio host. The macOS app's Safari Web Extension starts
+  this host from the app's tools folder through its Swift handler, with the
+  origin `safari-web-extension://com.althebear.tomSecretsApp.safari/`
+  (`tomSecretsSafariExtensionId`), and points it at the service's client
+  socket in the App Group container (`TSM_RUNTIME_DIR`). It is in the
+  team-signed build of the app only (`tom_secrets_app/README.md`).

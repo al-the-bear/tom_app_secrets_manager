@@ -96,6 +96,40 @@ Passkeys (macOS 14, `ProvidesPasskeys`):
 - Compile it unsigned:
   `xcodebuild -project macos/Runner.xcodeproj -target TomSecretsAutofill
   CODE_SIGNING_ALLOWED=NO build` (`ci.sh :analyze` does).
+
+### The Safari Web Extension
+
+`macos/TomSecretsSafari` is the Safari Web Extension (part-browser). It
+carries the browser extension's Safari build (`tom_secrets_browser/extension`,
+`dist/safari`, copied in by the target's build phase; run `npm ci` and
+`npm run build` there first). Safari has no stdio native messaging:
+
+- The extension sends each request with `browser.runtime.sendNativeMessage`.
+  Safari hands it to `SafariWebExtensionHandler`, which starts
+  `tsm-browser-host` from the app's `Contents/Resources/tsm/bin`, one
+  process per session of the extension, and passes the requests and
+  answers through. The host is the same program the other browsers start,
+  admitted by the service the same way (its real path beside the service).
+- The handler runs sandboxed, and the host it starts inherits the sandbox,
+  so neither reaches the runtime directory in `$TMPDIR`. The service
+  therefore also offers its client socket in the App Group container,
+  `~/Library/Group Containers/<team>.tom.secrets/tsm/client.sock`, when it
+  runs from the app and the app names its group (`TSMAppGroup` in
+  `Info.plist`). The handler points the host there (`TSM_RUNTIME_DIR`).
+- Passkeys in Safari go through the AutoFill provider; the Safari build has
+  no page-world WebAuthn script.
+
+- Its core, `macos/TomSecretsSafariKit` (a Swift package: the framing, one
+  host process per session, the bridge, where the host and the runtime
+  directory are), is tested with `swift test` against a fake host.
+- The extension target is in `Runner.xcodeproj` but not embedded in the
+  app: the App Group needs the team's provisioning profile (DP-176), as
+  for the AutoFill provider. `TSM_APP_GROUP` in
+  `Runner/Configs/Autofill.xcconfig` follows from `TSM_TEAM_ID`.
+- Compile it unsigned:
+  `xcodebuild -project macos/Runner.xcodeproj -target TomSecretsSafari
+  CODE_SIGNING_ALLOWED=NO build` (`ci.sh :analyze` does, after the
+  extension's npm build).
 - **Linux** needs `libayatana-appindicator3-dev` (the tray) and
   `libsecret-1-dev` (the keychain).
 - **Windows** needs Visual Studio 2022 Build Tools with "Desktop development
@@ -123,6 +157,9 @@ Everything else is set in the app: its Settings screen (see the
   Control-click › Open.
 - The macOS AutoFill provider is in the team-signed build only; the
   ad-hoc signed build has none (Settings › Password AutoFill says so).
+- The Safari Web Extension is in the team-signed build only; until then
+  Safari users fill logins through the AutoFill provider of that build, or
+  use a Chromium browser or Firefox with the extension.
 - Phase A is the desktop app; the mobile app, the browser extension and the
   relay are not built yet.
 

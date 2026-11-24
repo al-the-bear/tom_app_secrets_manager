@@ -29,6 +29,8 @@ export interface ExtensionApi {
     id: string;
     getURL(path: string): string;
     connectNative(application: string): NativePort;
+    /** Safari: one message to the app's handler, its reply. */
+    sendNativeMessage?(application: string, message: unknown): Promise<unknown>;
     sendMessage(message: unknown): Promise<unknown>;
     onMessage: {
       addListener(

@@ -3,13 +3,16 @@
 
 // The extension's manifest per browser family, from one source (part-browser,
 // "What it consists of"): a Chromium build with a background service worker
-// and the development key that fixes its id, and a Firefox build with a
-// background script and its gecko id. The ids are the ones the host serves
+// and the development key that fixes its id, a Firefox build with a
+// background script and its gecko id, and a Safari build that the macOS
+// app carries in its Safari Web Extension (its id is the extension's bundle
+// id; passkeys in Safari go through the app's AutoFill provider, so the
+// page-world WebAuthn script is left out). The ids are the ones the host serves
 // (tom_secrets_client's tomSecretsChromiumDevelopmentKey and
 // tomSecretsFirefoxExtensionId; a test of tom_secrets_browser compares them).
 
 /** The browser families built. */
-export type Family = 'chromium' | 'firefox';
+export type Family = 'chromium' | 'firefox' | 'safari';
 
 /** The Chromium development build's public key (the manifest's `key`). */
 export const chromiumDevelopmentKey =
@@ -54,18 +57,22 @@ export function manifest(
     permissions: ['nativeMessaging', 'activeTab', 'scripting', 'storage', 'contextMenus'],
     host_permissions: ['<all_urls>'],
     background:
-      family === 'chromium' ? { service_worker: 'background.js' } : { scripts: ['background.js'] },
+      family === 'firefox' ? { scripts: ['background.js'] } : { service_worker: 'background.js' },
     content_scripts: [
       { matches: pages, js: ['content.js'], all_frames: true, run_at: 'document_idle' },
       // Passkeys (DP-120): the page's WebAuthn calls, in the page's world
       // from its start, before the page's own scripts take a reference.
-      {
-        matches: pages,
-        js: ['webauthn.js'],
-        all_frames: true,
-        run_at: 'document_start',
-        world: 'MAIN',
-      },
+      ...(family === 'safari'
+        ? []
+        : [
+            {
+              matches: pages,
+              js: ['webauthn.js'],
+              all_frames: true,
+              run_at: 'document_start',
+              world: 'MAIN',
+            },
+          ]),
     ],
     action: { default_popup: 'popup.html', default_title: 'Tom Secrets Manager', default_icon: icons },
     commands: {
@@ -83,6 +90,8 @@ export function manifest(
             gecko: { id: firefoxExtensionId, strict_min_version: '128.0' },
           },
         }
-      : { minimum_chrome_version: '111' }),
+      : family === 'safari'
+        ? { browser_specific_settings: { safari: { strict_min_version: '17.0' } } }
+        : { minimum_chrome_version: '111' }),
   };
 }

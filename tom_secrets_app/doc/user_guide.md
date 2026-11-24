@@ -1331,6 +1331,16 @@ system vaults.
   own store) answer instead.
 - **Never handed out.** A passkey's key never leaves the app's service.
 
+**Safari** (macOS, the team-signed app): the app carries the Tom Secrets
+Manager extension for Safari. Turn it on in Safari › Settings › Extensions
+(and allow it on all websites). It works like the extension in the other
+browsers: the shield at a login field, Ctrl+Shift+L (Cmd+Shift+L), the
+toolbar button, the bar that offers to save a new login. The first time,
+the app asks you to approve Safari ("The browser extension asks for
+logins"). The app need not be open; the service must run. Passkeys in
+Safari go through Password AutoFill (below). The ad-hoc signed app has no
+Safari extension.
+
 **Password AutoFill** (macOS): macOS fills logins in apps and Safari through
 Tom Secrets Manager's AutoFill provider. Turn it on in System Settings ›
 General › AutoFill & Passwords (macOS 15; Passwords › Password Options
