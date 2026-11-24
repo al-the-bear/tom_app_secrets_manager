@@ -8,13 +8,15 @@
   "author": "Peter Nicolai Alexis Kyaw",
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit && node tool/build.mjs",
-    "test": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json && node tool/test.mjs"
+    "test": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json && node tool/test.mjs",
+    "screenshots": "node tool/screenshots.mjs"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
     "@types/node": "^20.11.0",
     "esbuild": "^0.25.0",
     "jsdom": "^25.0.1",
+    "playwright": "^1.65.1",
     "typescript": "^5.6.0"
   }
 }

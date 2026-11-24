@@ -245,6 +245,14 @@ opening the app with the login):
 cd android && ./gradlew app:connectedDebugAndroidTest
 ```
 
+The user guide's screenshots (`doc/images/`, a phone at 390×844 and a
+tablet at 1024×1366, both themes, the real fonts) are tests tagged
+`screenshots`, which run only when they write the images:
+
+```text
+flutter test --tags screenshots --update-goldens test/screenshots
+```
+
 ## Limits
 
 - No offline copy: a locked phone without a connection cannot open a vault.

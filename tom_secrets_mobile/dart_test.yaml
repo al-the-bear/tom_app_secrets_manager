@@ -1,0 +1,5 @@
+tags:
+  # The documentation's screenshots (test/screenshots/): they run only with
+  # `flutter test --tags screenshots --update-goldens`, which writes the
+  # images, and `:test` leaves them out.
+  screenshots:

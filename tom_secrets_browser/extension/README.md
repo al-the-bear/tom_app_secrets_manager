@@ -193,6 +193,20 @@ The tests (node:test, with jsdom for the page) cover:
 and `npm test` (`:test`), and checks the dependency closure from
 `package-lock.json` (`:licences`).
 
+## Screenshots
+
+```text
+npm run build && npm run screenshots
+```
+
+`tool/screenshots.mjs` loads a screenshot build of `dist/chromium` into
+headless Chromium (Playwright; once `npx playwright install chromium`). Its
+background is the extension's own over the tests' fake host, which answers
+demo logins (`tool/screenshot_background.ts`), on a demo login page served
+on 127.0.0.1 (`tool/demo_login.html`). It writes the in-page list, the save
+bar and the popup to `../doc/images/`. Demo data only; no release build
+holds any of it.
+
 ## Limits
 
 - The store entries are unlisted (DP-46) and made by the user, who also

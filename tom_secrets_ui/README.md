@@ -521,6 +521,19 @@ the service holding real demo vaults (`test/support/fake_service.dart`), with
 a fake GitHub for the First run's repository check. Demo data under demo keys
 only.
 
+The desktop app's screenshots for its user guide are tests too, tagged
+`screenshots`, which run only when they write the images:
+
+```text
+flutter test --tags screenshots --update-goldens test/screenshots
+```
+
+They write `tom_secrets_app/doc/images/<screen>-<state>-<theme>.png` at
+1440×900 in both themes, with the real fonts. `lib/screenshots.dart` holds
+what the desktop and mobile screenshots share: the sizes (desktop, phone,
+tablet), the file names, the fonts loaded from the Flutter SDK and the
+system, and the gate that skips them in every other run.
+
 ## Dependencies
 
 `tom_secrets_core` (the only way to KDBX, DP-29), `tom_secrets_client` (the

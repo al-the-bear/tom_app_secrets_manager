@@ -127,6 +127,10 @@ const String secretsCiIntegrationTag = 'integration';
 /// The test tag of the standalone check, run by `:standalone` only.
 const String secretsCiStandaloneTag = 'standalone';
 
+/// The test tag of the documentation's screenshots, made by hand with
+/// `flutter test --tags screenshots --update-goldens`; `:test` leaves it out.
+const String secretsCiScreenshotsTag = 'screenshots';
+
 /// The standalone test `:standalone` runs in this package.
 const String secretsCiStandaloneTest = 'test/standalone_test.dart';
 
@@ -274,6 +278,7 @@ class SecretsCiStages {
             secretsCiBoundaryTag,
             secretsCiIntegrationTag,
             secretsCiStandaloneTag,
+            secretsCiScreenshotsTag,
           ]);
           await run.step(
             stage,
