@@ -13,5 +13,6 @@ export 'src/ci_stages.dart';
 export 'src/ci_tool.dart';
 export 'src/ci_workspace.dart';
 export 'src/licence_boundary.dart';
+export 'src/msix.dart';
 export 'src/release.dart';
 export 'src/standalone.dart';

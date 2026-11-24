@@ -738,6 +738,14 @@ final class TomSecretsApprovalPrompt {
   /// The client's executable.
   String get exe => identity['exe'] as String? ?? '';
 
+  /// **[C]** Whether the client is the Windows passkey plugin
+  /// (`tsm-passkey-plugin`, part-os-integration, DP-120): Windows' own
+  /// passkey dialog asks through it, in any browser or app.
+  bool get windowsPasskeyPlugin {
+    final name = exe.split(RegExp(r'[/\\]')).last.toLowerCase();
+    return name == 'tsm-passkey-plugin.exe' || name == 'tsm-passkey-plugin';
+  }
+
   /// Its script, for an interpreted client, or null.
   String? get script => identity['script'] as String?;
 

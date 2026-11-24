@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Tom Secrets Manager's MSIX package (Windows 11): the app with `tsm`,
+  the service, the browser host and the passkey plugin in tsm\bin. The
+  release stage (tom_secrets_build, ci.ps1 :release) fills in the fields in
+  braces and signs the package. The passkey plugin is the package's COM
+  server: Windows starts it with -PluginActivated for a passkey request.
+  Write virtualisation is off, so the service's runtime folder in
+  %LOCALAPPDATA% and the integrations' files are the ones tsm and the
+  browsers read.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 com desktop6 rescap">
+  <Identity
+    Name="TomSecretsManager"
+    Publisher="{publisher}"
+    Version="{version}"
+    ProcessorArchitecture="{architecture}" />
+  <Properties>
+    <DisplayName>Tom Secrets Manager</DisplayName>
+    <PublisherDisplayName>Tom Secrets Manager</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.26100.0" MaxVersionTested="10.0.26200.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application
+      Id="TomSecretsManager"
+      Executable="tom_secrets_app.exe"
+      uap10:RuntimeBehavior="packagedClassicApp"
+      uap10:TrustLevel="mediumIL">
+      <uap:VisualElements
+        DisplayName="Tom Secrets Manager"
+        Description="Passwords and system secrets in KDBX vaults"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer
+              Executable="tsm\bin\tsm-passkey-plugin.exe"
+              Arguments="-PluginActivated"
+              DisplayName="Tom Secrets Manager passkeys">
+              <com:Class Id="{plugin_class_id}" DisplayName="Tom Secrets Manager passkeys" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+</Package>

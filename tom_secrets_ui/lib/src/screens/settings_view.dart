@@ -18,6 +18,8 @@
 ///   (`IdentityAgent` in `~/.ssh/config`, its host patterns editable) and
 ///   git asking `git-credential-tsm`, each a marked block written and
 ///   removed by the client library; what is not right is said.
+/// - **[C] Windows passkeys:** the passkey plugin added to Windows and
+///   removed, its state there, the passkeys Windows lists.
 ///
 /// The keys (protection layers, the GitHub token, rotation ages) are on the
 /// Keys screen.
@@ -49,6 +51,7 @@ import '../state/integrations.dart';
 import '../state/os_unlock.dart';
 import '../state/service_connection.dart';
 import '../state/session_state.dart';
+import '../state/windows_passkeys.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 
@@ -138,6 +141,7 @@ class _SettingsState extends State<TomSecretsSettingsView> {
     unawaited(_loadBrowsers());
     // The provider may have been turned on in System Settings meanwhile.
     unawaited(context.read<TomSecretsAutofill?>()?.refresh());
+    unawaited(context.read<TomSecretsWindowsPasskeys?>()?.refresh());
     final integrations = await tomSecretsIntegrationsOf(
       context.read<TomSecretsHost>(),
       context.read<TomSecretsServiceConnection>(),
@@ -346,6 +350,7 @@ class _SettingsState extends State<TomSecretsSettingsView> {
                   const _AutoTypeSettings(),
                 if (host.integrationPaths != null) _integrationsSection(theme),
                 ?_autofillSection(theme),
+                ?_windowsPasskeysSection(theme),
                 _shared(context, theme),
               ],
             ),
@@ -1100,6 +1105,78 @@ class _SettingsState extends State<TomSecretsSettingsView> {
               style: TextStyle(color: theme.colorScheme.error),
             ),
         ],
+      ],
+    );
+  }
+
+  /// **[C]** Windows passkeys (part-os-integration, DP-120): the plugin
+  /// added to Windows and removed, its state there with the way to turn it
+  /// on, and how many passkeys Windows lists (their names, never a key).
+  Widget? _windowsPasskeysSection(ThemeData theme) {
+    final passkeys = context.watch<TomSecretsWindowsPasskeys?>();
+    if (passkeys == null) return null;
+    final status = passkeys.status;
+    final registered =
+        status != null &&
+        status != TomSecretsWindowsPasskeysStatus.notRegistered;
+    return TomSecretsSection(
+      key: const Key('tsm-settings-windows-passkeys'),
+      title: 'Windows passkeys',
+      icon: Icons.key_rounded,
+      children: [
+        _whose(
+          'Windows offers the passkeys of the personal and shared vaults '
+          '(never a system vault\'s) in its own passkey dialog, in every '
+          'browser and app. Windows lists them by name; the service signs '
+          'and keeps them, and a new passkey is confirmed here.',
+        ),
+        Text(switch (status) {
+          null => 'Asking Windows…',
+          TomSecretsWindowsPasskeysStatus.notRegistered =>
+            'Tom Secrets Manager is not added to Windows.',
+          TomSecretsWindowsPasskeysStatus.disabled =>
+            'Added to Windows. Turn it on in Windows Settings › Accounts › '
+                'Passkeys › Advanced options.',
+          TomSecretsWindowsPasskeysStatus.enabled =>
+            'Added to Windows and turned on'
+                '${passkeys.listed == null ? '' : '; ${passkeys.listed} '
+                          '${passkeys.listed == 1 ? 'passkey' : 'passkeys'} '
+                          'listed'}.',
+        }, key: const Key('tsm-windows-passkeys-state')),
+        Row(
+          children: [
+            if (!registered)
+              FilledButton.tonal(
+                key: const Key('tsm-windows-passkeys-register'),
+                onPressed: passkeys.busy || status == null
+                    ? null
+                    : () => unawaited(passkeys.register()),
+                child: const Text('Add to Windows'),
+              )
+            else
+              TextButton(
+                key: const Key('tsm-windows-passkeys-unregister'),
+                onPressed: passkeys.busy
+                    ? null
+                    : () => unawaited(passkeys.unregister()),
+                child: const Text('Remove from Windows'),
+              ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const Key('tsm-windows-passkeys-refresh'),
+              onPressed: passkeys.busy
+                  ? null
+                  : () => unawaited(passkeys.refresh()),
+              child: const Text('Check again'),
+            ),
+          ],
+        ),
+        if (passkeys.error case final error?)
+          Text(
+            error,
+            key: const Key('tsm-windows-passkeys-error'),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
       ],
     );
   }

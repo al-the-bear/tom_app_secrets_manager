@@ -62,6 +62,7 @@ export 'src/state/shares.dart';
 export 'src/state/service_connection.dart';
 export 'src/state/session_state.dart';
 export 'src/state/token_renewal.dart';
+export 'src/state/windows_passkeys.dart';
 export 'src/widgets/emergency_sheet_offer.dart';
 export 'src/widgets/generator_dialog.dart';
 export 'src/widgets/protected_field.dart';

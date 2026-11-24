@@ -113,6 +113,7 @@ path inside one repository, so a clone of this repository builds on its own;
 | [`tom_secrets_testkit`](tom_secrets_testkit/) | A | test fixtures more than one package needs (the scratch folder so far); a dev dependency only |
 | [`tom_secrets_mobile`](tom_secrets_mobile/) | B | the mobile app (iOS/iPadOS, Android): the vaults fetched from GitHub into memory, set up by pairing, unlocked with biometrics, system vaults read-only; [user guide](tom_secrets_mobile/doc/user_guide.md) |
 | [`tom_secrets_browser`](tom_secrets_browser/) | B | the native-messaging host `tsm-browser-host` (shipped beside the service in the app's `tsm/bin`; the desktop app installs the browsers' manifests) and the WebExtension for Chromium browsers and Firefox (`extension/`) |
+| [`tom_secrets_passkey_plugin`](tom_secrets_passkey_plugin/) | C | the Windows 11 passkey plugin `tsm-passkey-plugin.exe` (C++, CMake): the COM server Windows' passkey dialog asks, through the service's passkey requests, never holding a key; shipped beside the service in the app's MSIX package |
 | [`tom_secrets_relay`](tom_secrets_relay/) | C | the optional relay server on `tom_core_server`: the pairing rendezvous, approval links and mailboxes of `age` packages (`tsm:<url>`), token mode by default, the address filters and the denial-of-service blocks |
 
 ## Checking it

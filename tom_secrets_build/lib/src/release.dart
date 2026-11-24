@@ -15,6 +15,8 @@ import 'dart:io';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 
+import 'msix.dart';
+
 /// The name the macOS app bundle has in a release (the Flutter build names
 /// it after the package; the executable inside keeps that name).
 const String secretsMacAppName = 'Tom Secrets Manager.app';
@@ -60,6 +62,9 @@ class SecretsReleaseInputs {
     required this.serviceBundle,
     required this.tsm,
     required this.browserHost,
+    this.passkeyPlugin,
+    this.msixPackaging,
+    this.windowsSigning,
     required this.licenceFiles,
     this.notices = const {},
     required this.outDir,
@@ -74,6 +79,9 @@ class SecretsReleaseInputs {
         serviceBundle: json['serviceBundle']! as String,
         tsm: json['tsm']! as String,
         browserHost: json['browserHost']! as String,
+        passkeyPlugin: json['passkeyPlugin'] as String?,
+        msixPackaging: json['msixPackaging'] as String?,
+        windowsSigning: json['windowsSigning'] as String?,
         licenceFiles: (json['licenceFiles']! as List).cast<String>(),
         notices: ((json['notices'] as Map?) ?? const {}).cast<String, String>(),
         outDir: json['outDir']! as String,
@@ -99,6 +107,20 @@ class SecretsReleaseInputs {
   /// service where it recognises it (protocol.md 5.5).
   final String browserHost;
 
+  /// **[C]** Windows: the passkey plugin `tsm-passkey-plugin.exe` (CMake),
+  /// beside the service in the app's tools folder (part-os-integration,
+  /// DP-120); null elsewhere.
+  final String? passkeyPlugin;
+
+  /// **[C]** Windows: the folder with the MSIX manifest template and its
+  /// assets (`tom_secrets_app/windows/packaging`); with [windowsSigning]
+  /// the app is also packed as a signed MSIX. Null elsewhere.
+  final String? msixPackaging;
+
+  /// **[C]** Windows: the signing properties file
+  /// ([secretsWindowsSigningVariable]).
+  final String? windowsSigning;
+
   /// Files every archive carries (`LICENSE`, `THIRD_PARTY.md`).
   final List<String> licenceFiles;
 
@@ -117,6 +139,9 @@ class SecretsReleaseInputs {
     'serviceBundle': serviceBundle,
     'tsm': tsm,
     'browserHost': browserHost,
+    'passkeyPlugin': ?passkeyPlugin,
+    'msixPackaging': ?msixPackaging,
+    'windowsSigning': ?windowsSigning,
     'licenceFiles': licenceFiles,
     'notices': notices,
     'outDir': outDir,
@@ -131,6 +156,7 @@ class SecretsRelease {
     required this.toolsArchive,
     required this.appDistribution,
     required this.toolsDistribution,
+    this.msix,
   });
 
   /// The app archive.
@@ -145,6 +171,9 @@ class SecretsRelease {
 
   /// The assembled tools folder of the tools-only archive (`bin/`, `lib/`).
   final String toolsDistribution;
+
+  /// **[C]** The signed MSIX package (Windows), or null.
+  final String? msix;
 }
 
 /// Assembles the release of [inputs]: the app with `tsm` and the service in
@@ -192,6 +221,11 @@ Future<SecretsRelease> secretsAssembleRelease(
       await _run('chmod', ['755', hostTarget]);
     }
   }
+  // The passkey plugin serves the app's package only: the tools alone are
+  // for a server.
+  if (inputs.passkeyPlugin case final plugin?) {
+    File(plugin).copySync(p.join(appTools, 'bin', p.basename(plugin)));
+  }
   for (final f in inputs.licenceFiles) {
     File(f).copySync(p.join(docsDir, p.basename(f)));
     File(f).copySync(p.join(toolsDist, p.basename(f)));
@@ -231,6 +265,21 @@ Future<SecretsRelease> secretsAssembleRelease(
   );
   await _archive(p.dirname(appDist), p.basename(appDist), appArchive);
   await _archive(p.dirname(toolsDist), toolsName, toolsArchive);
+  String? msix;
+  if (windows &&
+      inputs.msixPackaging != null &&
+      inputs.windowsSigning != null) {
+    msix = await secretsPackMsix(
+      appDistribution: appDist,
+      packagingDir: inputs.msixPackaging!,
+      layoutDir: p.join(stage.path, 'msix'),
+      version: inputs.version,
+      platform: inputs.platform,
+      signing: secretsWindowsSigningOf(inputs.windowsSigning!),
+      outDir: inputs.outDir,
+    );
+    say('packed and signed ${p.basename(msix)}');
+  }
   _writeSums(inputs.outDir);
   say(
     'wrote ${p.basename(appArchive)}, ${p.basename(toolsArchive)}, SHA256SUMS',
@@ -240,6 +289,7 @@ Future<SecretsRelease> secretsAssembleRelease(
     toolsArchive: toolsArchive,
     appDistribution: appDist,
     toolsDistribution: toolsDist,
+    msix: msix,
   );
 }
 
@@ -325,8 +375,8 @@ List<String> secretsCopyExtensionPackages(String packagesDir, String outDir) {
   return names..sort();
 }
 
-/// Writes `SHA256SUMS` over every archive, APK and signed Firefox package
-/// (`.xpi`) in [outDir].
+/// Writes `SHA256SUMS` over every archive, APK, MSIX package and signed
+/// Firefox package (`.xpi`) in [outDir].
 void secretsWriteSums(String outDir) => _writeSums(outDir);
 
 void _writeSums(String outDir) {
@@ -340,6 +390,7 @@ void _writeSums(String outDir) {
                 f.path.endsWith('.zip') ||
                 f.path.endsWith('.tar.gz') ||
                 f.path.endsWith('.apk') ||
+                f.path.endsWith('.msix') ||
                 f.path.endsWith('.xpi'),
           )
           .toList()
@@ -409,8 +460,15 @@ Future<bool> secretsSmokeRelease({
     '--unlock',
   ], stdinText: password);
   if (started.exitCode != 0) return false;
+  // The admin key of this start is in the keychain where there is one; a
+  // session without it (an SSH logon on Windows, a Linux without a keyring)
+  // claims again with the master password, read only then.
   try {
-    final status = await run(['status', '--json']);
+    final status = await run([
+      '--password-stdin',
+      'status',
+      '--json',
+    ], stdinText: password);
     if (status.exitCode != 0) return false;
     final report = jsonDecode('${status.stdout}');
     final locked = report is Map ? report['locked'] : null;
@@ -420,7 +478,7 @@ Future<bool> secretsSmokeRelease({
     }
     return true;
   } finally {
-    await run(['stop']);
+    await run(['--password-stdin', 'stop'], stdinText: password);
   }
 }
 

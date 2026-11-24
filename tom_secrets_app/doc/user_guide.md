@@ -57,7 +57,12 @@ archives):
   Open, and confirm.
 - **Windows:** unzip into a folder of your choice and start
   `tom_secrets_app.exe`. If SmartScreen says "Windows protected your PC",
-  choose More info › Run anyway.
+  choose More info › Run anyway. For [Windows passkeys](#settings) install
+  the MSIX package instead (`tom_secrets_manager-<version>-windows-x64.msix`,
+  double-click it). It is signed with the project's own certificate, so an
+  administrator first puts that certificate into the machine's Trusted
+  People store, once per machine (`install_signing_certificate.ps1` of
+  `tom_secrets_build`).
 - **Linux:** unpack into a folder of your choice and start `tom_secrets_app`.
   The tray icon needs a desktop with an AppIndicator (StatusNotifierItem)
   host; without one, closing the window minimises it.
@@ -1361,6 +1366,27 @@ the app; a build without it says so here.
   that offers neither is told so.
 - **Never for clients.** A passkey is never given to a client, `tsm` or the
   browser extension.
+
+**Windows passkeys** (Windows 11 24H2 and later, the app installed from its
+MSIX package): Windows' own passkey dialog offers the passkeys of your
+personal and shared vaults (never a system vault's), in every browser and
+app.
+
+- **Turning it on.** "Add to Windows" adds Tom Secrets Manager to Windows.
+  Then turn it on in Windows Settings › Accounts › Passkeys › Advanced
+  options; the section says whether it is on. "Remove from Windows" takes
+  it out again.
+- **What Windows knows.** After every unlock and change the app tells
+  Windows the passkeys' names (site, user name, entry title), never a key.
+  The section says how many Windows lists.
+- **Signing in.** Windows' dialog lists the site's passkeys; pick yours.
+  The first time, the app asks "Windows asks for passkeys"; "Always" means
+  it does not ask again, and later sign-ins show only Windows' dialog.
+- **Creating one.** Choose Tom Secrets Manager in Windows' dialog. The app
+  asks "Save a passkey for …?" every time, and keeps the passkey in a
+  vault, from where every device has it.
+- **Locked.** With the vaults locked, Windows says the passkey provider is
+  locked: unlock the app and try again.
 
 **Shared by every device**: the configuration kept in the primary vault
 (`tsm.config`): the dimensions in priority order and the files per

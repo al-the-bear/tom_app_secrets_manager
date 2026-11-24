@@ -91,6 +91,11 @@ Future<void> main(List<String> args) async {
     osUnlock: tomSecretsDesktopOsUnlock(),
     sessionEvents: TomSecretsDesktopSessionEvents(),
     autofill: tomSecretsDesktopAutofill(),
+    // Windows 11: the passkey plugin beside the service (the MSIX package),
+    // its passkeys' names listed in Windows' passkey dialog.
+    windowsPasskeys: tomSecretsDesktopWindowsPasskeys(
+      serviceExecutable: serviceHost.serviceExecutable,
+    ),
     // Auto-type (FFI into the OS; X11 only on Linux, DP-41) and the global
     // hotkeys of quick access and auto-type (part-app).
     keyboard: tomSecretsDesktopKeyboard(),

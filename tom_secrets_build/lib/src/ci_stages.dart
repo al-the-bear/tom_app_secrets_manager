@@ -11,6 +11,7 @@ import 'package:tom_build_base/ci.dart';
 
 import 'ci_workspace.dart';
 import 'licence_boundary.dart';
+import 'msix.dart';
 import 'release.dart';
 
 /// The stages, in the order `:all` runs them. The build stages of the desktop
@@ -186,6 +187,7 @@ class SecretsCiStages {
               _cmakeBuildDir,
               '-DCMAKE_BUILD_TYPE=Debug',
               '-DCMAKE_COMPILE_WARNING_AS_ERROR=ON',
+              ..._cmakeClientSource,
             ], workingDirectory: dir),
             CiCommand('cmake', const [
               '--build',
@@ -271,6 +273,7 @@ class SecretsCiStages {
               _cmakeBuildDir,
               '-DCMAKE_BUILD_TYPE=Debug',
               '-DCMAKE_COMPILE_WARNING_AS_ERROR=ON',
+              ..._cmakeClientSource,
             ], workingDirectory: dir),
             CiCommand('cmake', const [
               '--build',
@@ -545,6 +548,13 @@ extension on SecretsCiStages {
     ]);
   }
 
+  /// The C client a CMake project fetches (`FetchContent` of
+  /// `tom_secrets_clients`, the passkey plugin's) taken from the
+  /// checked-out repository, so the CI builds what it tests.
+  List<String> get _cmakeClientSource => [
+    '-DFETCHCONTENT_SOURCE_DIR_TSM_C=${workspace.clientsRoot}',
+  ];
+
   /// The mobile app's Android release: the signed APK beside the archives.
   Future<void> _mobile(CiRun run) async {
     const stage = 'mobile';
@@ -675,6 +685,42 @@ extension on SecretsCiStages {
       ),
     );
 
+    // Windows: the passkey plugin (C++, CMake) beside the service in the
+    // app's package, and the signed MSIX it registers from
+    // (part-os-integration, DP-120).
+    String? passkeyPlugin;
+    String? windowsSigning;
+    if (windows) {
+      final pluginDir = p.join(
+        workspace.repoRoot,
+        'tom_secrets_passkey_plugin',
+      );
+      final pluginBuild = p.join(work, 'passkey_plugin');
+      passkeyPlugin = p.join(pluginBuild, 'Release', 'tsm-passkey-plugin.exe');
+      await run.step(stage, 'passkey plugin', 'release.passkey_plugin.log', [
+        CiCommand('cmake', [
+          '-S',
+          '.',
+          '-B',
+          pluginBuild,
+          '-DTSM_PLUGIN_BUILD_TESTS=OFF',
+          ..._cmakeClientSource,
+        ], workingDirectory: pluginDir),
+        CiCommand('cmake', [
+          '--build',
+          pluginBuild,
+          '--config',
+          'Release',
+        ], workingDirectory: pluginDir),
+      ], produces: passkeyPlugin);
+      windowsSigning = Platform.environment[secretsWindowsSigningVariable];
+      final problem = secretsWindowsSigningProblem(windowsSigning);
+      if (problem != null) {
+        run.fail(stage, 'msix signing', 'release.msix.log', problem);
+        windowsSigning = null;
+      }
+    }
+
     final app = package(appPackage, flutter: true);
     final built = secretsBuiltApp(appPackage, platform);
     await run.step(
@@ -696,6 +742,11 @@ extension on SecretsCiStages {
       serviceBundle: serviceBundle,
       tsm: tsm,
       browserHost: browserHost,
+      passkeyPlugin: passkeyPlugin,
+      msixPackaging: windows
+          ? p.join(appPackage, 'windows', 'packaging')
+          : null,
+      windowsSigning: windowsSigning,
       licenceFiles: [
         p.join(workspace.repoRoot, 'LICENSE'),
         p.join(workspace.repoRoot, 'THIRD_PARTY.md'),

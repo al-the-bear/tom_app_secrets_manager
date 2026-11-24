@@ -240,6 +240,48 @@ void main() {
     expect(service.approvals.single['decision'], 'once');
   });
 
+  testWidgets('the Windows passkey plugin asks as Windows: "Always" holds '
+      'for its dialog in every browser and app', (tester) async {
+    await unlocked(tester);
+    service.ask({
+      'approvalId': 'a-4',
+      'host': 'demo-host',
+      'identity': {
+        'kind': 'exe',
+        'exe': r'C:\Program Files\WindowsApps\tsm\bin\tsm-passkey-plugin.exe',
+        'args': ['-PluginActivated'],
+        'cwd': r'C:\Windows\System32',
+        'parent': {'exe': r'C:\Windows\System32\svchost.exe'},
+      },
+      'refs': ['team/~01'],
+      'resolved': [
+        {'store': 'team', 'path': 'Web/Mail', 'kind': 'login'},
+      ],
+      'url': 'https://mail.example.com/',
+      'browser': true,
+      'passkey': true,
+    });
+    await wait(tester);
+    expect(find.text('Windows asks for passkeys'), findsOneWidget);
+    expect(find.text('The passkeys of mail.example.com'), findsOneWidget);
+    expect(find.text('Started by'), findsWidgets);
+    expect(find.text('Browser'), findsNothing);
+    expect(
+      find.textContaining('Windows may list these passkeys'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('tsm-approval-decision-always')));
+    await tester.pump();
+    expect(find.text('Always in this browser'), findsNothing);
+    expect(
+      find.textContaining("This holds for Windows' passkey dialog"),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('tsm-approval-answer')));
+    await wait(tester);
+    expect(service.approvals.single['decision'], 'always');
+  });
+
   testWidgets('a new passkey: the site, the user and the page; saved once or '
       'not now, never a lasting grant', (tester) async {
     await unlocked(tester);

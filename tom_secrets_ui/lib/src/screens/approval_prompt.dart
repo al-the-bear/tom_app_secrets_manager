@@ -150,6 +150,9 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
     }
     final browser = prompt.browser;
     final passkeyCreate = prompt.passkeyCreate;
+    // Windows' passkey dialog, asking through the passkey plugin.
+    final windows = prompt.windowsPasskeyPlugin;
+    final startedBy = windows ? 'Started by' : 'Browser';
     if (browser && !_browserDefaults) {
       // DP-44: one grant per browser for its logins; the host is the
       // product's own executable, updated with it, so not pinned.
@@ -194,6 +197,8 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
             child: Text(
               passkeyCreate != null
                   ? 'Save a passkey for ${passkeyCreate.rpId}?'
+                  : browser && windows
+                  ? 'Windows asks for passkeys'
                   : browser
                   ? prompt.passkey
                         ? 'The browser extension asks for passkeys'
@@ -277,7 +282,7 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     line('Site', passkeyCreate.rpId),
                     line('User', passkeyCreate.userName),
                     line('Page', passkeyCreate.url),
-                    line('Browser', prompt.parentExe),
+                    line(startedBy, prompt.parentExe),
                     Text(
                       'It goes into the login of this site and user in your '
                       'vaults (a new login when there is none), and every '
@@ -295,7 +300,7 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                   icon: Icons.language_rounded,
                   children: [
                     line('Page', prompt.url),
-                    line('Browser', prompt.parentExe),
+                    line(startedBy, prompt.parentExe),
                     for (final r in prompt.resolved)
                       line(
                         prompt.passkey ? 'Passkey' : 'Login',
@@ -350,6 +355,12 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                                   ('once', 'Save in Tom Secrets Manager'),
                                   ('never', 'Not now'),
                                 ]
+                              : browser && windows
+                              ? const [
+                                  ('once', 'This time'),
+                                  ('always', 'Always'),
+                                  ('never', 'Never'),
+                                ]
                               : browser
                               ? const [
                                   ('once', 'This time'),
@@ -402,7 +413,10 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     ),
                   if (browser && _decision == 'once')
                     Text(
-                      prompt.passkey
+                      windows
+                          ? 'Windows may list these passkeys and sign in '
+                                'with them in the next ten minutes.'
+                          : prompt.passkey
                           ? 'The extension may list these passkeys and sign '
                                 'in with them in the next ten minutes.'
                           : 'The extension may list these logins and fill '
@@ -412,10 +426,14 @@ class _PromptState extends State<TomSecretsApprovalPromptDialog> {
                     ),
                   if (browser && _decision != 'once')
                     Text(
-                      'This holds for '
-                      '${prompt.parentExe ?? 'this browser'} only; another '
-                      'browser asks on its own. System vaults are never given '
-                      'to a browser.',
+                      windows
+                          ? "This holds for Windows' passkey dialog, in every "
+                                'browser and app. System vaults are never '
+                                'given to it.'
+                          : 'This holds for '
+                                '${prompt.parentExe ?? 'this browser'} only; '
+                                'another browser asks on its own. System '
+                                'vaults are never given to a browser.',
                       key: const Key('tsm-approval-browser-lasting'),
                       style: label,
                     ),

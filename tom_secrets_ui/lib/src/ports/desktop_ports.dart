@@ -23,6 +23,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart'
 
 import '../state/auto_type.dart';
 import '../state/autofill.dart';
+import '../state/windows_passkeys.dart';
 import '../state/entry_requests.dart';
 import 'service_host.dart';
 
@@ -312,6 +313,7 @@ final class TomSecretsHost {
     this.unlockFooter,
     this.entryRequests,
     this.autofill,
+    this.windowsPasskeys,
     this.breachCheck,
     this.keyboard,
     this.hotkeys,
@@ -331,6 +333,10 @@ final class TomSecretsHost {
   /// The system's password AutoFill (macOS: the credential provider's
   /// snapshot and QuickType identities), or null where there is none.
   final TomSecretsAutofillPort? autofill;
+
+  /// **[C]** The Windows passkey plugin (Windows 11: the plugin beside
+  /// the service in the app's MSIX package), or null elsewhere.
+  final TomSecretsWindowsPasskeysPort? windowsPasskeys;
 
   /// The breach check the health report asks (part-password-manager,
   /// DP-39); null: the Have I Been Pwned range API over a client of the

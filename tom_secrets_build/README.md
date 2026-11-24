@@ -210,6 +210,31 @@ turns red when one is no longer needed.
    `tool/demo_installation.dart`), the assembled `tsm` starting and unlocking
    the service beside it, its status read, the service stopped.
 
+On Windows the release also has the passkey plugin and an MSIX package:
+
+- the plugin `tsm-passkey-plugin.exe` (`tom_secrets_passkey_plugin`,
+  CMake, Release) goes beside the service in the app's `tsm\bin`; the
+  tools alone do not carry it;
+- the app's folder is packed with the manifest and logos of
+  `tom_secrets_app/windows/packaging` as
+  `tom_secrets_manager-<version>-windows-x64.msix` (`makeappx`). The
+  manifest names the plugin as the package's COM server, which Windows
+  needs to register a passkey plugin.
+- the package is signed (`signtool`) with the certificate
+  `TSM_WINDOWS_SIGNING` names, and listed in `SHA256SUMS`. Without a
+  complete properties file the step `msix signing` is red; the package is
+  never unsigned.
+
+The certificate is self-signed for now:
+
+- `windows\new_signing_certificate.ps1 -OutDir <folder outside the
+  repositories>` makes it once (no administrator needed). It writes the
+  `.pfx`, the public `.cer` and the properties file (`certificateFile`,
+  `certificatePassword`, `publisher`).
+- Each machine that installs the package trusts it once: an administrator
+  runs `windows\install_signing_certificate.ps1 -Certificate <the .cer>`,
+  which puts it into Trusted People.
+
 The version is `tom_secrets_app`'s. The archives are published as a release of
 the `al-the-bear/tom_binaries` repository on GitHub, tag
 `tom_secrets_manager-v<version>`, with `SHA256SUMS`.
@@ -245,6 +270,8 @@ same committed source.
   are (above).
 - `FLUTTER_ROOT`: the Flutter SDK to use, instead of `flutter` on `PATH`.
 - `TSM_ANDROID_SIGNING`: the Android signing properties file of `:mobile`.
+- `TSM_WINDOWS_SIGNING`: the Windows signing properties file of `:release`
+  on Windows (the MSIX package).
 - `secretsLicenceExceptions` (`lib/src/licence_boundary.dart`): the licence
   exceptions in force.
 - `secretsStandaloneExceptions` (`lib/src/standalone.dart`): the places the

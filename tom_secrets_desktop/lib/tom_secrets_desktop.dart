@@ -18,3 +18,4 @@ export 'src/printer.dart';
 export 'src/service_host.dart';
 export 'src/shell.dart';
 export 'src/single_instance.dart';
+export 'src/windows_passkeys.dart';

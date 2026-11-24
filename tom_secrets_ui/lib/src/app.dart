@@ -25,6 +25,7 @@ import 'state/health.dart';
 import 'state/os_unlock.dart';
 import 'state/service_connection.dart';
 import 'state/session_state.dart';
+import 'state/windows_passkeys.dart';
 import 'widgets/style.dart';
 
 /// The Tom Secrets Manager app over [host].
@@ -68,6 +69,13 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
           session: _session,
           preferences: widget.host.preferences,
         );
+  late final TomSecretsWindowsPasskeys? _windowsPasskeys =
+      widget.host.windowsPasskeys == null
+      ? null
+      : TomSecretsWindowsPasskeys(
+          port: widget.host.windowsPasskeys!,
+          session: _session,
+        );
   // The host's breach check, else the range API over a client of the app's
   // own (closed with the app).
   late final TomSecretsBreachCheck? _ownBreachCheck =
@@ -101,6 +109,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
     unawaited(_quickAccess.registerHotkeys());
     if (widget.connection == null) _connection.connect();
     unawaited(_autofill?.refresh());
+    unawaited(_windowsPasskeys?.refresh());
   }
 
   @override
@@ -110,6 +119,7 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
     _quickAccess.dispose();
     _ownBreachCheck?.close();
     _autofill?.dispose();
+    _windowsPasskeys?.dispose();
     _osUnlock.dispose();
     _session.dispose();
     if (widget.connection == null) _connection.dispose();
@@ -127,6 +137,9 @@ class _TomSecretsAppState extends State<TomSecretsApp> {
       ChangeNotifierProvider.value(value: _quickAccess),
       // Null where the host has no AutoFill (watched as nullable).
       ChangeNotifierProvider<TomSecretsAutofill?>.value(value: _autofill),
+      ChangeNotifierProvider<TomSecretsWindowsPasskeys?>.value(
+        value: _windowsPasskeys,
+      ),
     ],
     child: MaterialApp(
       title: 'Tom Secrets Manager',
