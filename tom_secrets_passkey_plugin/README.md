@@ -6,6 +6,10 @@ The Windows 11 passkey plugin of the Tom Secrets Manager
 (part-os-integration): `tsm-passkey-plugin.exe`, which lets Windows' own
 passkey dialog use the passkeys of the vaults, in every browser and app.
 
+Using it — installing, turning it on in the app and in Windows, signing
+in and creating passkeys, troubleshooting — is the
+[user guide](doc/user_guide.md).
+
 ## Overview
 
 Windows 11 (24H2 and later) lets a password manager add itself as a

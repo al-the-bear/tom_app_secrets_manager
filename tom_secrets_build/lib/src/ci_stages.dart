@@ -78,8 +78,8 @@ const Map<String, String> secretsCiStageDescriptions = {
   'docs':
       'the documentation check (node tool/check_docs.mjs in tom_secrets_build, '
       'after npm ci): over tom_secrets_manager/doc and the user guides of the '
-      'service, the relay, the app, the mobile app, the browser extension '
-      'and tsm, every '
+      'service, the relay, the app, the mobile app, the browser extension, '
+      'the passkey plugin, the build and tsm, every '
       'diagram\'s Mermaid '
       'source renders '
       '(@mermaid-js/mermaid-cli), its exported SVG and PNG are there and '
@@ -110,7 +110,8 @@ const Map<String, String> secretsCiStageDescriptions = {
 /// The documents `:docs` checks: the documentation set of
 /// `tom_secrets_manager` (`doc/`) and the user guides of the service and
 /// the relay (their operators' guides), the desktop app, the mobile app,
-/// the browser extension and `tsm`.
+/// the browser extension, the Windows passkey plugin, this build (its
+/// maintainer's guide) and `tsm`.
 List<String> secretsDocsRoots(SecretsCiWorkspace workspace) => [
   p.join(workspace.managerRoot, 'doc'),
   p.join(workspace.managerRoot, 'tom_secrets_service', 'doc', 'user_guide.md'),
@@ -118,6 +119,13 @@ List<String> secretsDocsRoots(SecretsCiWorkspace workspace) => [
   p.join(workspace.repoRoot, 'tom_secrets_app', 'doc', 'user_guide.md'),
   p.join(workspace.repoRoot, 'tom_secrets_mobile', 'doc', 'user_guide.md'),
   p.join(workspace.repoRoot, 'tom_secrets_browser', 'doc', 'user_guide.md'),
+  p.join(
+    workspace.repoRoot,
+    'tom_secrets_passkey_plugin',
+    'doc',
+    'user_guide.md',
+  ),
+  p.join(workspace.repoRoot, 'tom_secrets_build', 'doc', 'user_guide.md'),
   p.join(
     workspace.clientsRoot,
     'clients',

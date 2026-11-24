@@ -91,6 +91,8 @@ void main() {
       p.join('/w/app', 'tom_secrets_app', 'doc', 'user_guide.md'),
       p.join('/w/app', 'tom_secrets_mobile', 'doc', 'user_guide.md'),
       p.join('/w/app', 'tom_secrets_browser', 'doc', 'user_guide.md'),
+      p.join('/w/app', 'tom_secrets_passkey_plugin', 'doc', 'user_guide.md'),
+      p.join('/w/app', 'tom_secrets_build', 'doc', 'user_guide.md'),
       p.join(
         '/w/clients',
         'clients',

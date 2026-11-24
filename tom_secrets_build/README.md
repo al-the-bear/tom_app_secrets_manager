@@ -10,6 +10,9 @@ and the service) and `tom_secrets_clients` (the protocol, the clients and
 step after another, keeping every log; `:release` builds the release
 archives for the platform it runs on.
 
+Running it — the stages, reading the logs, making, signing and publishing a
+release, a red check — is the [maintainer's guide](doc/user_guide.md).
+
 **A person starts it, from the repository.** Nothing schedules it: no launchd
 agent, crontab, systemd timer, git hook or GitHub workflow (Actions is
 switched off for the product's repositories).
@@ -193,8 +196,10 @@ turns red when one is no longer needed.
 ## The documentation check
 
 The documentation set of `tom_secrets_manager` (`doc/`, its conventions in
-`doc/README.md`) and the user guides of the desktop app, the mobile app and
-`tsm` are checked by `:docs`. This package is also an npm package for it
+`doc/README.md`) and the user guides (the service's and the relay's
+operator guides; the desktop app, the mobile app, the browser extension,
+the Windows passkey plugin, `tsm`, and this package's own) are checked by
+`:docs`. This package is also an npm package for it
 (`package.json`, Node.js 20 or later): its dev dependencies are
 `@mermaid-js/mermaid-cli` and `puppeteer`, which downloads the headless
 browser both render with at `npm ci`.

@@ -1539,7 +1539,10 @@ the app; a build without it says so here.
 **Windows passkeys** (Windows 11 24H2 and later, the app installed from its
 MSIX package): Windows' own passkey dialog offers the passkeys of your
 personal and shared vaults (never a system vault's), in every browser and
-app.
+app. Its own [user guide](../../tom_secrets_passkey_plugin/doc/user_guide.md)
+has every step.
+
+![Windows passkeys turned on](images/settings-winpasskeys-on-light.png)
 
 - **Turning it on.** "Add to Windows" adds Tom Secrets Manager to Windows.
   Then turn it on in Windows Settings › Accounts › Passkeys › Advanced

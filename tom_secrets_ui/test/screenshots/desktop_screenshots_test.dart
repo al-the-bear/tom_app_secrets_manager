@@ -259,6 +259,55 @@ final class _WindowsPasskeys implements TomSecretsWindowsPasskeysPort {
   ) async {}
 }
 
+/// The Windows passkey plugin standing at [current] in Windows.
+final class _WindowsPasskeysAt implements TomSecretsWindowsPasskeysPort {
+  _WindowsPasskeysAt(this.current);
+
+  final TomSecretsWindowsPasskeysStatus current;
+
+  @override
+  Future<TomSecretsWindowsPasskeysStatus> status() async => current;
+  @override
+  Future<void> register() async {}
+  @override
+  Future<void> unregister() async {}
+  @override
+  Future<void> syncCredentials(
+    List<TomSecretsWindowsPasskeyName> names,
+  ) async {}
+}
+
+/// The demo stores with two passkeys in `primary` (demo keys only).
+Future<List<FakeStore>> _passkeyStores() async {
+  final mail = await tomSecretsCreatePasskey(
+    rpId: 'mail.example.com',
+    userHandle: Uint8List.fromList([1, 2, 3, 4]),
+    userName: 'demo-user@example.com',
+  );
+  final shop = await tomSecretsCreatePasskey(
+    rpId: 'shop.example.com',
+    userHandle: Uint8List.fromList([5, 6, 7, 8]),
+    userName: 'demo-user',
+  );
+  final primary = await demoVault('primary', demoPassword, (f) {
+    addEntry(
+      f,
+      'Db/Main',
+      password: 'demo-db-pw',
+      fields: {'UserName': 'demo-user', 'URL': 'https://db.example'},
+    );
+    tomSecretsKeepPasskey(f, mail.passkey);
+    tomSecretsKeepPasskey(f, shop.passkey);
+  });
+  final team = await demoVault('team', 'team-demo-pw', (f) {
+    addEntry(f, 'Api/Token', password: 'demo-api-token').tags.set('prod;api');
+  });
+  return [
+    FakeStore('primary', demoPassword, primary),
+    FakeStore('team', 'team-demo-pw', team),
+  ];
+}
+
 /// The vault browser's demo: `primary` with logins (one with a one-time
 /// code), an SSH key, a certificate, a PGP key, a note, an API token and an
 /// overlay; `team` with a tagged login. Demo keys only.
@@ -491,6 +540,25 @@ void main() {
     captureGuard: _CaptureGuard(),
     macOS: true,
     autofill: autofill,
+  );
+
+  /// A Windows-like host over [service]: Windows Hello as the OS unlock
+  /// (a gated store in memory), the screen lock's session events, a capture
+  /// guard and the Windows passkey plugin over [passkeys].
+  TomSecretsHost windowsHost(
+    FakeService service,
+    TomSecretsWindowsPasskeysPort passkeys,
+  ) => TomSecretsHost(
+    service: FakeHost(service),
+    preferences: TomSecretsMemoryPreferences(),
+    breachCheck: _quietBreachCheck(),
+    osUnlock: TomSecretsOsUnlockHost(
+      store: TomInMemoryGatedSecretStore(),
+      label: 'Windows Hello',
+    ),
+    sessionEvents: _SessionEvents(),
+    captureGuard: _CaptureGuard(),
+    windowsPasskeys: passkeys,
   );
 
   /// The session of the shell.
@@ -1350,6 +1418,36 @@ void main() {
       await scrollToTop(tester, find.byKey(const Key('tsm-settings-autofill')));
       await snap(tester, 'settings', 'autofill');
     });
+
+    for (final (state, status) in [
+      ('notadded', TomSecretsWindowsPasskeysStatus.notRegistered),
+      ('off', TomSecretsWindowsPasskeysStatus.disabled),
+      ('on', TomSecretsWindowsPasskeysStatus.enabled),
+    ]) {
+      _shot('Windows passkeys ($state)', (tester) async {
+        await unlocked(
+          tester,
+          service: FakeService(await tester.runAsync(_passkeyStores) ?? []),
+          host: (s) => windowsHost(s, _WindowsPasskeysAt(status)),
+        );
+        await go(tester, 'Settings');
+        await scrollToTop(
+          tester,
+          find.byKey(const Key('tsm-settings-windows-passkeys')),
+        );
+        expect(
+          find.byKey(
+            Key(
+              status == TomSecretsWindowsPasskeysStatus.notRegistered
+                  ? 'tsm-windows-passkeys-register'
+                  : 'tsm-windows-passkeys-unregister',
+            ),
+          ),
+          findsOneWidget,
+        );
+        await snap(tester, 'settings', 'winpasskeys-$state');
+      });
+    }
 
     _shot('the status report', (tester) async {
       final service = FakeService(await tester.runAsync(demoStores) ?? [])
