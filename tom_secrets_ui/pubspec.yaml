@@ -20,7 +20,7 @@ dependencies:
   # generator, the stored-file codec and the entry fields.
   tom_secrets_core: ^0.2.26
   # The admin errors and the reference grammar ("How clients name it").
-  tom_secrets_client: ^0.2.16
+  tom_secrets_client: ^0.2.19
   # The key fields, notices, sync indicator and the masked editing surface.
   tom_ui_support: ^0.1.0
   tom_host_ui: ^0.1.0
