@@ -50,22 +50,44 @@ It goes task by task; the labels in quotes are the ones the app shows.
 
 Download the archive for your platform from the release and unpack it (the
 repository README's [Installing](../../README.md#installing) lists the
-archives):
+archives). Check it against the release's `SHA256SUMS` first.
 
-- **macOS:** move `Tom Secrets Manager.app` to `/Applications`. The app is
-  ad-hoc signed, not notarised: open it the first time with Control-click ›
-  Open, and confirm.
-- **Windows:** unzip into a folder of your choice and start
-  `tom_secrets_app.exe`. If SmartScreen says "Windows protected your PC",
-  choose More info › Run anyway. For [Windows passkeys](#settings) install
-  the MSIX package instead (`tom_secrets_manager-<version>-windows-x64.msix`,
-  double-click it). It is signed with the project's own certificate, so an
-  administrator first puts that certificate into the machine's Trusted
-  People store, once per machine (`install_signing_certificate.ps1` of
-  `tom_secrets_build`).
-- **Linux:** unpack into a folder of your choice and start `tom_secrets_app`.
-  The tray icon needs a desktop with an AppIndicator (StatusNotifierItem)
-  host; without one, closing the window minimises it.
+**To install on macOS:**
+
+1. Move `Tom Secrets Manager.app` to `/Applications`.
+2. Open it the first time with Control-click › Open, and confirm: the app
+   is ad-hoc signed, not notarised, so macOS asks once.
+
+**To install on Windows from the archive:**
+
+1. Unzip it into a folder of your choice.
+2. Start `tom_secrets_app.exe`. If SmartScreen says "Windows protected your
+   PC", choose More info › Run anyway.
+
+**To install on Windows from the MSIX package** (needed for
+[Windows passkeys](#settings)):
+
+1. Once per machine, an administrator trusts the project's signing
+   certificate, which the package carries in its signature: right-click the
+   `.msix` file › Properties › Digital Signatures, select the signature ›
+   Details › View Certificate › Install Certificate…, choose "Local Machine"
+   and the store "Trusted People". (With the certificate file
+   `tsm-signing.cer` at hand, `install_signing_certificate.ps1 -Certificate
+   tsm-signing.cer` of `tom_secrets_build/windows/`, in an administrator
+   PowerShell, does the same.)
+2. Double-click `tom_secrets_manager-<version>-windows-x64.msix`. Windows'
+   App Installer names the app and its publisher; choose Install.
+3. Start "Tom Secrets Manager" from the Start menu.
+
+Without the certificate step, App Installer refuses the package as
+untrusted.
+
+**To install on Linux:**
+
+1. Unpack the archive into a folder of your choice.
+2. Start `tom_secrets_app`. The tray icon needs a desktop with an
+   AppIndicator (StatusNotifierItem) host; without one, closing the window
+   minimises it.
 
 The app runs once per user: starting it a second time brings the open window
 to the front. It registers itself to start at login (in the tray, without a
@@ -95,6 +117,8 @@ At the top of the first step you choose:
 
 ### Step 1: the vault
 
+![First run: the vault](images/first-run-vault-light.png)
+
 Choose **"Create a new vault"** or **"Open an existing one"**, and where it
 is: **"On this computer"** or **"In a GitHub repository"**.
 
@@ -119,6 +143,8 @@ Opening a vault with an outer encryption asks for its "Repository key
 
 ### Step 2: protection
 
+![First run: protection](images/first-run-protection-light.png)
+
 Both layers are optional, and each adds a key you must not lose: without it
 the vault cannot be opened on another machine.
 
@@ -138,6 +164,8 @@ The app reminds you when these keys are due for rotation.
 
 ### Step 3: this machine
 
+![First run: this machine](images/first-run-machine-light.png)
+
 - **"This machine's name"**: how this machine appears to your other devices
   and in approvals (for example `laptop1`).
 - **"Default environment (optional, e.g. prod)"**: the environment programs
@@ -154,11 +182,15 @@ The app reminds you when these keys are due for rotation.
 
 ### Step 4: done
 
+![First run: done](images/first-run-done-light.png)
+
 The last step says what was set up and when its keys and GitHub token are
 due, and offers the next things to do: "Import from 1Password or Enpass" and
 "Pair another desktop". "Open my vaults" takes you to the main window.
 
 ### Setting up by pairing
+
+![First run: set up by pairing](images/first-run-pairing-light.png)
 
 On a desktop that is already set up, open **Pairing** and choose "Pair a
 device": it shows an address and a code (see
@@ -196,16 +228,22 @@ come from the other machine.
 
 ## Unlocking and locking
 
-When the service is locked, the app shows **"Unlock"**: give the master
-password (and the key file, if the primary has one) and choose "Unlock".
+![The Unlock screen](images/unlock-locked-light.png)
+
+**To unlock:**
+
+1. Open the app: it shows **"Unlock"** while the service is locked.
+2. Give the master password (and the key file, if the primary has one).
+3. Choose "Unlock".
+
 When a program is waiting for the secrets, the screen says "A program on
 this machine waits for the unlock", and a notification "Unlock the secrets"
 appears while the window is closed.
 
-To lock: the lock button in the top bar, Cmd+L (Ctrl+L on Windows and
-Linux), or "Lock" in the tray menu. The service also locks by itself as
-[Settings](#settings) say (when idle, after a longest unlocked time, or
-never). Locking drops every open vault from the app's memory.
+**To lock:** choose the lock button in the top bar, press Cmd+L (Ctrl+L on
+Windows and Linux), or choose "Lock" in the tray menu. The service also locks
+by itself as [Settings](#settings) say (when idle, after a longest unlocked
+time, or never). Locking drops every open vault from the app's memory.
 
 Other screens you may meet before unlocking:
 
@@ -215,6 +253,10 @@ Other screens you may meet before unlocking:
   for (it was started from the command line, or another admin took it
   over). Taking it over sends your master password to it; do it only on a
   machine you trust.
+
+![The service is not running](images/connect-noservice-light.png)
+
+![Take over the service](images/claim-needed-light.png)
 
 A vault with a password of its own shows "has a password of its own" in the
 vault browser; "Open…" asks for it.
@@ -260,6 +302,8 @@ OS unlock**: the master password is the only way to unlock there.
 
 ## The main window
 
+![The main window with the vaults](images/vaults-unlocked-light.png)
+
 The rail on the left holds the screens: **Vaults**, **Environments**,
 **Conflicts** (with the number of conflicted entries), **Clients** (with the
 number of approvals waiting), **Proposals** (with the number of logins
@@ -285,22 +329,34 @@ reminder step, "Open Keys" goes to the [Keys](#keys) screen.
 
 ### Tree and list
 
+![The vault browser as a tree](images/vaults-tree-light.png)
+
 - **Tree** shows the groups of each vault, the entries of the chosen group
   and the chosen entry's details.
 - **List** shows every entry, filtered by "Vault", "Type" and "Tag".
 
 The vault's menu has "New group"; a group's menu "New group in it",
-"Rename" and "Move…". "New entry" asks for a title and opens the editor.
+"Rename" and "Move…".
+
+**To add an entry:**
+
+1. Choose the vault and group in the tree.
+2. Choose "New entry" (Cmd/Ctrl+N) and give its title.
+3. Fill in the editor (below) and choose "Save".
 Overlay groups (named `@host:…`, `@env:…`) are not shown as folders: they
 appear as the entry's overlays.
 
 Tick entries to act on several at once: "Move…", "Tag…", "Move to the
 recycle bin", "Clear the marks".
 
+![The vault browser as a list, a login in the editor](images/vaults-list-light.png)
+
 A vault served from its offline copy is marked "offline copy:" with the
 reason and its age, and opens read-only.
 
 ### A new vault
+
+![The New vault dialog](images/newvault-dialog-light.png)
 
 "New vault…" (under the vaults in the tree; also on the Environments and
 Import screens) creates a further vault beside the primary:
@@ -349,6 +405,8 @@ An entry is a "Login", an "API token", a "Secure note" or an "SSH key"
 - "Overlays…" (see [System secrets](#system-secrets));
 - "History": earlier versions, each with "Restore".
 
+![The password generator](images/generator-dialog-light.png)
+
 "Save" (Cmd/Ctrl+S) writes the entry; "Discard" drops your edits.
 
 Protected values are masked. "Reveal for 30 seconds" shows one; "Copy"
@@ -358,6 +416,8 @@ When the entry changed elsewhere while you edit, the editor says so; your
 unsaved edits are saved over it field by field, or "Discard my edits".
 
 ### SSH keys
+
+![An SSH key entry](images/entry-sshkey-light.png)
 
 An "SSH key" entry holds a private key as its attachment, with a
 `KeeAgent.settings` attachment beside it, so KeePassXC's SSH agent finds the
@@ -385,6 +445,8 @@ and saves the vault; the note as it was stays in the entry's history.
 
 ### Certificates and PGP keys
 
+![A certificate entry](images/entry-certificate-light.png)
+
 A "Certificate" entry holds an X.509 certificate: the certificate (with its
 chain) as the attachment `certificate.pem`, its private key as
 `private-key.pem`, or both together as a PKCS#12 bundle
@@ -403,6 +465,8 @@ days of its end), the other names and the SHA-256 fingerprint, and offers:
   without a certificate is refused. A bundle's validity is not read: set
   its expiry by hand.
 - "Copy the certificate": the public certificate, to hand on.
+
+![A PGP key entry](images/entry-pgpkey-light.png)
 
 A "PGP key" entry holds an OpenPGP key: the secret key as
 `private-key.asc`, the public key as `public-key.asc`, the secret key's
@@ -503,6 +567,8 @@ URL and TOTP.
 
 ### The overlay editor
 
+![The overlay editor](images/overlays-editor-light.png)
+
 "Overlays…" in the entry editor opens **"Overlays of"** the entry: a matrix
 with the shared entry on top, then for each dimension (host, platform,
 environment) one row per value, each with the value it gets and where it
@@ -524,6 +590,8 @@ request).
 
 ### Environments
 
+![The Environments screen](images/environments-keys-light.png)
+
 **Environments** puts the keys of every environment's file side by side, one
 column per file this machine serves. "Filter keys" narrows the rows and
 "Field" chooses the field shown. A cell is edited in place; an empty cell's
@@ -541,6 +609,8 @@ vault…" creates another (see [A new vault](#a-new-vault)).
 ## Approvals
 
 ### The prompt
+
+![A program asks for secrets](images/approval-prompt-light.png)
 
 When a program asks for secrets for the first time, **"A program asks for
 secrets"** opens on top of the window (and a notification "Approve a
@@ -574,11 +644,22 @@ asks when a site creates a passkey through the extension: it names the
 site, the user and the page. "Save in Tom Secrets Manager" saves it, "Not
 now" lets the browser offer its own.
 
-"Allow" (or "Refuse" for Never) answers; "Later" leaves the request waiting
-under Clients. A program that asked for a client token gets one with an
-"Always" answer and is known by it from then on. "Only when started by …"
-makes a lasting answer hold only while the program is started by the same
-parent (for example the `ssh` that `git` starts).
+**To answer a program:**
+
+1. Read "Who asks" and "Which secrets".
+2. Choose the answer: "Once", "Always", "Always for this folder" or "Never",
+   and for a lasting one what it "Covers".
+3. Choose "Allow" (or "Refuse" for Never); "Later" leaves the request
+   waiting under Clients.
+
+The flows document draws the
+[whole exchange](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/flows.md#a-clients-get).
+A program that asked for a client token gets one with an "Always" answer and
+is known by it from then on. "Only when started by …" makes a lasting answer
+hold only while the program is started by the same parent (for example the
+`ssh` that `git` starts).
+
+![Save a passkey for a site?](images/approval-passkey-light.png)
 
 **An SSH signature** (the ssh-agent) opens "A program wants to use an SSH
 key": "Which SSH key, for what" names the key and its fingerprint, "For
@@ -596,11 +677,14 @@ Clients › Pre-approve; without one it is refused without asking.
 
 ### The Clients screen
 
+![The Clients screen with an approval waiting](images/clients-approvals-light.png)
+
 Its tabs:
 
 - **"Approvals"**: the requests waiting; "Answer…" opens the prompt.
 - **"Allow list"**: every grant, of every host or one ("Every host"), with
-  what it covers, when it was last used, and "Revoke".
+  what it covers, when it was last used, and "Revoke": to take back an
+  approval, find the program's line and choose "Revoke".
 - **"Pre-approve"**: "Pre-approve a client for a host" before it asks:
   the "Host", "Who" (an executable, an executable started by a parent, a
   script with its interpreter, a folder or an interpreter, by path), the
@@ -618,6 +702,8 @@ Its tabs:
   SSH signature names its key, the host and whether it was forwarded.
 
 ### Approval codes
+
+![Answering an approval code](images/approval-code-light.png)
 
 A program waiting on a machine where no app is attached (a server, a
 terminal session) shows a ten-character **approval code**. On your desktop,
@@ -651,6 +737,8 @@ Open **Import** (also offered at the end of the First run wizard). It reads:
   Export passwords (CSV). Firefox has no titles, so the site is the title.
 - **KeePass, KeePassXC** and every other tool writing KDBX: the KDBX file
   itself (see [A KeePass file](#a-keepass-file)).
+
+![The Import screen with its preview](images/import-preview-light.png)
 
 Keep an export outside every repository: it holds every password in
 plaintext.
@@ -688,8 +776,17 @@ file…" when it has one), and how to bring it in:
 
 ## Exporting
 
-A vault's menu (the three dots beside it in the tree) or a group's menu ›
-**"Export…"** writes it as:
+![The Export dialog](images/export-dialog-light.png)
+
+**To export a vault or a group:**
+
+1. Open its menu (the three dots beside it in the tree).
+2. Choose **"Export…"** and the format.
+3. For KDBX, give the new master password twice; for CSV and JSON, confirm
+   the plaintext warning.
+4. Choose where the file goes.
+
+The formats:
 
 - **KDBX (KeePass)**: a copy under a new master password of its own, for
   KeePass and every tool reading KDBX. The only export that is encrypted.
@@ -707,6 +804,8 @@ recycle bin are never exported. Enpass is served by the CSV for now.
 
 ## Keys
 
+![The Keys screen](images/keys-list-light.png)
+
 **Keys** lists every key with a date, soonest first: the GitHub tokens, the
 vaults' key files and repository keys, this device's approver and
 approval-link key pairs, and the certificates and PGP keys stored in the
@@ -719,6 +818,8 @@ day before, and once a day once it is due; a notification comes once a day
 while the app runs.
 
 ### Signing in with GitHub
+
+![Signing in with GitHub](images/github-signin-light.png)
 
 "GitHub sign-in (this machine)", at the top of Keys, signs the machine in
 with your own GitHub App instead of a token pasted per repository; the
@@ -744,6 +845,8 @@ device. The Pairing screen shows how each device reaches GitHub, and
 
 ### Renewing a GitHub token
 
+![Renewing a GitHub token](images/token-renewal-light.png)
+
 "Renew…" on a token opens "Renew the GitHub token for" the repository:
 
 1. Choose "Expires in" and "Open GitHub's new-token page": the page opens
@@ -756,6 +859,8 @@ device. The Pairing screen shows how each device reaches GitHub, and
 3. "Open GitHub's token list" and delete the old token.
 
 ### Rotating a vault's keys
+
+![Rotating a vault's keys](images/rotate-dialog-light.png)
 
 "Rotate…" (on a vault's key row, or under "Rotate a vault's keys") opens
 "Rotate the keys of" the vault:
@@ -831,17 +936,32 @@ key pairs, your member key, the primary's keys and the other vaults' keys.
 
 ## Pairing another device
 
+![The pairing window](images/pairing-window-light.png)
+
 Pairing brings another of your machines in: it gets the vaults you choose
 with their keys, and the two approve for each other.
 
-On the machine that is set up, open **Pairing** and choose **"Pair a
-device"**. The app opens a pairing window for five minutes and shows the
-code, the addresses it listens on, a QR code for a phone or tablet to scan
-(it holds the addresses and the code) and the time left; the code works
-once.
-On the same network it is announced, so the other machine needs the code
-only; over a VPN it needs the address too. The first time, macOS or Windows
-Defender Firewall asks whether the app may accept connections: allow it.
+**To pair another desktop:**
+
+1. On the machine that is set up, open **Pairing** and choose **"Pair a
+   device"**.
+2. On the new machine, in the First run wizard, choose "Pair with another
+   desktop" and type the code (and, over a VPN, the address).
+3. Back on the first machine, tick what the new one gets and choose
+   "Pair *name*".
+
+The flows document draws
+[every route](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/flows.md#pairing-a-new-device):
+the same network, a VPN, a phone's QR code, `tsm pair` on a server and the
+relays.
+
+In more detail: "Pair a device" opens a pairing window for five minutes and
+shows the code, the addresses it listens on, a QR code for a phone or tablet
+to scan (it holds the addresses and the code) and the time left; the code
+works once. On the same network it is announced, so the other machine needs
+the code only; over a VPN it needs the address too. The first time, macOS or
+Windows Defender Firewall asks whether the app may accept connections: allow
+it.
 
 **Through a relay.** "Also through a relay" above the button picks a relay
 from the [Relays](#relays) list (the default for pairing is preselected;
@@ -904,6 +1024,8 @@ confirmation names them).
 
 ## Sharing
 
+![The Sharing screen with the member key](images/sharing-memberkey-light.png)
+
 **Sharing** holds what you share with other people. The first time you open
 it, the app makes your **member key** and keeps it in your primary vault,
 which brings it to your other devices when you pair them.
@@ -918,6 +1040,13 @@ which brings it to your other devices when you pair them.
 - **The fingerprint** (five groups of four characters) is what you and the
   other person compare, by phone or in person, before either of you trusts
   a key. The key itself is too long to read out.
+
+**To exchange member keys with someone:**
+
+1. Give them your public key: "Copy", "Save as file…" or the QR code.
+2. Take theirs with **"Add a member…"** (below).
+3. Compare the fingerprint with them by phone or in person, and tick that
+   you did.
 
 **Members** are the public keys other people gave you. **"Add a member…"**
 takes a key pasted into "Their public key", one from "Open file…" (a key
@@ -934,6 +1063,8 @@ person" once you have. A key in the list, or your own, is refused.
   cannot join shared vaults, so ask them to make a hybrid one
   (`age-keygen -pq`).
 - The bin icon removes a member (to the primary vault's recycle bin).
+
+![A shared vault and its members](images/sharing-sharedvaults-light.png)
 
 **Shared vaults** are vaults several people open, each with their own
 member key. A shared vault has no master password: a key file opens it, and
@@ -1009,6 +1140,8 @@ expiry, never the vault's history.
    mailbox there, with the relay's instance token. A relay that refuses it
    (no token kept, its limits) says why in the dialog.
 
+![Sharing an entry](images/share-dialog-light.png)
+
 The `age` command line (v1.3.0 or later) opens a share too: with the
 member's key, or `age -d` asking for the passphrase.
 
@@ -1036,6 +1169,8 @@ your member key, which only you hold, and lists them in the Shares section
 like the inbox's. Importing or declining one deletes it on the relay.
 
 ### Relays
+
+![The relays](images/relays-section-light.png)
 
 A relay carries a pairing, or a share, where two machines do not reach each
 other over the network or the VPN. It sees only encrypted bytes and is not
@@ -1073,14 +1208,22 @@ first relay added that pairs becomes it); the filled star clears it.
 
 ## Conflicts
 
+![The Conflicts screen](images/conflicts-list-light.png)
+
 When two devices change the same field of an entry differently, the merge
 keeps the newer value and records the conflict; the other value is in the
 entry's history. **Conflicts** lists the entries with fields to settle.
-"Resolve…" shows each field with both values (masked when protected): keep
-one side or write the value, and confirm. The last settled field clears the
-conflict.
+
+**To settle a conflict:**
+
+1. Open **Conflicts** and choose "Resolve…" on the entry.
+2. For each field, keep one side's value (masked when protected) or write
+   the value.
+3. Confirm. The last settled field clears the conflict.
 
 ## Proposals
+
+![The Proposals screen](images/proposals-list-light.png)
 
 **Proposals** in the rail (its badge counts them) lists the logins the
 browser extension offered to save ("Save" in its bar) and the credentials
@@ -1098,11 +1241,16 @@ the password stays masked. For each:
   the vault of a login of that site is preset).
 - **"Drop"**: forgotten.
 
+**To keep a proposed login:** open **Proposals**, then choose "Update the
+password" for a login you have, or "Save as a new login" with its vault.
+
 Nothing is written until you choose. Proposals live only in the app's
 memory: locking forgets them. While the window is closed, a notification
 "Save a login?" names the site and the user, never the password.
 
 ## Health
+
+![The Health screen](images/health-report-light.png)
 
 **Health** in the rail lists what in the open vaults needs attention, under
 a heading per kind; each line names the entry, its vault and why, and a
@@ -1151,6 +1299,8 @@ The app keeps only whether the check is on, the age setting, and per login
 when its password was checked with the result: never a password or a hash.
 
 ## Quick access and auto-type
+
+![The quick-access popup](images/quickaccess-dialog-light.png)
 
 **Quick access** finds a login from anywhere: press **Ctrl+Shift+Space**
 (**Cmd+Shift+Space** on macOS), or choose "Quick access" in the tray menu. A
@@ -1221,7 +1371,11 @@ off. A hotkey another program holds is refused, with that said.
 
 ## Settings
 
-Each setting says whose it is.
+Each setting says whose it is. Every setting, with its default and the file it
+is kept in, is in the
+[configuration reference](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/configuration.md).
+
+![The Settings screen](images/settings-top-light.png)
 
 **This machine** (kept by its service):
 
@@ -1276,6 +1430,8 @@ helper.
 At every start the app checks that the blocks still name this machine's
 agent and helper, rewrites one that does not, and tells you.
 
+![Settings: Integrations](images/settings-integrations-light.png)
+
 Under **Browsers** each browser found for your user (Chrome, Chromium, Edge,
 Brave, Firefox) has a switch: on, the app writes the browser's
 native-messaging manifest `net.tom.secrets.json` (on Windows also its
@@ -1287,33 +1443,33 @@ that each manifest still names its own host (after an update or a move it
 rewrites it and tells you). The extension's "Open Tom Secrets Manager"
 brings the app to the front.
 
-**The browser extension.** With the extension installed and its browser
-switched on here, a login page's fields get the logins of the site: press
-Ctrl+Shift+L (Command+Shift+L on macOS) in the user name or password field,
-right-click it and choose "Fill from Tom Secrets Manager", or click the
-toolbar button. A list opens at the field with each login (its title, user
-name and the address it matched); "Fill" fills the user name and password,
-and the current code when the form asks for one; "Copy code" copies the
-code. Nothing is filled until you pick a login. When the service is locked,
-"Unlock in Tom Secrets Manager" waits until you unlock it in the app. A
-login form in a frame of another site (a payment or sign-in frame) first
-shows nothing, then "Show the logins of `<site>`" lists that site's logins.
-A small shield in the user-name and password fields opens the same list.
-In a sign-up or password-change form, the shield in the new-password field
-suggests a password ("Use this password" fills it in, "Another" makes a new
-one). When you sign in with a login the vaults do not hold, or with a new
-password, the bar "Save in Tom Secrets Manager?" offers "Save" (the login
-waits under [Proposals](#proposals)), "Not now" and "Never for this site"
-(the toolbar button's "Offer to save logins on this site" turns it on
-again). Saving needs "Always in this browser".
-The first time a browser's extension looks up a site, the app asks you to
-approve that browser ("The browser extension asks for logins", see
-[Approvals](#approvals)); while you answer, the list says it is asking.
-"Always in this browser" approves it for good, for that browser only;
-with the app closed nothing is asked and the list shows no login. A
-browser you refused, or one you want to approve again, is under Clients ›
-Allow list ("Revoke"). The browser is never given the logins or values of
-system vaults.
+**The browser extension.** The flows document draws the
+[list, the fill, the approval and a saved proposal](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/flows.md#the-browser).
+With the extension installed and its browser switched on here, a login page's
+fields get the logins of the site: press Ctrl+Shift+L (Command+Shift+L on
+macOS) in the user name or password field, right-click it and choose "Fill
+from Tom Secrets Manager", or click the toolbar button. A list opens at the
+field with each login (its title, user name and the address it matched);
+"Fill" fills the user name and password, and the current code when the form
+asks for one; "Copy code" copies the code. Nothing is filled until you pick a
+login. When the service is locked, "Unlock in Tom Secrets Manager" waits until
+you unlock it in the app. A login form in a frame of another site (a payment
+or sign-in frame) first shows nothing, then "Show the logins of `<site>`"
+lists that site's logins. A small shield in the user-name and password fields
+opens the same list. In a sign-up or password-change form, the shield in the
+new-password field suggests a password ("Use this password" fills it in,
+"Another" makes a new one). When you sign in with a login the vaults do not
+hold, or with a new password, the bar "Save in Tom Secrets Manager?" offers
+"Save" (the login waits under [Proposals](#proposals)), "Not now" and "Never
+for this site" (the toolbar button's "Offer to save logins on this site" turns
+it on again). Saving needs "Always in this browser". The first time a
+browser's extension looks up a site, the app asks you to approve that browser
+("The browser extension asks for logins", see [Approvals](#approvals)); while
+you answer, the list says it is asking. "Always in this browser" approves it
+for good, for that browser only; with the app closed nothing is asked and the
+list shows no login. A browser you refused, or one you want to approve again,
+is under Clients › Allow list ("Revoke"). The browser is never given the
+logins or values of system vaults.
 
 **Passkeys in the browser** need Chrome 111 or Firefox 128 at least.
 - **Signing in.** When a site asks for a passkey and your vaults hold one
@@ -1360,6 +1516,8 @@ login of the site: macOS is told the site and the user name, never a
 password. The provider cannot save a new login: add it in the app or let
 the browser extension propose it. AutoFill needs the team-signed build of
 the app; a build without it says so here.
+
+![Settings: Password AutoFill](images/settings-autofill-light.png)
 
 **Passkeys** (macOS 14 and later) go through the same provider:
 
@@ -1416,6 +1574,8 @@ stores:
 ```
 
 ## Status
+
+![The Status screen](images/status-report-light.png)
 
 **Status** shows the service ("Running since", "Version and protocol",
 "Lock mode", "Admins attached"), each vault with its state, source, last
