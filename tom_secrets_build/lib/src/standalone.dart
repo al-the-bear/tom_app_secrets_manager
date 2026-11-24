@@ -52,6 +52,11 @@ const Map<String, String> secretsStandaloneExceptions = {
       'the workspace layout as a fixture',
   'apps:tom_secrets_build/test/standalone_rules_test.dart':
       'the markers as fixtures',
+  // Kept: the maintainers' test tool is compiled onto every machine's PATH
+  // by the workspace's binaries build, whose output folder is this
+  // variable; elsewhere the file is unused (`dart compile exe` builds it).
+  'secrets_manager:tom_secrets_import_cleaner/buildkit.yaml':
+      'the workspace\'s binaries build of the maintainers\' test tool',
 };
 
 /// File names the text rule reads: code, documents and build files.
