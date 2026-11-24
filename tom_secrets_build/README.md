@@ -95,7 +95,8 @@ Log and step names are paths relative to the folder that holds all three.
   (`dart build cli`), starts it through `tsm start` on demo vaults in a scratch
   data directory, and drives it with `tsm` and the Dart client.
 - `:licences`: `pub get` in every package, `npm ci --omit=dev` in every npm
-  package that links anything, `cargo fetch --locked` in every Cargo package,
+  package that links anything (`npm ci` when it names dev dependencies),
+  `cargo fetch --locked` in every Cargo package,
   then the licence-boundary check (`test/licence_boundary_test.dart`, tag
   `licence-boundary`); every non-Dart dependency manifest (`package.json`,
   `Cargo.toml`, `go.mod`, `pom.xml`, `pyproject.toml`, `setup.py`) is red until
@@ -112,6 +113,7 @@ Log and step names are paths relative to the folder that holds all three.
   toolchain is red here (Python 3 with `jsonschema` needed, and each
   runner's toolchain: Dart, Node.js, Python, Go, Rust, Java, CMake).
 - `:standalone`: the standalone check (`test/standalone_test.dart`), below.
+- `:docs`: the documentation check, below.
 - `:all`: the stages above, in that order.
 - `:release`: not part of `:all`: the release for this platform, below.
 - `:mobile`: not part of `:all`: the mobile app's Android release, below.
@@ -150,7 +152,11 @@ For every npm package (`secretsNpmProblems`): its `package.json` declares
 `package-lock.json`'s `packages` but the root and those marked `dev`, and each
 is classified by its licence file as `npm ci` installs it under
 `node_modules/` (not by the lock's SPDX tag), with the same admitted licences.
-A package that links nothing needs no install.
+The dev dependencies it names in `package.json` (its build and check tools:
+esbuild, TypeScript, mermaid-cli, puppeteer) are classified the same way,
+each by its own licence file (one that ships none, as puppeteer, by the SPDX
+licence its `package.json` declares), not their closures. A package that links
+nothing and names no dev dependency needs no install.
 
 For every Cargo package (`secretsCargoProblems`, from `cargo metadata` with
 every feature and the lock): its `Cargo.toml` declares `BSD-3-Clause` and,
@@ -183,6 +189,33 @@ A place that cannot follow the rules yet is named in
 `secretsStandaloneExceptions` (`lib/src/standalone.dart`), by role and path,
 with why and the todo that ends it; the check prints each on every run and
 turns red when one is no longer needed.
+
+## The documentation check
+
+The documentation set of `tom_secrets_manager` (`doc/`, its conventions in
+`doc/README.md`) and the user guides of the desktop app, the mobile app and
+`tsm` are checked by `:docs`. This package is also an npm package for it
+(`package.json`, Node.js 20 or later): its dev dependencies are
+`@mermaid-js/mermaid-cli` and `puppeteer`, which downloads the headless
+browser both render with at `npm ci`.
+
+- `tool/check_docs.mjs <folders or files>` (`:docs`): every diagram's Mermaid
+  source (in its `<!-- diagram <n>-<slug>` comment) and every other
+  ```` ```mermaid ```` block renders; every diagram's exported SVG and PNG are
+  there and current (the SVG's `data-tsm-source` is its source's hash); every
+  relative link resolves; no line is over 80 characters (tables, code,
+  comments and lines holding only an image or a link excepted).
+- `tool/render_diagrams.mjs <folders or files>` exports every stale or
+  missing diagram as `<doc dir>/images/diagrams/<document>/<n>-<slug>.svg`
+  and `.png`, in the style of enterprise-flutter.dev's diagrams
+  (`doc/diagram_style.md`: Mermaid's `base` theme with that palette, then
+  the panel, the font stack, `<title>` and `<desc>`). `--force` exports all,
+  `--hash` prints each source's hash for a hand-drawn SVG.
+- `tool/docs_lib.mjs` holds the parsing, the theme, the class set and the
+  post-processing; `tool/mermaid_render.mjs` the rendering through one
+  browser. `npm test` (`tool/test/docs.test.mjs`) checks a document that
+  passes, a diagram that does not render, a stale and a missing export, a
+  broken link and a long line, and the export.
 
 ## The release
 

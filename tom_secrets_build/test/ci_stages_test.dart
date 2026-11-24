@@ -25,6 +25,7 @@ void main() {
         'licences',
         'conformance',
         'standalone',
+        'docs',
       ]);
       expect(resolve(['release']), ['release'], reason: 'only when named');
       expect(resolve(['mobile']), ['mobile'], reason: 'only when named');

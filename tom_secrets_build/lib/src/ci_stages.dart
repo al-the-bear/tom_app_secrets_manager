@@ -23,6 +23,7 @@ const List<String> secretsCiStages = [
   'licences',
   'conformance',
   'standalone',
+  'docs',
   'release',
   'mobile',
   'relay',
@@ -74,6 +75,12 @@ const Map<String, String> secretsCiStageDescriptions = {
       'path dependency into another repository, no pubspec_overrides.yaml, no '
       'path of the maintainers\' workspace in code or documents, but the '
       'exceptions on record',
+  'docs':
+      'the documentation check (node tool/check_docs.mjs in tom_secrets_build, '
+      'after npm ci): over tom_secrets_manager/doc and the user guides of the '
+      'app, the mobile app and tsm, every diagram\'s Mermaid source renders '
+      '(@mermaid-js/mermaid-cli), its exported SVG and PNG are there and '
+      'current, every relative link resolves, no line is over 80 characters',
   'release':
       'the release for this platform (not part of :all): the service bundle, '
       'tsm, the browser host, the app built with them in its tsm folder, the app and tools-only '
@@ -93,6 +100,23 @@ const Map<String, String> secretsCiStageDescriptions = {
       'every stage above but :release, :mobile and :relay, in that order, '
       'continuing past a red',
 };
+
+/// The documents `:docs` checks: the documentation set of
+/// `tom_secrets_manager` (`doc/`) and the user guides of the desktop app,
+/// the mobile app and `tsm`.
+List<String> secretsDocsRoots(SecretsCiWorkspace workspace) => [
+  p.join(workspace.managerRoot, 'doc'),
+  p.join(workspace.repoRoot, 'tom_secrets_app', 'doc', 'user_guide.md'),
+  p.join(workspace.repoRoot, 'tom_secrets_mobile', 'doc', 'user_guide.md'),
+  p.join(
+    workspace.clientsRoot,
+    'clients',
+    'dart',
+    'tsm',
+    'doc',
+    'tsm_user_guide.md',
+  ),
+];
 
 /// The test tag of the licence-boundary check, run by `:licences` only.
 const String secretsCiBoundaryTag = 'licence-boundary';
@@ -430,16 +454,18 @@ class SecretsCiStages {
           isFlutter: false,
         );
         for (final dir in workspace.npmPackageDirs()) {
-          // The closure is classified by its installed licence files; a
-          // package that links nothing needs no install (and no npm).
-          if (!secretsNpmLinksAnything(dir)) continue;
+          // The closure and the direct dev dependencies are classified by
+          // their installed licence files; a package that has neither needs
+          // no install (and no npm).
+          final dev = secretsNpmDevDependencies(dir).isNotEmpty;
+          if (!secretsNpmLinksAnything(dir) && !dev) continue;
           final name = workspace.relative(dir);
           await run.step(
             stage,
             '$name npm ci',
             'licences.npm-ci.${_npmLogName(name)}.log',
             [
-              _npm(['ci', '--omit=dev'], dir),
+              _npm(['ci', if (!dev) '--omit=dev'], dir),
             ],
           );
         }
@@ -496,6 +522,14 @@ class SecretsCiStages {
             secretsCiStandaloneTest,
           ]),
         ], counts: true);
+      case 'docs':
+        await run.step(stage, 'docs', 'docs.log', [
+          _npm(['ci'], workspace.buildPackageDir),
+          CiCommand('node', [
+            p.join('tool', 'check_docs.mjs'),
+            ...secretsDocsRoots(workspace),
+          ], workingDirectory: workspace.buildPackageDir),
+        ]);
       case 'release':
         await _release(run);
       case 'mobile':

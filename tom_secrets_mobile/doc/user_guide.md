@@ -132,8 +132,8 @@ now" tries again, "Discard" drops it (the phone keeps no copy).
 On a phone, **Vaults** lists the vaults, each with what it is ("read-only on
 this device: a system vault"), when it was fetched and how big the fetch
 was (on mobile data every unlock fetches the vaults again), and the changes
-not yet written. Tap a vault for its entries, an entry to open it. **Search** looks
-in every vault by title, user name, URL and key.
+not yet written. Tap a vault for its entries, an entry to open it.
+**Search** looks in every vault by title, user name, URL and key.
 
 On a tablet the list and the entry stand side by side; on a wide tablet in
 landscape the desktop's tree, list and entry are shown.

@@ -455,12 +455,16 @@ List<String> secretsMavenProblems(String packageDir) {
 const String secretsNpmLicence = 'BSD-3-Clause';
 
 /// Every problem of the npm package whose `package.json` is in [packageDir]:
-/// its own licence, and the licences of its closure as `package-lock.json`
-/// records it. The closure is every entry of the lock's `packages` but the
-/// root and those marked `dev` (dev dependencies are not linked, as for the
-/// Dart packages). Each is classified by its licence file as installed under
-/// `node_modules` (`npm ci`), not by the lock's SPDX tag, which a package may
-/// carry without carrying the terms. Empty when it passes.
+/// its own licence, the licences of its closure as `package-lock.json`
+/// records it, and the licences of its direct dev dependencies. The closure
+/// is every entry of the lock's `packages` but the root and those marked
+/// `dev` (dev dependencies are not linked, as for the Dart packages). The
+/// dev dependencies the package names itself are the tools it builds and
+/// checks with (esbuild, mermaid-cli): their own licences are checked too,
+/// not their closures; one that ships no licence file by the SPDX licence
+/// its `package.json` declares. Each is classified by its licence file as installed
+/// under `node_modules` (`npm ci`), not by the lock's SPDX tag, which a
+/// package may carry without carrying the terms. Empty when it passes.
 List<String> secretsNpmProblems(String packageDir) {
   final problems = <String>[];
   final manifest = File(p.join(packageDir, 'package.json'));
@@ -520,7 +524,66 @@ List<String> secretsNpmProblems(String packageDir) {
       );
     }
   }
+  for (final dev in secretsNpmDevDependencies(packageDir)) {
+    final installed = Directory(p.join(packageDir, 'node_modules', dev));
+    if (!installed.existsSync()) {
+      problems.add(
+        '$name builds with $dev, which is not installed: run npm ci in '
+        '$packageDir before the check.',
+      );
+      continue;
+    }
+    final file = tomLicenceFileOf(installed);
+    if (file == null) {
+      // A tool that ships no licence file (puppeteer) is judged by the
+      // licence its package.json declares: it builds and checks, and is
+      // never distributed with the product.
+      final declared = _npmDeclaredLicence(installed.path);
+      if (!secretsSpdxAdmitted(declared)) {
+        problems.add(
+          '$name builds with $dev, which ships no licence file and declares '
+          '${declared ?? 'no licence'}.',
+        );
+      }
+      continue;
+    }
+    final licence = tomClassifyLicence(file.readAsStringSync());
+    if (licence == null || !secretsAdmittedLicences.contains(licence)) {
+      problems.add(
+        '$name builds with $dev under '
+        '${licence?.name ?? 'no recognised licence'}.',
+      );
+    }
+  }
   return problems;
+}
+
+/// The `license` the `package.json` in [packageDir] declares, or null.
+String? _npmDeclaredLicence(String packageDir) {
+  try {
+    final package = jsonDecode(
+      File(p.join(packageDir, 'package.json')).readAsStringSync(),
+    );
+    final licence = package is Map ? package['license'] : null;
+    return licence is String ? licence : null;
+  } on Object {
+    return null;
+  }
+}
+
+/// The dev dependencies the npm package in [packageDir] names in its
+/// `package.json`, sorted.
+List<String> secretsNpmDevDependencies(String packageDir) {
+  final manifest = File(p.join(packageDir, 'package.json'));
+  if (!manifest.existsSync()) return const [];
+  final Object? package;
+  try {
+    package = jsonDecode(manifest.readAsStringSync());
+  } on FormatException {
+    return const [];
+  }
+  final dev = package is Map ? package['devDependencies'] : null;
+  return dev is Map ? (dev.keys.cast<String>().toList()..sort()) : const [];
 }
 
 /// The entries of a lock's `packages` an npm package links: all but the root
@@ -534,7 +597,9 @@ Map<String, Map<Object?, Object?>> secretsNpmLinked(
 };
 
 /// Whether the npm package in [packageDir] links anything by its
-/// `package-lock.json` (so `:licences` installs it before the check).
+/// `package-lock.json` (so `:licences` installs its closure before the
+/// check; its dev dependencies, [secretsNpmDevDependencies], need the full
+/// install).
 bool secretsNpmLinksAnything(String packageDir) {
   final lock = File(p.join(packageDir, 'package-lock.json'));
   if (!lock.existsSync()) return false;

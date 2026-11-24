@@ -1270,8 +1270,9 @@ each profile listed with its reference and a button to remove it) and
 "For every registry"; `docker-credential-tsm` beside `tsm`). Each is a block
 between `# >>> tom secrets >>>` and `# <<< tom secrets <<<` (Docker's JSON
 has no comments: there the app's own entries are its block); switching off
-removes it, and nothing outside it changes. What is not right is said, for example
-that the folder of `tsm` is not on `PATH`, so git does not find the helper.
+removes it, and nothing outside it changes. What is not right is said, for
+example that the folder of `tsm` is not on `PATH`, so git does not find the
+helper.
 At every start the app checks that the blocks still name this machine's
 agent and helper, rewrites one that does not, and tells you.
 

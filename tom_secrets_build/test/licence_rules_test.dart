@@ -574,6 +574,65 @@ fast = ["ujson"]
       ]);
     });
 
+    test('the dev dependencies it names are checked by their own licence '
+        'files, not their closures', () {
+      final dir = npmPackage({
+        'node_modules/tool': {'dev': true, 'license': 'MIT'},
+        'node_modules/gpltool': {'dev': true, 'license': 'MIT'},
+        'node_modules/tooldep': {'dev': true, 'license': 'GPL-3.0'},
+      });
+      secretsWriteFile(
+        root,
+        'pkg/package.json',
+        jsonEncode({
+          'name': 'pkg',
+          'license': 'BSD-3-Clause',
+          'devDependencies': {
+            'tool': '^1.0.0',
+            'gpltool': '^1.0.0',
+            'absent': '^1.0.0',
+          },
+        }),
+      );
+      secretsWriteFile(root, 'pkg/node_modules/tool/LICENSE', mit);
+      secretsWriteFile(root, 'pkg/node_modules/gpltool/LICENSE', _gpl);
+      // A dev dependency's own dependency (tooldep) is not checked.
+      secretsWriteFile(root, 'pkg/node_modules/tooldep/LICENSE', _gpl);
+      expect(secretsNpmDevDependencies(dir), ['absent', 'gpltool', 'tool']);
+      expect(secretsNpmProblems(dir), [
+        contains('pkg builds with absent, which is not installed'),
+        'pkg builds with gpltool under no recognised licence.',
+      ]);
+    });
+
+    test('a dev dependency without a licence file is judged by the licence '
+        'its package.json declares', () {
+      final dir = npmPackage(const {});
+      secretsWriteFile(
+        root,
+        'pkg/package.json',
+        jsonEncode({
+          'name': 'pkg',
+          'license': 'BSD-3-Clause',
+          'devDependencies': {'apachetool': '^1.0.0', 'gpltool': '^1.0.0'},
+        }),
+      );
+      secretsWriteFile(
+        root,
+        'pkg/node_modules/apachetool/package.json',
+        jsonEncode({'name': 'apachetool', 'license': 'Apache-2.0'}),
+      );
+      secretsWriteFile(
+        root,
+        'pkg/node_modules/gpltool/package.json',
+        jsonEncode({'name': 'gpltool', 'license': 'GPL-3.0-only'}),
+      );
+      expect(secretsNpmProblems(dir), [
+        'pkg builds with gpltool, which ships no licence file and declares '
+            'GPL-3.0-only.',
+      ]);
+    });
+
     test('no lock: run npm install', () {
       final dir = npmPackage(const {}, withLock: false);
       expect(secretsNpmProblems(dir), [contains('no package-lock.json')]);

@@ -132,6 +132,17 @@ Every package here is BSD-3 (`LICENSE`); `THIRD_PARTY.md` lists the licences
 of what the apps bundle. The apps reach KDBX only through
 `tom_secrets_core`.
 
+## Documentation
+
+The product as a whole (how the parts fit together, how secrets are kept
+safe, the main flows) is explained in the documentation set,
+[`tom_secrets_manager/doc`](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/README.md).
+The apps' user guides: the
+[desktop app](tom_secrets_app/doc/user_guide.md) and the
+[mobile app](tom_secrets_mobile/doc/user_guide.md). The checks and the
+diagram export of the documentation are in `tom_secrets_build`
+(`ci.sh :docs`, `tool/render_diagrams.mjs`).
+
 ## Design
 
 The design decisions the code and documents cite (`DP-`, `BP-`, `TD-` and
