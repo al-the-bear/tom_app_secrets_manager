@@ -107,5 +107,20 @@ void main() {
         names('tokens'),
       );
     });
+
+    test('refuses a secret reference as a token: the relay resolves none, '
+        'and taking the reference itself as the token would admit whoever '
+        'reads the file and refuse the token\'s real holders', () {
+      expect(
+        () => TomSecretsRelayConfig.fromMap({
+          'tokens': {'team-a': 'secret:local:relay/team-a#Password'},
+        }),
+        throwsA(
+          isA<TomSecretsRelayConfigException>()
+              .having((e) => e.key, 'key', 'tokens.team-a')
+              .having((e) => e.message, 'message', contains('not resolved')),
+        ),
+      );
+    });
   });
 }

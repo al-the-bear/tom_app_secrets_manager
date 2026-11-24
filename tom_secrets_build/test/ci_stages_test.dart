@@ -77,7 +77,7 @@ void main() {
   });
 
   test(':docs checks the documentation set and every user guide, the '
-      'service\'s operator guide among them', () {
+      'service\'s and the relay\'s operator guides among them', () {
     final workspace = SecretsCiWorkspace(
       repoRoot: '/w/app',
       workspaceRoot: '/w',
@@ -87,6 +87,7 @@ void main() {
     expect(secretsDocsRoots(workspace), [
       p.join('/w/manager', 'doc'),
       p.join('/w/manager', 'tom_secrets_service', 'doc', 'user_guide.md'),
+      p.join('/w/app', 'tom_secrets_relay', 'doc', 'user_guide.md'),
       p.join('/w/app', 'tom_secrets_app', 'doc', 'user_guide.md'),
       p.join('/w/app', 'tom_secrets_mobile', 'doc', 'user_guide.md'),
       p.join(

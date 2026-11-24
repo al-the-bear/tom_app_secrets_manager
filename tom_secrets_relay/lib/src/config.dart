@@ -122,6 +122,16 @@ final class TomSecretsRelayConfig {
     if (t is Map) {
       for (final e in t.entries) {
         final token = '${e.value}'.trim();
+        // Why: the relay resolves no secret reference (its section is read
+        // apart from the server's substitution, and its image reaches no
+        // secrets service); the reference itself would become the token.
+        if (token.startsWith('secret:')) {
+          throw TomSecretsRelayConfigException(
+            'tokens.${e.key}',
+            'a secret reference is not resolved here: write the token itself '
+                'and keep relay.yaml readable only by the relay',
+          );
+        }
         if (token.length < 16) {
           throw TomSecretsRelayConfigException(
             'tokens.${e.key}',

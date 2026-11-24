@@ -12,8 +12,8 @@ relay:
   # token; open: anyone may send, limited per address and recipient.
   mode: token
   # One token per team or user (at least 16 characters); the names are
-  # what the logs and the per-token limits use. A token can be a secret
-  # reference instead of the value, e.g. secret:local:relay/team-a#Password.
+  # what the logs and the per-token limits use. Write the token itself (a
+  # secret: reference is refused); keep this file readable only by the relay.
   tokens:
     team-a: replace-with-a-long-random-token   # example, not a default
   # Address ranges (CIDR, IPv4 and IPv6), checked before anything else.

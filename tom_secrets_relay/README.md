@@ -10,6 +10,10 @@ format.
 The apps reach it as the relay `tsm:<url>` (`tom_secrets_core`'s
 `TomSecretsServerRelay`), listed in the desktop app's Sharing › Relays.
 
+Hosting one — building and configuring it, the instance tokens, the limits
+and blocks, a reverse proxy, health checks, storage, logs and upgrading —
+is the [operator's guide](doc/user_guide.md).
+
 ## What it serves
 
 | Endpoint | Purpose |

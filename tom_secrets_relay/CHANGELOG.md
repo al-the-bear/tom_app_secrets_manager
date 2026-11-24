@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1
+
+- An instance token written as a `secret:` reference in `relay.tokens` is
+  refused at start: the relay resolves no reference, and the reference
+  itself would have become the token. `relay.example.yaml` no longer
+  suggests one.
+- The operator's guide (`doc/user_guide.md`): building, configuring,
+  tokens, address lists, limits and blocks, a reverse proxy (Apache),
+  health checks, storage, logs, upgrading; its `curl` transcripts are
+  written by `test/guide_transcripts_test.dart`.
+
 ## 0.3.0
 
 - The per-address denial-of-service defaults are 10 requests a second, 120
