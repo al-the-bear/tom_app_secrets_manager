@@ -11,6 +11,9 @@ suggests a password in new-password fields. It talks only to the
 native-messaging host `tsm-browser-host` (the package around this folder),
 which asks the secrets service.
 
+Using it in each browser is the [user guide](../doc/user_guide.md); this
+README is the developers' reference.
+
 ## What it does
 
 - **Finding the form.** A content script runs in every frame of every
@@ -202,10 +205,29 @@ npm run build && npm run screenshots
 `tool/screenshots.mjs` loads a screenshot build of `dist/chromium` into
 headless Chromium (Playwright; once `npx playwright install chromium`). Its
 background is the extension's own over the tests' fake host, which answers
-demo logins (`tool/screenshot_background.ts`), on a demo login page served
-on 127.0.0.1 (`tool/demo_login.html`). It writes the in-page list, the save
-bar and the popup to `../doc/images/`. Demo data only; no release build
-holds any of it.
+demo logins and passkeys (`tool/screenshot_background.ts`); the demo page's
+path sets the service's state (`/locked`, `/notrunning`, `/nohost`,
+`/asking`). The demo pages are served on 127.0.0.1 (a demo mail, from
+`tool/demo_login.html`) and on localhost (a demo single sign-on, also in a
+frame of the mail's portal page). It writes to `../doc/images/`:
+
+- `shield-field`: the login form with the icons in its fields;
+- `list-logins`: the in-page list at the user-name field;
+- `list-locked`, `list-notrunning`, `list-nohost`: the list with the
+  service locked, not running, and no host installed;
+- `list-asking`: the list while the app is asked to approve the browser;
+- `list-suggest`: a suggested password at a sign-up form's new-password
+  field;
+- `list-frame`, `list-frame-logins`: a login form in a frame of another
+  site, the list offering the frame's own logins, then showing them;
+- `passkey-list`: the list of a page's passkeys for a sign-in;
+- `bar-save`, `bar-saved`, `bar-update`: the save bar for a new login,
+  after Save, and for a changed password;
+- `popup-logins`, `popup-locked`, `popup-never`: the popup with the logins,
+  with the service locked, and with saving turned off for the site.
+
+Each is `<name>-light.png`. Demo data only; no release build holds any of
+it.
 
 ## Limits
 

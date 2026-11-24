@@ -86,6 +86,8 @@ code.suggestion {
   word-break: break-all;
   user-select: all;
 }
+/* Its own line, also below the locked and not-running states' button. */
 #tsm-never-toggle {
+  display: block;
   margin-top: 8px;
 }

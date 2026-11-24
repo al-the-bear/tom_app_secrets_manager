@@ -13,6 +13,9 @@ package holds two parts:
   logins, the list at the field, the fill
   ([its README](extension/README.md)).
 
+Using it — installing the extension in each browser, filling and saving
+logins, passkeys — is the [user guide](doc/user_guide.md).
+
 ## Overview
 
 A browser starts the host when the extension opens a port
