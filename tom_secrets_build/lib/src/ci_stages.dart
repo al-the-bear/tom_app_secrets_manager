@@ -78,7 +78,8 @@ const Map<String, String> secretsCiStageDescriptions = {
   'docs':
       'the documentation check (node tool/check_docs.mjs in tom_secrets_build, '
       'after npm ci): over tom_secrets_manager/doc and the user guides of the '
-      'app, the mobile app and tsm, every diagram\'s Mermaid source renders '
+      'service, the app, the mobile app and tsm, every diagram\'s Mermaid '
+      'source renders '
       '(@mermaid-js/mermaid-cli), its exported SVG and PNG are there and '
       'current, every relative link resolves, no line is over 80 characters; '
       'and the configuration reference (tool/check_configuration.mjs): every '
@@ -105,10 +106,11 @@ const Map<String, String> secretsCiStageDescriptions = {
 };
 
 /// The documents `:docs` checks: the documentation set of
-/// `tom_secrets_manager` (`doc/`) and the user guides of the desktop app,
-/// the mobile app and `tsm`.
+/// `tom_secrets_manager` (`doc/`) and the user guides of the service (its
+/// operator's guide), the desktop app, the mobile app and `tsm`.
 List<String> secretsDocsRoots(SecretsCiWorkspace workspace) => [
   p.join(workspace.managerRoot, 'doc'),
+  p.join(workspace.managerRoot, 'tom_secrets_service', 'doc', 'user_guide.md'),
   p.join(workspace.repoRoot, 'tom_secrets_app', 'doc', 'user_guide.md'),
   p.join(workspace.repoRoot, 'tom_secrets_mobile', 'doc', 'user_guide.md'),
   p.join(

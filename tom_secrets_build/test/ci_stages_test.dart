@@ -76,6 +76,30 @@ void main() {
     });
   });
 
+  test(':docs checks the documentation set and every user guide, the '
+      'service\'s operator guide among them', () {
+    final workspace = SecretsCiWorkspace(
+      repoRoot: '/w/app',
+      workspaceRoot: '/w',
+      managerRoot: '/w/manager',
+      clientsRoot: '/w/clients',
+    );
+    expect(secretsDocsRoots(workspace), [
+      p.join('/w/manager', 'doc'),
+      p.join('/w/manager', 'tom_secrets_service', 'doc', 'user_guide.md'),
+      p.join('/w/app', 'tom_secrets_app', 'doc', 'user_guide.md'),
+      p.join('/w/app', 'tom_secrets_mobile', 'doc', 'user_guide.md'),
+      p.join(
+        '/w/clients',
+        'clients',
+        'dart',
+        'tsm',
+        'doc',
+        'tsm_user_guide.md',
+      ),
+    ]);
+  });
+
   test('the relay image is tagged with the relay\'s version', () {
     expect(secretsRelayImageTag('0.1.0'), 'tom_secrets_relay:0.1.0');
   });
