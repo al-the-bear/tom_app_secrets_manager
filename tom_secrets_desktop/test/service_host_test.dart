@@ -5,12 +5,14 @@
 /// on demo vaults: no service; attached with the admin key the keychain
 /// keeps under tsm's handle; a key the keychain lacks needs a claim, which
 /// keeps the new key; the editing path over the attached channel
-/// (`vaultKeys`, `vaultFile`). Demo data only.
+/// (`vaultKeys`, `vaultFile`); a vault far over the admin frame limits
+/// saved and opened again through the app's session. Demo data only.
 @TestOn('vm')
 library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -287,5 +289,71 @@ void main() {
     );
     expect(await keyring.recorded(), isEmpty);
     await (attached as TomSecretsAttached).channel.close();
+  });
+
+  test('a vault of 1,000 entries and 2 MB of attachments: saved and opened '
+      'again through the session in a few seconds', () async {
+    final key = tomSecretsRandomBytes();
+    final service = await launch(key);
+    await keychain.write(
+      tomSecretsAdminKeyHandle(service.startedAt),
+      base64.encode(key),
+    );
+    Future<TomSecretsSession> open(TomSecretsServiceConnection c) async {
+      final session = TomSecretsSession(c, TomSecretsMemoryPreferences());
+      addTearDown(session.dispose);
+      await c.connect();
+      if (c.locked) await c.unlock(_password);
+      for (
+        var i = 0;
+        i < 600 && (session.loading || session.vaults.isEmpty);
+        i++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      return session;
+    }
+
+    final connection = TomSecretsServiceConnection(host);
+    addTearDown(connection.dispose);
+    final session = await open(connection);
+    final file = session.vault('primary')!.file;
+    final group = file.body.rootGroup;
+    final random = Random(1);
+    for (var i = 0; i < 1000; i++) {
+      final entry = KdbxEntry.create(file, group)..label = 'Demo $i';
+      entry.setString(
+        KdbxKeyCommon.PASSWORD,
+        ProtectedValue.fromString('demo-password-$i'),
+      );
+      if (i % 200 == 0) {
+        // Five demo images of 400 KB, as an export carries them.
+        entry.createBinary(
+          isProtected: false,
+          name: 'image$i.png',
+          bytes: Uint8List.fromList(
+            List.generate(400 * 1000, (_) => random.nextInt(256)),
+          ),
+        );
+      }
+      group.addEntry(entry);
+    }
+
+    final watch = Stopwatch()..start();
+    await session.save('primary');
+    final saved = watch.elapsed;
+
+    final other = TomSecretsServiceConnection(host);
+    addTearDown(other.dispose);
+    watch.reset();
+    final again = await open(other);
+    final opened = watch.elapsed;
+    final entries = again.vault('primary')!.file.body.rootGroup.entries;
+    expect(entries, hasLength(1001));
+    expect(entries.where((e) => e.binaryEntries.isNotEmpty).length, 5);
+    // A few seconds each (the debug VM, Argon2 at 1 MiB here).
+    expect(saved, lessThan(const Duration(seconds: 15)), reason: '$saved');
+    expect(opened, lessThan(const Duration(seconds: 15)), reason: '$opened');
+    printOnFailure('saved in $saved, opened in $opened');
   });
 }
