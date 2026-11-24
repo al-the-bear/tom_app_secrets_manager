@@ -116,6 +116,11 @@ the app's, listed in [`tom_secrets_app`](../tom_secrets_app/README.md).
   `GetWindowTextW`), `TomSecretsX11Keyboard` (XTest, a spare keycode for a
   character the layout lacks, `_NET_WM_NAME`; on Wayland one that says why
   not).
+- **Windows passkeys**: `tomSecretsDesktopWindowsPasskeys()`, on Windows the
+  passkey plugin `tsm-passkey-plugin.exe` beside the service
+  (`TomSecretsPluginPasskeys`, run with `--register`, `--unregister`,
+  `--state`, `--sync-credentials`); null elsewhere and where the build has
+  no plugin.
 - **Global hotkeys**: `tomSecretsDesktopHotkeys()`, this package's own code
   (DP-32; the hotkey plugins build through CocoaPods): Carbon
   `RegisterEventHotKey` on macOS and `RegisterHotKey` on Windows

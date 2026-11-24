@@ -3,8 +3,9 @@
 > Part of the Tom Secrets Manager by Peter Nicolai Alexis Kyaw, BSD-3-Clause.
 
 The browser extension of the Tom Secrets Manager (part-browser): a Manifest
-V3 WebExtension for Chromium browsers (Chrome, Chromium, Edge, Brave) and
-Firefox, built from one TypeScript source. It shows the logins the vaults
+V3 WebExtension for Chromium browsers (Chrome, Chromium, Edge, Brave),
+Firefox and Safari (carried by the team-signed macOS app), built from one
+TypeScript source. It shows the logins the vaults
 hold for the page, fills the one you pick, and never fills by itself; it
 offers to save a login you signed in with that the vaults do not hold, and
 suggests a password in new-password fields. It talks only to the

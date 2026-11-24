@@ -356,6 +356,8 @@ else's and adding or removing members happen in the desktop app.
 
 ## Autofill on Android
 
+Android shows the app by its short name, "Tom Secrets".
+
 **To turn it on:**
 
 1. Open **Settings** › "Autofill service" and choose "Turn on".

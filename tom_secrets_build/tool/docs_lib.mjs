@@ -350,13 +350,15 @@ export function postProcess(svg, { title, desc, hash }) {
 }
 
 /** Every Markdown file the tools read: the `.md` files under each root
- *  folder (recursively) and each root that is a file. */
+ *  folder (recursively) and each root that is a file. A folder `article`
+ *  is left out: it holds the overview's Medium export, generated and held
+ *  current by `export_article.mjs --check`, its lines as Medium takes them. */
 export function markdownFiles(roots, { readdir, statIsDir }) {
   const out = [];
   const walk = (dir) => {
     for (const name of readdir(dir).sort()) {
       const path = join(dir, name);
-      if (name === 'node_modules' || name.startsWith('.')) continue;
+      if (name === 'node_modules' || name === 'article' || name.startsWith('.')) continue;
       if (statIsDir(path)) walk(path);
       else if (name.endsWith('.md')) out.push(path);
     }

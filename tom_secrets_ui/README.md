@@ -8,7 +8,7 @@ desktop app and (phase B) the mobile app.
 ## Overview
 
 The package is the whole user interface of the manager app, without a
-platform. A host (the desktop app today) implements its ports in a
+platform. A host (the desktop app, the mobile app) implements its ports in a
 `TomSecretsHost` (the secrets service, the tray, the window, notifications,
 screen capture, files, printing, the clipboard, pairing discovery) and runs
 `TomSecretsApp` with it. `TomSecretsApp` holds a `TomSecretsServiceConnection`
@@ -510,7 +510,6 @@ the primary vault; the Settings screen edits both.
   file dialogs) gets the screens without that capability.
 - Linux cannot keep a window out of screen capture; the Settings screen says
   so.
-- The mobile host (phase B) does not exist yet.
 
 ## Testing
 
@@ -544,7 +543,10 @@ admin errors, the reference grammar), the Tom UI modules `tom_ui_support`
 (key fields, the key-file picker, the token prompt) and `tom_sync_ui` (the
 merge view, the sync indicator), `tom_basics` (the protected clipboard),
 `tom_core_storage` (the token prompt's types), `tom_core_sync` (the sync
-states), `pdf` (the emergency sheet), `provider`; all from pub.dev.
+states), `pdf` (the emergency sheet), `qr` (the QR codes of the pairing
+window, the member key and shares), `bonsoir` (the pairing window's mDNS
+announcement), `cryptography` (the macOS AutoFill snapshot's sealing),
+`provider`; all from pub.dev.
 
 ## Further documentation
 

@@ -9,7 +9,7 @@ package holds two parts:
   start for the product's extension, which talks to the secrets service over
   the client protocol (this README);
 - the WebExtension in [`extension/`](extension/), Manifest V3 builds for
-  Chromium browsers and Firefox from one TypeScript source: the page's
+  Chromium browsers, Firefox and Safari from one TypeScript source: the page's
   logins, the list at the field, the fill
   ([its README](extension/README.md)).
 

@@ -9,7 +9,7 @@
   "type": "module",
   "scripts": {
     "build": "node --check tool/check_docs.mjs && node --check tool/render_diagrams.mjs && node --check tool/docs_lib.mjs && node --check tool/mermaid_render.mjs && node --check tool/check_configuration.mjs && node --check tool/config_lib.mjs",
-    "test": "node --test tool/test/docs.test.mjs tool/test/config.test.mjs"
+    "test": "node --test tool/test/docs.test.mjs tool/test/config.test.mjs tool/test/article.test.mjs"
   },
   "devDependencies": {
     "@mermaid-js/mermaid-cli": "^12.2.0",

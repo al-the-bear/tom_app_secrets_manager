@@ -81,8 +81,9 @@ Log and step names are paths relative to the folder that holds all three.
   -Werror` over `src/main/java` of every Maven project whose dependencies are
   all test-scoped; `go vet ./...` in every Go module that requires nothing;
   `python3 -m compileall` in every Python package; on macOS the AutoFill
-  provider's extension target (`tom_secrets_app/macos`, `TomSecretsAutofill`)
-  compiled with `xcodebuild`, unsigned (its entitlements need the team).
+  provider's and the Safari Web Extension's targets (`tom_secrets_app/macos`,
+  `TomSecretsAutofill`, `TomSecretsSafari`) compiled with `xcodebuild`,
+  unsigned (their entitlements need the team).
 - `:test`: every package's suite (without the tags `licence-boundary`,
   `integration` and `standalone`), one full log per package; a package without
   `*_test.dart` is reported skipped; `npm ci` and `npm test` in every npm
@@ -92,7 +93,8 @@ Log and step names are paths relative to the folder that holds all three.
   and `AllTests` run with `java`; `go test -count=1 ./...` in every Go module
   that requires nothing and has `_test.go` files; `python3 -m unittest discover
   -s tests` (with `PYTHONPATH=src`) in every Python package; on macOS `swift
-  test` of the AutoFill provider's core (`TomSecretsAutofillKit`).
+  test` of the AutoFill provider's and the Safari handler's cores
+  (`TomSecretsAutofillKit`, `TomSecretsSafariKit`).
 - `:integration`: the integration suites against the real service (test tag
   `integration`, left out of `:test`): `tsm`'s builds the service as a binary
   (`dart build cli`), starts it through `tsm start` on demo vaults in a scratch
@@ -148,7 +150,8 @@ linked):
 - **KDBX through one gate.** Only `tom_secrets_core` declares
   `tom_kdbx_store`; no package declares a KDBX library itself (`tom_kpasslib`,
   `kpasslib`, `tom_kdbx`, `kdbx`); the packages of `tom_secrets_clients`,
-  `tom_secrets_relay` and this package link neither the store nor the core.
+  `tom_secrets_relay`, `tom_secrets_browser` and this package link neither
+  the store nor the core.
 
 For every npm package (`secretsNpmProblems`): its `package.json` declares
 `BSD-3-Clause` and its `LICENSE` is BSD-3; its closure is every entry of
@@ -172,9 +175,11 @@ needs one side, an `AND` both) and ship a licence file (`LICENSE`,
 An exception is named in `secretsLicenceExceptions`, by package, with its
 reason; the check prints each one on every run and turns red when one is no
 longer needed. One is in force: `dbus` (MPL-2.0, file-level copyleft), which
-`tom_secrets_desktop` and `tom_secrets_app` link on Linux through
-`flutter_local_notifications_linux`, unmodified and stated in
-`THIRD_PARTY.md` with its source. Every other closure is permissive.
+`tom_secrets_ui`, `tom_secrets_desktop` and `tom_secrets_app` link on Linux
+through `flutter_local_notifications_linux` and `bonsoir_linux`, unmodified
+and stated in `THIRD_PARTY.md` with its source; `tom_secrets_mobile` has it
+in its closure through `bonsoir` but never builds it into a phone app. Every
+other closure is permissive.
 
 ## The standalone check
 
@@ -216,11 +221,18 @@ browser both render with at `npm ci`.
   (`doc/diagram_style.md`: Mermaid's `base` theme with that palette, then
   the panel, the font stack, `<title>` and `<desc>`). `--force` exports all,
   `--hash` prints each source's hash for a hand-drawn SVG.
+- `tool/export_article.mjs <doc folder>` writes the overview as a Medium
+  article, `doc/article/overview.medium.md` with the diagrams' PNGs in
+  `doc/article/images/` (the conventions are `doc/README.md`'s "The overview
+  as an article"); `--check`, which `:docs` runs, fails when it is stale.
+  The documentation check leaves the generated `article/` folder out.
 - `tool/docs_lib.mjs` holds the parsing, the theme, the class set and the
   post-processing; `tool/mermaid_render.mjs` the rendering through one
   browser. `npm test` (`tool/test/docs.test.mjs`) checks a document that
   passes, a diagram that does not render, a stale and a missing export, a
-  broken link and a long line, and the export.
+  broken link and a long line, and the export; `tool/test/article.test.mjs`
+  the article export, `tool/test/config.test.mjs` the configuration
+  check.
 
 ## The release
 

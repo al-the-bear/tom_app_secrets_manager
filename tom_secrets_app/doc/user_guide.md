@@ -96,6 +96,7 @@ window) on its first start; switch that off under
 
 Closing the window keeps the app in the tray (the menu bar on macOS). The
 tray menu has "Open", "Quick access" (while unlocked), "Lock" or "Unlock…",
+"Lock completely (forget the … unlock)" while the OS unlock holds a session,
 the number of approvals waiting, "Quit the app (the service keeps running)"
 and "Stop the service".
 
@@ -293,7 +294,7 @@ unlock again afterwards, when:
 - the check is locked after too many attempts, or cannot be used (a remote
   session, a closed lid).
 
-**On macOS before the app is signed by its developer team** (as now), Touch
+**On macOS, in the ad-hoc signed app** (not signed by its developer team), Touch
 ID is the weaker, gate-only form: it guards the unlock, but the unlock is
 kept in the login keychain, where a program running as you can read it
 without Touch ID. Settings say so. With Windows Hello the key exists only
@@ -800,7 +801,7 @@ password in plaintext. Save it where nothing syncs or backs it up, and
 delete it once imported. After the export the dialog names what the format
 did not carry (for example attachments, expiry dates, tags other than the
 favourite). The product's own groups (`.tom-secrets`, the grants) and the
-recycle bin are never exported. Enpass is served by the CSV for now.
+recycle bin are never exported. To move to Enpass, export as CSV.
 
 ## Keys
 
@@ -1443,60 +1444,20 @@ that each manifest still names its own host (after an update or a move it
 rewrites it and tells you). The extension's "Open Tom Secrets Manager"
 brings the app to the front.
 
-**The browser extension.** The flows document draws the
-[list, the fill, the approval and a saved proposal](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/flows.md#the-browser).
-With the extension installed and its browser switched on here, a login page's
-fields get the logins of the site: press Ctrl+Shift+L (Command+Shift+L on
-macOS) in the user name or password field, right-click it and choose "Fill
-from Tom Secrets Manager", or click the toolbar button. A list opens at the
-field with each login (its title, user name and the address it matched);
-"Fill" fills the user name and password, and the current code when the form
-asks for one; "Copy code" copies the code. Nothing is filled until you pick a
-login. When the service is locked, "Unlock in Tom Secrets Manager" waits until
-you unlock it in the app. A login form in a frame of another site (a payment
-or sign-in frame) first shows nothing, then "Show the logins of `<site>`"
-lists that site's logins. A small shield in the user-name and password fields
-opens the same list. In a sign-up or password-change form, the shield in the
-new-password field suggests a password ("Use this password" fills it in,
-"Another" makes a new one). When you sign in with a login the vaults do not
-hold, or with a new password, the bar "Save in Tom Secrets Manager?" offers
-"Save" (the login waits under [Proposals](#proposals)), "Not now" and "Never
-for this site" (the toolbar button's "Offer to save logins on this site" turns
-it on again). Saving needs "Always in this browser". The first time a
-browser's extension looks up a site, the app asks you to approve that browser
-("The browser extension asks for logins", see [Approvals](#approvals)); while
-you answer, the list says it is asking. "Always in this browser" approves it
-for good, for that browser only; with the app closed nothing is asked and the
-list shows no login. A browser you refused, or one you want to approve again,
-is under Clients › Allow list ("Revoke"). The browser is never given the
-logins or values of system vaults.
-
-**Passkeys in the browser** need Chrome 111 or Firefox 128 at least.
-- **Signing in.** When a site asks for a passkey and your vaults hold one
-  for it, the extension's list opens at the top right of the page: "Sign in
-  to … with a passkey". Pick the passkey, and Tom Secrets Manager signs you
-  in.
-- **Approval.** The first time, the app asks you to approve the browser for
-  the site's passkeys, as for logins ("The browser extension asks for
-  passkeys").
-- **Creating one.** When a site creates a passkey, the app asks "Save a
-  passkey for …?". "Save in Tom Secrets Manager" keeps it in the login of
-  that site and user, or in a new login, and every device has it from
-  there. "Not now" lets the browser offer its own.
-- **The browser's own.** Close the list, or have Tom Secrets Manager locked
-  or closed, and the browser's own passkeys (a phone, a security key, its
-  own store) answer instead.
-- **Never handed out.** A passkey's key never leaves the app's service.
-
-**Safari** (macOS, the team-signed app): the app carries the Tom Secrets
-Manager extension for Safari. Turn it on in Safari › Settings › Extensions
-(and allow it on all websites). It works like the extension in the other
-browsers: the shield at a login field, Ctrl+Shift+L (Cmd+Shift+L), the
-toolbar button, the bar that offers to save a new login. The first time,
-the app asks you to approve Safari ("The browser extension asks for
-logins"). The app need not be open; the service must run. Passkeys in
-Safari go through Password AutoFill (below). The ad-hoc signed app has no
-Safari extension.
+**The browser extension** (Chrome, Chromium, Edge, Brave, Firefox) and
+**Safari** (macOS, the team-signed app, which carries the extension): with
+the extension installed and its browser switched on here, the shield at a
+login field, Ctrl+Shift+L (Command+Shift+L on macOS), the context menu or
+the toolbar button opens the site's logins; nothing is filled until you
+pick one. A sign-up form gets a suggested password, a new login the bar
+"Save in Tom Secrets Manager?" (saved under [Proposals](#proposals)), and a
+site's passkey request the extension's own list. The first time, the app
+asks you to approve the browser ("The browser extension asks for logins",
+see [Approvals](#approvals)). Installing it per browser, every step and
+what the list can say are in the
+[browser extension's user guide](../../tom_secrets_browser/doc/user_guide.md).
+Passkeys in Safari go through Password AutoFill (below); the ad-hoc signed
+app has no Safari extension.
 
 **Password AutoFill** (macOS): macOS fills logins in apps and Safari through
 Tom Secrets Manager's AutoFill provider. Turn it on in System Settings ›

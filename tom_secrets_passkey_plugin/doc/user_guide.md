@@ -64,22 +64,11 @@ The plugin is part of the manager app's MSIX package
 passkey plugin only from an installed package. The package is signed with
 a self-signed certificate, which each machine trusts once.
 
-**To install:**
-
-1. Trust the certificate, as an administrator, once per machine: open the
-   package's Properties › Digital Signatures › Details › View Certificate ›
-   Install Certificate…, choose "Local Machine" and the store "Trusted
-   People"; or run
-   `install_signing_certificate.ps1 -Certificate tsm-signing.cer` from an
-   administrator's PowerShell.
-2. Open the `.msix` file. App Installer names the app and its publisher;
-   choose "Install".
-3. Start the app and set it up (the
-   [app's user guide](../../tom_secrets_app/doc/user_guide.md) has the
-   First run).
-
-Without the certificate step, App Installer refuses the package as
-untrusted.
+**To install:** trust the certificate (an administrator, once per
+machine), then open the package and choose "Install"; the app's user guide
+has the steps:
+[installing from the MSIX package](../../tom_secrets_app/doc/user_guide.md#installing-and-first-start).
+Then start the app and set it up (its First run).
 
 ## Turning it on
 

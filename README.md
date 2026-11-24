@@ -1,9 +1,9 @@
 # Tom Secrets Manager — applications
 
 The applications of the Tom Secrets Manager: the desktop app (a password
-manager and the editor for system secrets), and later the mobile app, the
-browser extension and the relay server, with the manual CI and the shared test
-fixtures. A flat set of packages at the top.
+manager and the editor for system secrets), the mobile app, the browser
+extension, the Windows passkey plugin and the relay server, with the manual
+CI and the shared test fixtures. A flat set of packages at the top.
 
 GitHub: `al-the-bear/tom_app_secrets_manager`. The product's other two
 repositories are `al-the-bear/tom_secrets_manager` (the core and the secrets
@@ -19,7 +19,10 @@ GitHub (tag `tom_secrets_manager-v<version>`), one archive per platform:
   unzip, move `Tom Secrets Manager.app` to `/Applications`; the app is
   ad-hoc signed, so open it the first time with Control-click › Open.
 - **Windows (x64)**, `tom_secrets_manager-<version>-windows-x64.zip`: unzip
-  into a folder of your choice and start `tom_secrets_app.exe`.
+  into a folder of your choice and start `tom_secrets_app.exe`; or
+  `tom_secrets_manager-<version>-windows-x64.msix`, the package Windows
+  passkeys need (its certificate trusted first: the desktop app's user
+  guide has the steps).
 - **Linux (x64)**, `tom_secrets_manager-<version>-linux-x64.tar.gz`: unpack
   into a folder of your choice and start `tom_secrets_app`; the tray needs an
   AppIndicator (StatusNotifierItem) host, the keychain a Secret Service
@@ -27,9 +30,11 @@ GitHub (tag `tom_secrets_manager-v<version>`), one archive per platform:
 
 `SHA256SUMS` beside the archives holds their checksums
 (`shasum -a 256 -c SHA256SUMS` on macOS, `sha256sum -c SHA256SUMS` on
-Linux). Only the macOS archive is signed, and ad-hoc: it is not notarised,
-which is why the first start goes through Control-click › Open; Windows may
-show SmartScreen's "Windows protected your PC" once (More info › Run anyway).
+Linux). The macOS app is signed ad-hoc and not notarised, which is why the
+first start goes through Control-click › Open; the MSIX package is signed
+with a self-signed certificate; the Windows ZIP is unsigned, so Windows may
+show SmartScreen's "Windows protected your PC" once (More info › Run
+anyway).
 
 The app carries everything it needs: the secrets service and the command
 line `tsm` are inside it, in its `tsm/bin` folder (on macOS
@@ -109,10 +114,10 @@ path inside one repository, so a clone of this repository builds on its own;
 | [`tom_secrets_ui`](tom_secrets_ui/) | A | the shell, screens and state both apps use: the First run wizard, unlock, the vault browser, the entry editor, over ports the host implements |
 | [`tom_secrets_desktop`](tom_secrets_desktop/) | A | the desktop host: starting and attaching to the service, tray and menu bar, window, notifications, start at login, screen-capture exclusion, the protected clipboard |
 | [`tom_secrets_app`](tom_secrets_app/) | A | the desktop composition root (macOS, Linux, Windows), shipping `tsm` and the service inside its distribution |
-| [`tom_secrets_build`](tom_secrets_build/) | A | the manual CI (analyze, test, the licence-boundary and standalone checks over every package of the three repositories) and the release build, started by a person (`ci.sh`, `ci.ps1`, `ci.cmd`) |
+| [`tom_secrets_build`](tom_secrets_build/) | A | the manual CI (analyze, test, the integration suites, the licence-boundary, conformance, standalone and documentation checks over every package of the three repositories) and the release build, started by a person (`ci.sh`, `ci.ps1`, `ci.cmd`) |
 | [`tom_secrets_testkit`](tom_secrets_testkit/) | A | test fixtures more than one package needs (the scratch folder so far); a dev dependency only |
 | [`tom_secrets_mobile`](tom_secrets_mobile/) | B | the mobile app (iOS/iPadOS, Android): the vaults fetched from GitHub into memory, set up by pairing, unlocked with biometrics, system vaults read-only; [user guide](tom_secrets_mobile/doc/user_guide.md) |
-| [`tom_secrets_browser`](tom_secrets_browser/) | B | the native-messaging host `tsm-browser-host` (shipped beside the service in the app's `tsm/bin`; the desktop app installs the browsers' manifests) and the WebExtension for Chromium browsers and Firefox (`extension/`) |
+| [`tom_secrets_browser`](tom_secrets_browser/) | B | the native-messaging host `tsm-browser-host` (shipped beside the service in the app's `tsm/bin`; the desktop app installs the browsers' manifests) and the WebExtension for Chromium browsers, Firefox and Safari (`extension/`) |
 | [`tom_secrets_passkey_plugin`](tom_secrets_passkey_plugin/) | C | the Windows 11 passkey plugin `tsm-passkey-plugin.exe` (C++, CMake): the COM server Windows' passkey dialog asks, through the service's passkey requests, never holding a key; shipped beside the service in the app's MSIX package |
 | [`tom_secrets_relay`](tom_secrets_relay/) | C | the optional relay server on `tom_core_server`: the pairing rendezvous, approval links and mailboxes of `age` packages (`tsm:<url>`), token mode by default, the address filters and the denial-of-service blocks |
 
@@ -122,8 +127,9 @@ path inside one repository, so a clone of this repository builds on its own;
 tom_secrets_build/ci.sh :all
 ```
 
-analyzes and tests every package of the three repositories and runs the
-licence-boundary and standalone checks; see
+analyzes and tests every package of the three repositories, runs their
+integration suites, and the licence-boundary, conformance, standalone and
+documentation checks; see
 [`tom_secrets_build/README.md`](tom_secrets_build/README.md).
 
 ## Licence
@@ -136,12 +142,19 @@ of what the apps bundle. The apps reach KDBX only through
 
 The product as a whole (how the parts fit together, how secrets are kept
 safe, the main flows) is explained in the documentation set,
-[`tom_secrets_manager/doc`](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/README.md).
-The apps' user guides: the
-[desktop app](tom_secrets_app/doc/user_guide.md) and the
-[mobile app](tom_secrets_mobile/doc/user_guide.md). The checks and the
-diagram export of the documentation are in `tom_secrets_build`
-(`ci.sh :docs`, `tool/render_diagrams.mjs`).
+[`tom_secrets_manager/doc`](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/README.md);
+start with the [overview](https://github.com/al-the-bear/tom_secrets_manager/blob/main/doc/overview.md). This repository's user guides:
+
+- the [desktop app](tom_secrets_app/doc/user_guide.md);
+- the [mobile app](tom_secrets_mobile/doc/user_guide.md);
+- the [browser extension](tom_secrets_browser/doc/user_guide.md);
+- [Windows passkeys](tom_secrets_passkey_plugin/doc/user_guide.md);
+- hosting the [relay server](tom_secrets_relay/doc/user_guide.md);
+- checking, building and releasing: the
+  [build tool](tom_secrets_build/doc/user_guide.md).
+
+The checks and the diagram export of the documentation are in
+`tom_secrets_build` (`ci.sh :docs`, `tool/render_diagrams.mjs`).
 
 ## Design
 

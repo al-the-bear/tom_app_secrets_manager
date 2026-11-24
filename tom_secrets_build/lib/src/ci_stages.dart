@@ -84,7 +84,8 @@ const Map<String, String> secretsCiStageDescriptions = {
       'source renders '
       '(@mermaid-js/mermaid-cli), its exported SVG and PNG are there and '
       'current, every relative link resolves, no line is over 80 characters; '
-      'and the configuration reference (tool/check_configuration.mjs): every '
+      'the overview\'s Medium article current (tool/export_article.mjs '
+      '--check); and the configuration reference (tool/check_configuration.mjs): every '
       'environment variable and setting key the three repositories read is in '
       'tom_secrets_manager/doc/configuration.md',
   'release':
@@ -555,6 +556,11 @@ class SecretsCiStages {
           CiCommand('node', [
             p.join('tool', 'check_docs.mjs'),
             ...secretsDocsRoots(workspace),
+          ], workingDirectory: workspace.buildPackageDir),
+          CiCommand('node', [
+            p.join('tool', 'export_article.mjs'),
+            '--check',
+            p.join(workspace.managerRoot, 'doc'),
           ], workingDirectory: workspace.buildPackageDir),
           CiCommand('node', [
             p.join('tool', 'check_configuration.mjs'),

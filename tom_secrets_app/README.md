@@ -54,6 +54,12 @@ Platform requirements:
 
 - **macOS** builds through Swift Package Manager (no CocoaPods); the app is
   not sandboxed (`macos/Runner/*.entitlements` says why).
+- **Linux** needs `libayatana-appindicator3-dev` (the tray) and
+  `libsecret-1-dev` (the keychain).
+- **Windows** needs Visual Studio 2022 Build Tools with "Desktop development
+  with C++" and the ATL component: `flutter_secure_storage_windows` and
+  `flutter_local_notifications_windows` include ATL headers and C++20
+  coroutines, which the 2019 tools without ATL refuse.
 
 ### The macOS AutoFill provider
 
@@ -130,12 +136,6 @@ carries the browser extension's Safari build (`tom_secrets_browser/extension`,
   `xcodebuild -project macos/Runner.xcodeproj -target TomSecretsSafari
   CODE_SIGNING_ALLOWED=NO build` (`ci.sh :analyze` does, after the
   extension's npm build).
-- **Linux** needs `libayatana-appindicator3-dev` (the tray) and
-  `libsecret-1-dev` (the keychain).
-- **Windows** needs Visual Studio 2022 Build Tools with "Desktop development
-  with C++" and the ATL component: `flutter_secure_storage_windows` and
-  `flutter_local_notifications_windows` include ATL headers and C++20
-  coroutines, which the 2019 tools without ATL refuse.
 
 ## Configuration
 
@@ -160,8 +160,6 @@ Everything else is set in the app: its Settings screen (see the
 - The Safari Web Extension is in the team-signed build only; until then
   Safari users fill logins through the AutoFill provider of that build, or
   use a Chromium browser or Firefox with the extension.
-- Phase A is the desktop app; the mobile app, the browser extension and the
-  relay are not built yet.
 
 ## Further documentation
 
@@ -176,7 +174,7 @@ Everything else is set in the app: its Settings screen (see the
 
 ## Status
 
-Version 0.1.0 (phase A). The app has no suite of its own: its screens are
+Version 0.1.2. The app has no suite of its own: its screens are
 tested in `tom_secrets_ui`, its host in `tom_secrets_desktop`, and the
 assembled release by the smoke run of `ci.sh :release`.
 
