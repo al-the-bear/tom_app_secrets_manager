@@ -50,7 +50,7 @@ flowchart LR
     appa("App, service"):::program
   end
   subgraph remote["The internet"]
-    relay("Relay server"):::external
+    relay["Relay server"]:::external
     box["Mailbox items<br/&gt;age packages"]:::file
   end
   subgraph b["Device B"]
@@ -278,7 +278,7 @@ loopback, its configuration and storage on the host.
 flowchart LR
   devices["Devices<br/&gt;apps, services, tsm"]:::client
   subgraph host["The relay's host"]
-    proxy("Apache<br/&gt;TLS, port 443"):::external
+    proxy["Apache<br/&gt;TLS, port 443"]:::external
     relay("tom_secrets_relay<br/&gt;127.0.0.1:47910"):::program
     conf["relay.yaml"]:::file
     data["Storage<br/&gt;mailbox, block list"]:::file

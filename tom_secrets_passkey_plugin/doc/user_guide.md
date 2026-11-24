@@ -31,7 +31,7 @@ This diagram shows what answers when a site asks Windows for a passkey.
 flowchart LR
   site["A site or app<br/&gt;asks for a passkey"]:::client
   subgraph win["Windows"]
-    dialog("Windows' passkey dialog"):::external
+    dialog["Windows' passkey dialog"]:::external
     plugin("Tom Secrets Manager's<br/&gt;passkey plugin"):::program
   end
   svc("Secrets service"):::program

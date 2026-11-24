@@ -75,6 +75,14 @@ describe('reading a document', () => {
     assert.equal(raw.diagrams[0].source, good);
   });
 
+  test('any other raw ">" in a diagram comment is a problem: one rule, every ">" as "&gt;"', () => {
+    const escaped = parseDocument(documentWith(good));
+    assert.equal(escaped.diagrams[0].rawGreaterLine, undefined);
+    const raw = parseDocument(documentWith(good).replace('Secrets service', 'Secrets<br/>service'));
+    assert.equal(raw.diagrams[0].rawGreaterLine, 10);
+    assert.equal(raw.diagrams[0].rawArrowLine, undefined);
+  });
+
   test('long lines: tables, code, comments and lines holding only an image '
     + 'or a link excepted', () => {
     const long = 'x'.repeat(maxLineLength + 1);

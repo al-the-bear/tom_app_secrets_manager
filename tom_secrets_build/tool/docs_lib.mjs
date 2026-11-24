@@ -138,6 +138,8 @@ export const classDefs = {
   vault: `fill:${palette.greenFill},color:${palette.green},stroke:${palette.greenBorder}`,
   key: `fill:${palette.lilacFill},color:${palette.magentaText},stroke:${palette.lilacBorder}`,
   external: `fill:#fff,color:${palette.navy},stroke:${palette.border}`,
+  step: `fill:#fff,color:${palette.navy},stroke:${palette.slate}`,
+  decision: `fill:#fff,color:${palette.navy},stroke:${palette.slate}`,
   person: `fill:${palette.skyFill},color:${palette.navy},stroke:${palette.skyBorder}`,
   zoneDevice: `fill:#fff,color:${palette.navy},stroke:${palette.zoneBorder}`,
   zoneSandbox: `fill:${palette.amberFill},color:${palette.navy},stroke:${palette.amberBorder}`,
@@ -185,7 +187,8 @@ function escapeXml(text) {
  * - `diagrams`: `{id, title, desc, source, handDrawn, image, line}` per
  *   `<!-- diagram <id> [hand-drawn]` comment holding a ```mermaid fence,
  *   its `&gt;` read as `>` (and `rawArrowLine`, a line of the fence holding
- *   `-->`, which would end the comment on GitHub);
+ *   `-->`, which would end the comment on GitHub; `rawGreaterLine`, a line
+ *   holding any other raw `>`, which the one rule refuses too);
  * - `fences`: the other ```mermaid fences `{source, line}`;
  * - `links`: `{target, line}` of every relative link and image outside code
  *   and comments;
@@ -236,6 +239,7 @@ export function parseDocument(text) {
         // GitHub ends an HTML comment at the first line holding `-->`, a
         // fence's too, so the source writes every `>` as `&gt;`.
         if (comment && line.includes('-->')) comment.rawArrowLine ??= lineNo;
+        else if (comment && line.includes('>')) comment.rawGreaterLine ??= lineNo;
         codeLines.push(codeLang === 'mermaid' ? line.replace(/&gt;/g, '>') : line);
         continue;
       }
@@ -398,6 +402,12 @@ export function staticProblems(file, parsed) {
       problems.push(
         `${at(d.rawArrowLine)}: diagram ${d.id}'s source holds "-->", which ends ` +
           'its comment on GitHub: write every ">" of the source as "&gt;"',
+      );
+    }
+    if (d.rawGreaterLine) {
+      problems.push(
+        `${at(d.rawGreaterLine)}: diagram ${d.id}'s source holds a raw ">": ` +
+          'write every ">" of the source as "&gt;"',
       );
     }
     if (!d.image || !d.title) {

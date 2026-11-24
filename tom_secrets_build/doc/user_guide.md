@@ -85,23 +85,21 @@ that only run when named.
 ```mermaid
 flowchart LR
   subgraph all[":all, in order, past a red"]
-    analyze(":analyze"):::program
-    test(":test"):::program
-    integration(":integration"):::program
-    licences(":licences"):::program
-    conformance(":conformance"):::program
-    standalone(":standalone"):::program
-    docs(":docs"):::program
+    analyze[":analyze"]:::step
+    test[":test"]:::step
+    integration[":integration"]:::step
+    licences[":licences"]:::step
+    conformance[":conformance"]:::step
+    standalone[":standalone"]:::step
+    docs[":docs"]:::step
   end
   subgraph named["Only when named"]
-    release(":release"):::program
-    mobile(":mobile"):::program
-    relay(":relay"):::program
+    release[":release"]:::step
+    mobile[":mobile"]:::step
+    relay[":relay"]:::step
   end
   analyze --&gt; test --&gt; integration --&gt; licences
   licences --&gt; conformance --&gt; standalone --&gt; docs
-  class all zoneDevice
-  class named zoneRemote
 ```
 -->
 
