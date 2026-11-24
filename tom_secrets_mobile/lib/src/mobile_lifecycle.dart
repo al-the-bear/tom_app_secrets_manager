@@ -7,6 +7,13 @@
 /// foreground; in the background longer than the lock timeout the app
 /// locks, dropping every vault from memory (measured on return too, since a
 /// suspended app runs no timer).
+///
+/// **[C]** In the background, while the process lives and the vaults are
+/// held (until that lock), the look goes on read-only (DP-131, DP-151):
+/// the copies in memory are brought up to date, nothing is written to
+/// GitHub or the device, and the saves that wait are written at the return.
+/// Android keeps a backgrounded process running until it ends it; iOS
+/// suspends it within seconds, so there the look waits for the return.
 library;
 
 import 'dart:async';
@@ -57,10 +64,12 @@ class _LifecycleState extends State<TomSecretsMobileLifecycle> {
     _startTicker();
   }
 
-  void _startTicker() {
+  void _startTicker({bool background = false}) {
     _ticker?.cancel();
     _ticker = Timer.periodic(widget.tick, (_) {
-      if (!_engine.isLocked) unawaited(_quiet(_engine.refresh()));
+      if (!_engine.isLocked) {
+        unawaited(_quiet(_engine.refresh(background: background)));
+      }
     });
   }
 
@@ -80,11 +89,14 @@ class _LifecycleState extends State<TomSecretsMobileLifecycle> {
       _engine.lock();
       return;
     }
+    // Until the lock: the read-only refresh of the copies in memory.
+    _startTicker(background: true);
     _lockTimer?.cancel();
     _lockTimer = Timer(Duration(seconds: seconds), _engine.lock);
   }
 
   void _shown() {
+    _ticker?.cancel();
     _lockTimer?.cancel();
     final at = _hiddenAt;
     _hiddenAt = null;

@@ -181,7 +181,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         limit: kdfMemoryLimit,
       ),
       clock: _clock,
-    )..onPrimaryKeysChanged = _keepPrimaryKeys;
+    )..onPrimaryKeysChanged = _primaryKeysChanged;
   }
 
   /// The memory a vault's key derivation may take when the device's is not
@@ -596,6 +596,23 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     }
   }
 
+  /// **[C]** The primary's keys the vault set took up during a refresh in
+  /// the background, kept in the keychain at the next refresh in the
+  /// foreground (the background writes nothing to the device, DP-151).
+  TomSecretsHeldKeys? _keysToKeep;
+
+  /// Whether a refresh in the background runs.
+  bool _inBackground = false;
+
+  Future<void> _primaryKeysChanged(TomSecretsHeldKeys keys) async {
+    if (_inBackground) {
+      _keysToKeep = keys;
+      return;
+    }
+    _keysToKeep = null;
+    await _keepPrimaryKeys(keys);
+  }
+
   /// Keeps the primary's [keys] in the keychain, where the unlock takes
   /// them: its key file and a `.tsmx` primary's newest repository key.
   Future<void> _keepPrimaryKeys(TomSecretsHeldKeys keys) async {
@@ -665,6 +682,10 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   /// Closes every vault: nothing of them stays on the device.
   void lock() {
     _pending.clear();
+    // Keys a background refresh took up are dropped; the next unlock takes
+    // them from the keychain's next keys.
+    _keysToKeep = null;
+    _nextKeysDue = false;
     _retry?.cancel();
     _retry = null;
     _sizes.clear();
@@ -675,39 +696,87 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
 
   /// Fetches every vault whose branch moved (one conditional request per
   /// vault) and tells the screens; [force] fetches all (pull to refresh).
-  Future<TomSecretsRefreshReport> refresh({bool force = false}) => _serial(
-    () async {
-      if (isLocked) return const TomSecretsRefreshReport();
-      _vaults.refreshInterval = Duration(minutes: settings.refreshMinutes);
-      final waiting = _pending.keys.toSet();
-      final report = await _vaults.refresh(force: force || waiting.isNotEmpty);
-      if (report.reopened.contains(_vaults.primaryName) ||
-          _vaults.primaryWritePending) {
-        await _takeNextKeys();
-      }
-      final written = await _writePending();
-      final changed = {...report.reopened, ...written};
+  ///
+  /// **[C]** [background]: the read-only refresh while the app's process
+  /// lives in the background with the vaults in memory (DP-131, DP-151): it
+  /// only brings the copies held in memory up to date. It writes nothing,
+  /// neither to GitHub (the saves that wait, the primary's own edits: a
+  /// refresh is skipped while the primary has one) nor to the device (the
+  /// rotation keys go into the keychain at the next refresh in the
+  /// foreground).
+  Future<TomSecretsRefreshReport> refresh({
+    bool force = false,
+    bool background = false,
+  }) => _serial(() async {
+    if (isLocked) return const TomSecretsRefreshReport();
+    if (background && _vaults.primaryWritePending) {
+      return const TomSecretsRefreshReport();
+    }
+    _vaults.refreshInterval = Duration(minutes: settings.refreshMinutes);
+    final waiting = _pending.keys.toSet();
+    final TomSecretsRefreshReport report;
+    _inBackground = background;
+    try {
+      report = await _vaults.refresh(
+        force: force || (!background && waiting.isNotEmpty),
+      );
+    } finally {
+      _inBackground = false;
+    }
+    if (report.reopened.contains(_vaults.primaryName) ||
+        _vaults.primaryWritePending) {
+      _nextKeysDue = true;
+    }
+    if (background) {
+      final changed = report.reopened.toSet();
       if (changed.isNotEmpty) await _recordSizes();
-      for (final s in report.states) {
+      _report(report, waiting, changed);
+      return report;
+    }
+    if (_keysToKeep case final keys?) {
+      _keysToKeep = null;
+      await _keepPrimaryKeys(keys);
+    }
+    if (_nextKeysDue) {
+      _nextKeysDue = false;
+      await _takeNextKeys();
+    }
+    final written = await _writePending();
+    final changed = {...report.reopened, ...written};
+    if (changed.isNotEmpty) await _recordSizes();
+    _report(report, waiting, changed);
+    return report;
+  });
+
+  /// Whether the primary was fetched or written since its rotation keys
+  /// were last taken ([_takeNextKeys], which the next refresh in the
+  /// foreground does).
+  bool _nextKeysDue = false;
+
+  /// Tells the screens a refresh's states and the stores [changed].
+  void _report(
+    TomSecretsRefreshReport report,
+    Set<String> waiting,
+    Set<String> changed,
+  ) {
+    for (final s in report.states) {
+      _emit({'op': 'store_state', ..._stateOf(s)});
+    }
+    for (final name in waiting.difference(
+      report.states.map((s) => s.name).toSet(),
+    )) {
+      if (_vaults.statusOf(name) case final s?) {
         _emit({'op': 'store_state', ..._stateOf(s)});
       }
-      for (final name in waiting.difference(
-        report.states.map((s) => s.name).toSet(),
-      )) {
-        if (_vaults.statusOf(name) case final s?) {
-          _emit({'op': 'store_state', ..._stateOf(s)});
-        }
-      }
-      for (final name in changed) {
-        _emit({
-          'op': 'store_changed',
-          'store': name,
-          'revision': ?_vaults.statusOf(name)?.revision,
-        });
-      }
-      return report;
-    },
-  );
+    }
+    for (final name in changed) {
+      _emit({
+        'op': 'store_changed',
+        'store': name,
+        'revision': ?_vaults.statusOf(name)?.revision,
+      });
+    }
+  }
 
   static bool _unreachable(String kind) =>
       kind == TomSecretsStoreState.offline.wireName ||

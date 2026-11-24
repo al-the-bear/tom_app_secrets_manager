@@ -91,6 +91,37 @@ void main() {
     );
   }
 
+  test('the desktop switches while the phone is in the background: the '
+      'background refresh opens the primary with the next key in memory and '
+      'writes no keychain item; the refresh in the foreground keeps it '
+      '(DP-151)', () async {
+    final next = TomSecretsKeyFile.generate();
+    await desktop((p) {
+      TomSecretsPrimaryNextKeys(keyFile: next.toBytes()).writeTo(p);
+      TomSecretsRotations(p).start(record('primary', next.hash));
+    });
+    final engine = await unlock();
+    final before = await keychain.read(handle);
+    expect(before, isNot(base64.encode(next.toBytes())));
+
+    final primary = await demo.fetch(demoPrimary, demo.primaryCredentials)
+      ..credentials = next.credentials(demoPassword);
+    await demo.put(demoPrimary, primary);
+
+    await engine.refresh(force: true, background: true);
+    final status = await engine.request('status', const {});
+    expect(
+      (status['stores']! as List).cast<Map>().firstWhere(
+        (s) => s['name'] == 'primary',
+      )['state'],
+      'current',
+    );
+    expect(await keychain.read(handle), before, reason: 'nothing written');
+
+    await engine.refresh();
+    expect(await keychain.read(handle), base64.encode(next.toBytes()));
+  });
+
   test('a further vault\'s next key: the phone\'s device record gets its id '
       'at the unlock, and it leaves the pending', () async {
     final next = TomSecretsKeyFile.generate().toBytes();

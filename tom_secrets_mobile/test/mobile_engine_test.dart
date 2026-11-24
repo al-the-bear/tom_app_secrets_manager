@@ -155,6 +155,93 @@ void main() {
     );
   });
 
+  test('the background refresh (DP-151): another device\'s change comes into '
+      'the copy in memory; a save that waits is not written until the '
+      'refresh in the foreground', () async {
+    final net = NetSwitch(server.client);
+    final phone = newEngine(client: net);
+    addTearDown(phone.close);
+    final changed = <String>[];
+    phone.events.listen((e) {
+      if (e['op'] == 'store_changed') changed.add(e['store']! as String);
+    });
+    await phone.request('unlock', {'password': demoPassword});
+
+    Future<List<String?>> held() async {
+      final file = await phone.request('vaultFile', {'store': 'team'});
+      final opened = await KdbxFormat().read(
+        base64.decode(file['bytes']! as String),
+        teamCredentials(),
+      );
+      return [
+        for (final e in opened.body.rootGroup.entries)
+          e.getString(KdbxKeyCommon.TITLE)?.getText(),
+      ];
+    }
+
+    Future<List<String?>> onGitHub() async => [
+      for (final e in (await demo.fetch(
+        demoTeam,
+        teamCredentials(),
+      )).body.rootGroup.entries)
+        e.getString(KdbxKeyCommon.TITLE)?.getText(),
+    ];
+
+    Future<void> mbpAdds(String title) async {
+      final mbp = await demo.fetch(demoTeam, teamCredentials());
+      mbp.body.rootGroup.addEntry(
+        KdbxEntry.create(mbp, mbp.body.rootGroup)
+          ..setString(KdbxKeyCommon.TITLE, PlainValue(title)),
+      );
+      await demo.put(demoTeam, mbp);
+    }
+
+    // mbp writes while the app is in the background: the copy in memory
+    // follows.
+    await mbpAdds('From mbp');
+    await phone.refresh(force: true, background: true);
+    await settle();
+    expect(changed, contains('team'));
+    expect(await held(), contains('From mbp'));
+
+    // A save made without a network waits; a background refresh brings in
+    // mbp's next change but does not write the save.
+    net.down = true;
+    final file = await phone.request('vaultFile', {'store': 'team'});
+    final opened = await KdbxFormat().read(
+      base64.decode(file['bytes']! as String),
+      teamCredentials(),
+    );
+    opened.body.rootGroup.addEntry(
+      KdbxEntry.create(opened, opened.body.rootGroup)
+        ..setString(KdbxKeyCommon.TITLE, PlainValue('Offline')),
+    );
+    await phone.request('save', {
+      'store': 'team',
+      'bytes': base64.encode(await opened.save()),
+      'baseRevision': file['revision'],
+    });
+    net.down = false;
+    await mbpAdds('Later from mbp');
+    await phone.refresh(force: true, background: true);
+    expect(await onGitHub(), isNot(contains('Offline')));
+    final status = await phone.request('status');
+    expect(
+      {
+        for (final s in (status['stores']! as List).cast<Map>())
+          s['name']: s['notPushed'],
+      }['team'],
+      1,
+    );
+
+    // Back in the foreground: written, merged with mbp's changes.
+    await phone.refresh();
+    expect(
+      await onGitHub(),
+      containsAll(['Offline', 'From mbp', 'Later from mbp']),
+    );
+  });
+
   test('a system vault is read-only on a phone', () async {
     await engine.request('unlock', {'password': demoPassword});
     final file = await engine.request('vaultFile', {'store': 'fleet'});

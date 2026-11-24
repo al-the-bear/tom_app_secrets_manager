@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- The read-only refresh in the background (DP-131, DP-151): while the
+  process lives and the vaults are held, until the background lock, the
+  copies in memory follow other devices; nothing is written to GitHub or
+  the device until the return (`TomSecretsMobileEngine.refresh`'s
+  `background`).
 - The Credential Manager provider (Android 14+, DP-120): passkeys of the
   personal and shared vaults listed from their identities, signed and made
   after BiometricPrompt or the app's own unlock (`passkeyMain`), kept in

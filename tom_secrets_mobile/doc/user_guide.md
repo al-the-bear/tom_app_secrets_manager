@@ -196,8 +196,15 @@ lists every vault with where it is.
 
 While the app is open and unlocked it looks on GitHub for changes every few
 minutes (15 by default), when you come back to it, and when you pull a list
-down or tap the sync button at the top. Nothing happens while the app is
-closed.
+down or tap the sync button at the top.
+
+In the background, until the app locks, it goes on looking, read-only: a
+change made on another device comes into the vaults the app holds, so they
+are current when you come back. It writes nothing then: an edit that could
+not reach GitHub is written when you return. Android lets the app go on
+while it keeps it running; iOS pauses it within seconds, so on an iPhone
+the look happens when you return. Nothing happens while the app is closed
+or locked.
 
 When the desktop app runs a **guided rotation** of a vault's keys, the phone
 takes the new key the next time it unlocks or refreshes, and the desktop's

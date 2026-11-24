@@ -31,6 +31,14 @@ A phone runs no secrets service and keeps no copy of a vault:
   written to GitHub", and the next refresh that reaches GitHub writes it
   (merged three-way when the vault moved meanwhile); the lock asks first
   ("Write now" or "Discard"), since the phone keeps no copy.
+- **In the background** (DP-131, DP-151): while the process lives and the
+  vaults are still held (until the background lock), the same look goes on
+  read-only. Another device's change comes into the copies in memory;
+  nothing is written, neither to GitHub (an edit that waits is written at
+  the return) nor to the device (a rotation's new key reaches the keychain
+  at the next refresh in the foreground). Android keeps a backgrounded
+  process running until it ends it; iOS suspends it within seconds, so
+  there the look waits for the return.
 - **Unlocked with biometrics.** The first unlock types the master password;
   the app then keeps the primary's composite key under Face ID, Touch ID or
   the fingerprint (never the password), and the next unlocks ask only for
@@ -165,7 +173,8 @@ switch on their own.
   set up by hand.
 - `lib/src/mobile_shell.dart`, `lib/src/mobile_settings_view.dart`: the
   shell and the settings.
-- `lib/src/mobile_lifecycle.dart`: the refresh and the background lock.
+- `lib/src/mobile_lifecycle.dart`: the refresh (read-only in the
+  background) and the background lock.
 - `lib/src/mobile_scanner.dart`: the camera's QR reader over
   `mobile_scanner` (AVFoundation on iOS, Google's ML Kit model bundled on
   Android; closed source, named in the repository's `THIRD_PARTY.md`).
@@ -212,6 +221,8 @@ pairing, an edit written and another device's change merged, the system
 vault refused, the OS unlock's composite key, no network, a save kept while
 GitHub is out of reach and written (merged) when it is back, the phone and
 tablet layouts, the biometric unlock and its switch, the background lock,
+the read-only refresh in the background (another device's change in
+memory, nothing written to GitHub or the keychain until the return),
 the clipboard timeout, the setup reset, the reinstall banner, the
 desktop's QR code scanned (a fake scanner), the window found on the network
 by the code (a fake discovery), a TOTP secret scanned; a file added as a
