@@ -206,7 +206,9 @@ offering the import and the pairing.
 - `TomSecretsEntryEditor`: Login, API token, secure note, SSH key, certificate
   and PGP key: title, user name, the password with the generator, URLs, TOTP with its countdown (the
   secret pasted, or its QR code scanned where the host has a camera), notes,
-  custom fields (protected or not), tags, expiry, attachments, "How clients name
+  custom fields (protected or not), tags, expiry, attachments (pictures and
+  text files shown in the app from memory, `showTomSecretsAttachment`; any
+  file saved or shared), "How clients name
   it" (the path reference and the `tsm.key`, checked for uniqueness in the
   vault), "Overlays…" opening the overlay editor, the history with Restore; for
   an SSH key its type, fingerprint and public key, a key generated (Ed25519, or

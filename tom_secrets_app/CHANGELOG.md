@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- Imported fields keep their own labels (`tom_secrets_core` 0.2.28): no
+  section prefix such as `Weitere Details · `.
+- Attachments are shown in the app, from memory only: pictures (PNG, JPEG,
+  GIF, WebP, BMP) in a viewer, text files (`.txt`, `.csv`, `.md`, keys,
+  `.ovpn` profiles, any UTF-8 text) as selectable text; Save as… stays for
+  every file.
+
 ## 0.1.1
 
 - Vaults of any size: a save over 64 KiB and a vault over 1 MiB cross the

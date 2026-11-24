@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- Attachments are shown in the editor from memory: a picture (PNG, JPEG,
+  GIF, WebP, BMP, told by its bytes) in a zoomable viewer, UTF-8 text as
+  selectable monospace text (the first 2 MiB); nothing is written to a
+  file (`showTomSecretsAttachment`, `tomSecretsAttachmentKindOf`).
 - The approval prompt asks for a site's passkeys (a browser prompt with
   `passkey`) and confirms a new passkey ("Save a passkey for …?",
   `passkeyCreate`: "Save in Tom Secrets Manager" or "Not now"; protocol.md

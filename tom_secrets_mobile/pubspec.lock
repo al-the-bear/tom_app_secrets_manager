@@ -817,10 +817,10 @@ packages:
     dependency: "direct main"
     description:
       name: tom_secrets_core
-      sha256: c6bde9e5947e99727dae3daca905e46ab2fa09915755147d46ed1a19b548dea5
+      sha256: "97885bd3b82b2feaa126254c2f04355e59561fbc192e3a5f62ec0d31f65303f3"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.27"
+    version: "0.2.28"
   tom_secrets_service:
     dependency: "direct main"
     description:

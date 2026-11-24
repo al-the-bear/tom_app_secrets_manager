@@ -29,6 +29,7 @@ import '../widgets/generator_dialog.dart';
 import '../widgets/protected_field.dart';
 import '../widgets/style.dart';
 import '../widgets/totp_view.dart';
+import 'attachment_viewer.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 import 'overlay_editor.dart' show tomSecretsShowOverlayEditor;
 import 'share_dialogs.dart' show tomSecretsShowShareDialog;
@@ -1253,12 +1254,37 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                 in entry.binaryEntries)
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.attach_file),
+                leading: Icon(switch (tomSecretsAttachmentKindOf(
+                  name.key,
+                  binary.value,
+                )) {
+                  TomSecretsAttachmentKind.image => Icons.image_outlined,
+                  TomSecretsAttachmentKind.text => Icons.description_outlined,
+                  TomSecretsAttachmentKind.other => Icons.attach_file,
+                }),
                 title: Text(name.key),
                 subtitle: Text('${binary.value.length} bytes'),
+                // Shown from memory: viewing writes no file.
+                onTap: () => unawaited(
+                  showTomSecretsAttachment(context, name.key, binary.value),
+                ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (tomSecretsAttachmentKindOf(name.key, binary.value) !=
+                        TomSecretsAttachmentKind.other)
+                      IconButton(
+                        key: Key('tsm-attachment-view-${name.key}'),
+                        tooltip: 'Show',
+                        icon: const Icon(Icons.visibility_outlined),
+                        onPressed: () => unawaited(
+                          showTomSecretsAttachment(
+                            context,
+                            name.key,
+                            binary.value,
+                          ),
+                        ),
+                      ),
                     if (host.files != null)
                       IconButton(
                         key: Key('tsm-attachment-save-${name.key}'),

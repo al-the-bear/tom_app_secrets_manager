@@ -7,6 +7,12 @@
 library;
 
 export 'src/app.dart';
+export 'src/screens/attachment_viewer.dart'
+    show
+        TomSecretsAttachmentKind,
+        showTomSecretsAttachment,
+        tomSecretsAttachmentKindOf,
+        tomSecretsAttachmentTextLimit;
 export 'src/host_bridge.dart';
 export 'src/ports/desktop_ports.dart';
 export 'src/ports/bonsoir_pairing_discovery.dart';
