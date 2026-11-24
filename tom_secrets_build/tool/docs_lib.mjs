@@ -26,7 +26,7 @@ export const maxLineLength = 80;
 
 /** Changes when the theme or the post-processing changes: every exported
  *  diagram is then stale and is exported again. */
-export const styleVersion = 4;
+export const styleVersion = 5;
 
 /** The font stack of enterprise-flutter.dev's diagrams. */
 export const fontFamily = 'Inter, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -343,9 +343,16 @@ export function postProcess(svg, { title, desc, hash }) {
   const out = svg.replace(/<svg\b([^>]*)>/, (_, attrs) => {
     const cleaned = attrs
       .replace(/\s(role|aria-label|aria-roledescription|data-tsm-source)="[^"]*"/g, '')
-      .replace(/\sstyle="[^"]*"/, '');
+      .replace(/\sstyle="[^"]*"/, '')
+      .replace(/\s(width|height)="[^"]*"/g, '');
+    // Why: Mermaid writes width="100%" and no height, which a viewer that
+    // sizes an <img> by its own size draws at the 300-pixel fallback (or
+    // not at all); the view box's size is the diagram's.
+    const size = vb
+      ? ` width="${Math.ceil(Number(vb[3]))}" height="${Math.ceil(Number(vb[4]))}"`
+      : '';
     return (
-      `<svg${cleaned} role="img" aria-label="${escapeXml(title)}" ` +
+      `<svg${cleaned}${size} role="img" aria-label="${escapeXml(title)}" ` +
       `font-family="${escapeXml(fontFamily)}" data-tsm-source="${hash}">` +
       `<title>${escapeXml(title)}</title><desc>${escapeXml(desc)}</desc>${panel}`
     );

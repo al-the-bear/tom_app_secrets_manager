@@ -147,6 +147,18 @@ describe('reading a document', () => {
     assert.match(svg, new RegExp(`rx="22" fill="${palette.panel}"`));
     assert.doesNotMatch(svg, /max-width/);
   });
+
+  test('the post-processing gives the SVG its own size: every viewer draws it '
+    + 'at that size, not at the 300-pixel fallback of width="100%"', () => {
+    const svg = postProcess(
+      '<svg id="x" width="100%" viewBox="-16 -16 1035.09 300.67" style="max-width: 1035px;" xmlns="http://www.w3.org/2000/svg"><g/></svg>',
+      { title: 'T', desc: 'D', hash: 'h' },
+    );
+    const open = svg.match(/<svg\b[^>]*>/)[0];
+    assert.match(open, / width="1036"/);
+    assert.match(open, / height="301"/);
+    assert.doesNotMatch(open, /width="100%"/);
+  });
 });
 
 describe('the check and the export, with the real renderer', () => {
