@@ -422,9 +422,11 @@ either.
    code…"**.
 2. Choose where the code is:
    - **"From the screen…"**: the system's own picker opens; pick the
-     browser window (or the display) that shows the code. macOS 14 or
-     later; Windows 10 1903 or later; on Linux the desktop's screenshot
-     dialog.
+     browser window (or the display) that shows the code, and allow the
+     system's question whether to share it. macOS 14 or later (move the
+     pointer over the windows; the one to share is highlighted); Windows
+     10 1903 or later (a list of windows and displays); on Linux the
+     desktop's screenshot dialog.
    - **"From the clipboard"**: a screenshot of the code you copied (on
      macOS Shift-Control-Command-4, on Windows Windows-Shift-S). On Linux
      it needs `wl-paste` (Wayland) or `xclip` (X11) installed.
