@@ -620,10 +620,10 @@ packages:
     dependency: "direct main"
     description:
       name: tom_test_support
-      sha256: "0e5eaab8b0bb740dc3c24758c4dbb717e66600958c4289a3e5d49820001a4fa9"
+      sha256: e379b7329a46d1f22affa9e7bff03c8755211da011d5620fba78831ad55665ec
       url: "https://pub.dev"
     source: hosted
-    version: "0.8.2"
+    version: "0.9.0"
   typed_data:
     dependency: transitive
     description:
