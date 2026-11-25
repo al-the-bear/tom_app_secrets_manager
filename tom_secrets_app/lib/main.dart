@@ -13,7 +13,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:tom_secrets_client/admin.dart' show tomSecretsDataDirectory;
+import 'package:tom_secrets_client/admin.dart'
+    show
+        TomSecretsDataDirectoryException,
+        tomSecretsDataDirectory,
+        tomSecretsPrepareDataDirectory;
 import 'package:tom_secrets_desktop/tom_secrets_desktop.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
@@ -24,6 +28,15 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final hidden = args.contains(tomSecretsHiddenArgument);
   final data = tomSecretsDataDirectory(environment: Platform.environment);
+  // The app's own files (its preferences, the one-instance port) go there:
+  // the folder is the user's alone first (0700, files 0600; Windows the
+  // user-only ACL).
+  try {
+    await tomSecretsPrepareDataDirectory(data);
+  } on TomSecretsDataDirectoryException {
+    // Why it goes on: the service refuses to start in the same folder, and
+    // the connect screen shows that refusal with its reason.
+  }
 
   // `--show-entry <store>/~<uuid>`: the browser host's openApp (part-browser)
   // asks for an entry; a running app is told it and comes to the front.

@@ -691,7 +691,8 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         TomSecretsFirstRunProblem.inconsistent =>
           TomSecretsFirstRunStep.protection,
         TomSecretsFirstRunProblem.keychainNeeded ||
-        TomSecretsFirstRunProblem.alreadySetUp =>
+        TomSecretsFirstRunProblem.alreadySetUp ||
+        TomSecretsFirstRunProblem.dataDirectory =>
           TomSecretsFirstRunStep.machine,
         _ => TomSecretsFirstRunStep.primary,
       };
