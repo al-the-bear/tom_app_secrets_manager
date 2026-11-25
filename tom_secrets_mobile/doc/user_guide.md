@@ -269,8 +269,15 @@ write the value.
 1. Switch on two-factor sign-in at the service; it shows a QR code or a
    secret.
 2. In the entry's "One-time code" section, choose **"Scan a QR code"** and
-   point the camera at it, or paste the `otpauth://` URI or the secret.
+   point the camera at it, or paste the `otpauth://` URI or the secret
+   (the setup key: base32, or hex with `hex:` before it).
 3. Choose "Save". The entry shows the current code with a copy button.
+
+A code exported from Google Authenticator (`otpauth-migration://`) is read
+when it holds one account; export the accounts one at a time. On the
+desktop the same code is read from the screen, the clipboard or an image
+file:
+[setting up a one-time code](../../tom_secrets_app/doc/user_guide.md#setting-up-a-one-time-code).
 
 ![The one-time code](images/entry-totp-light.png)
 

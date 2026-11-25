@@ -15,6 +15,8 @@
 #include <optional>
 #include <string>
 
+#include "tom_secrets_qr_windows.h"
+
 namespace tom_secrets_desktop {
 
 class TomSecretsDesktopPlugin : public flutter::Plugin {
@@ -56,6 +58,9 @@ class TomSecretsDesktopPlugin : public flutter::Plugin {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> session_;
   int window_proc_id_ = -1;
   HWND session_window_ = nullptr;
+  // The clipboard's picture and the screen capture (`tom_secrets_desktop/
+  // qr`).
+  std::unique_ptr<TomSecretsQrWindows> qr_;
 };
 
 }  // namespace tom_secrets_desktop

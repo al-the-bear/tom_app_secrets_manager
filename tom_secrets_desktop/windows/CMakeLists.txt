@@ -20,6 +20,8 @@ set(PLUGIN_NAME "tom_secrets_desktop_plugin")
 list(APPEND PLUGIN_SOURCES
   "tom_secrets_desktop_plugin.cpp"
   "tom_secrets_desktop_plugin.h"
+  "tom_secrets_qr_windows.cpp"
+  "tom_secrets_qr_windows.h"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -46,8 +48,11 @@ target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
 # dependencies here.
 target_include_directories(${PLUGIN_NAME} INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
+# The screen capture (Windows.Graphics.Capture) is C++/WinRT, which needs
+# C++20 here (its coroutine header) and the Direct3D and WinRT libraries.
+target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_20)
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin
-  wtsapi32)
+  wtsapi32 d3d11 dxgi windowsapp)
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an

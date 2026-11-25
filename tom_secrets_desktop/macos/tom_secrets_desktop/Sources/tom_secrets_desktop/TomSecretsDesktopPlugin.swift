@@ -24,7 +24,10 @@ import ServiceManagement
 /// - `tom_secrets_desktop/autofill`: the macOS AutoFill provider's snapshot,
 ///   its key and the QuickType identities (`TomSecretsAutofillChannel`);
 /// - `tom_secrets_desktop/hotkeys`: the global hotkeys of quick access and
-///   auto-type (`TomSecretsHotkeys`).
+///   auto-type (`TomSecretsHotkeys`);
+/// - `tom_secrets_desktop/qr`: the pasteboard's picture and a capture through
+///   ScreenCaptureKit's picker, a TOTP's QR code read from them
+///   (`TomSecretsQrChannel`).
 public class TomSecretsDesktopPlugin: NSObject, FlutterPlugin {
   private weak var registrar: FlutterPluginRegistrar?
 
@@ -42,6 +45,7 @@ public class TomSecretsDesktopPlugin: NSObject, FlutterPlugin {
     TomSecretsLoginItem.register(messenger: registrar.messenger)
     TomSecretsSessionEvents.register(messenger: registrar.messenger)
     TomSecretsHotkeys.register(messenger: registrar.messenger)
+    TomSecretsQrChannel.register(messenger: registrar.messenger)
     if #available(macOS 11.0, *) {
       TomSecretsAutofillChannel.register(messenger: registrar.messenger)
     }

@@ -394,8 +394,10 @@ An entry is a "Login", an "API token", a "Secure note" or an "SSH key"
   "Symbols", "Leave out look-alikes", and the strength in bits; "Use" puts
   it in the field;
 - "URLs" ("Add a URL");
-- "One-time code (TOTP)": an `otpauth://` URI or a base32 secret; the
-  current code is shown with its countdown, with "Copy the code";
+- "One-time code (TOTP)": an `otpauth://` URI, a base32 or a hex secret,
+  or "Read a QR code…" (see
+  [Setting up a one-time code](#setting-up-a-one-time-code));
+  the current code is shown with its countdown, with "Copy the code";
 - "Notes";
 - "Custom fields" ("Add a field"; each field can be protected);
 - "Tags and expiry": tags separated by commas, and "Expires" with a date;
@@ -407,6 +409,50 @@ An entry is a "Login", an "API token", a "Secure note" or an "SSH key"
 - "History": earlier versions, each with "Restore".
 
 ![The password generator](images/generator-dialog-light.png)
+
+#### Setting up a one-time code
+
+When you switch on two-factor sign-in at a site, it shows a QR code and,
+usually beside it, the secret as text (the "setup key"). The entry takes
+either.
+
+**To set up a one-time code from the QR code:**
+
+1. In the entry's "One-time code (TOTP)" section, choose **"Read a QR
+   code…"**.
+2. Choose where the code is:
+   - **"From the screen…"**: the system's own picker opens; pick the
+     browser window (or the display) that shows the code. macOS 14 or
+     later; Windows 10 1903 or later; on Linux the desktop's screenshot
+     dialog.
+   - **"From the clipboard"**: a screenshot of the code you copied (on
+     macOS Shift-Control-Command-4, on Windows Windows-Shift-S). On Linux
+     it needs `wl-paste` (Wayland) or `xclip` (X11) installed.
+   - **"From an image file…"**: a PNG or JPEG of the code.
+3. The field fills with the code's `otpauth://` URI and the current code
+   shows. Choose "Save".
+
+![Read a QR code](images/entry-readqr-light.png)
+
+The capture is read in memory and overwritten once read; the app writes it
+nowhere. On Linux the screenshot dialog writes the picture to a file of its
+own, which the app deletes once read. A code exported from Google
+Authenticator (`otpauth-migration://`) is read when it holds one account;
+export the accounts one at a time.
+
+**To set it up from the setup key:** paste it into the field. A base32
+key (letters A–Z and digits 2–7) and a hex key (0–9 and a–f, as some
+hardware tokens give it) are both taken; a key that could be either is read
+as base32 unless you write `hex:` before it. The secret is saved as base32,
+which KeePass, KeePassXC and the phone read.
+
+**With the phone:** the mobile app reads the code with the camera
+([mobile user guide](../../tom_secrets_mobile/doc/user_guide.md)), and the
+entry is the same on every device.
+
+Entries made in KeePass with its secret in hex, as text or in base64
+(`TimeOtp-Secret-Hex`, `TimeOtp-Secret`, `TimeOtp-Secret-Base64`) show
+their codes too; saving one writes the base32 form.
 
 "Save" (Cmd/Ctrl+S) writes the entry; "Discard" drops your edits.
 

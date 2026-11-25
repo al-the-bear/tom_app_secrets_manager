@@ -22,6 +22,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart'
     show TomSecretsBreachCheck, TomSecretsRelay, TomSecretsRelayId;
 
 import '../state/auto_type.dart';
+import '../state/qr_reader.dart';
 import '../state/autofill.dart';
 import '../state/windows_passkeys.dart';
 import '../state/entry_requests.dart';
@@ -281,6 +282,24 @@ abstract interface class TomSecretsCodeScanner {
   Future<String?> scan(BuildContext context, {required String title});
 }
 
+/// Where a desktop reads a QR code from besides an image file (a TOTP's
+/// setup code): a picture on the clipboard and a capture of the screen
+/// through the system's own picker. The image is handed over in memory and
+/// never written to a file by the app.
+abstract interface class TomSecretsQrSources {
+  /// The picture on the clipboard, or null when it holds none.
+  Future<TomSecretsQrImage?> clipboardImage();
+
+  /// Whether this desktop can capture the screen (macOS 14 and later,
+  /// Windows 10 1903 and later, Linux with the screenshot portal).
+  bool get canCaptureScreen;
+
+  /// A capture of the window or screen the user picks in the system's
+  /// picker, or null when cancelled. Throws [TomSecretsQrException] when
+  /// the system refuses (no permission, no picker).
+  Future<TomSecretsQrImage?> captureScreen();
+}
+
 /// Everything the app's host provides.
 final class TomSecretsHost {
   /// A host; only [service] is required.
@@ -309,6 +328,7 @@ final class TomSecretsHost {
     this.shell,
     this.clipboardClearAfter,
     this.scanner,
+    this.qrSources,
     this.attachmentsShare = false,
     this.unlockFooter,
     this.entryRequests,
@@ -442,9 +462,13 @@ final class TomSecretsHost {
   /// setting the user may change); null: 30 seconds.
   final Duration Function()? clipboardClearAfter;
 
-  /// The camera's QR reader (the mobile app), or null: then a TOTP secret
-  /// is pasted only.
+  /// The camera's QR reader (the mobile app), or null.
   final TomSecretsCodeScanner? scanner;
+
+  /// The desktop's QR sources besides an image file (the clipboard, the
+  /// screen), or null: a TOTP's QR code is then read from the camera
+  /// ([scanner]) or an image file ([files]) only.
+  final TomSecretsQrSources? qrSources;
 
   /// Whether [files]' save hands a file to the share sheet (the mobile
   /// app: an attachment is opened in another app) rather than to a save

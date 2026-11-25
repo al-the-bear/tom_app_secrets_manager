@@ -18,7 +18,7 @@ dependencies:
   provider: ^6.1.5
   # The vaults: KDBX through the one gateway (DP-29), the TOTP, the password
   # generator, the stored-file codec and the entry fields.
-  tom_secrets_core: ^0.2.31
+  tom_secrets_core: ^0.2.32
   # The admin errors and the reference grammar ("How clients name it").
   tom_secrets_client: ^0.2.19
   # The key fields, notices, sync indicator and the masked editing surface.
@@ -41,6 +41,9 @@ dependencies:
   # window as _tsm-pair._tcp and finding one by its code's number (MIT;
   # Avahi over D-Bus on Linux).
   bonsoir: ^7.1.6
+  # Reading a TOTP's QR code from an image file, the clipboard or the
+  # screen on desktop: a pure Dart port of ZXing (BSD-3).
+  zxing2: ^0.2.4
 
 dev_dependencies:
   # MockClient: the breach check's range API faked in the tests.

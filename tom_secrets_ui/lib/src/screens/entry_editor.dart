@@ -24,6 +24,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
 import '../state/auto_type.dart';
+import '../state/qr_reader.dart';
 import '../state/session_state.dart';
 import '../widgets/generator_dialog.dart';
 import '../widgets/protected_field.dart';
@@ -43,12 +44,7 @@ final Set<String> _ownFields = {
   KdbxKeyCommon.PASSWORD.key,
   KdbxKeyCommon.URL.key,
   KdbxKeyCommon.NOTES.key,
-  TomSecretsTotpFields.otp.key,
-  TomSecretsTotpFields.otpAuth.key,
-  TomSecretsTotpFields.secretBase32.key,
-  TomSecretsTotpFields.length.key,
-  TomSecretsTotpFields.period.key,
-  TomSecretsTotpFields.algorithm.key,
+  for (final f in TomSecretsTotpFields.all) f.key,
 };
 
 /// Whether the editor leaves [field] alone: the product's own `tsm.*`
@@ -223,42 +219,118 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
     return taken ? 'another entry of this vault has this key' : null;
   }
 
-  TomSecretsTotp? _parseOtp(String text) {
-    final t = text.trim();
-    if (t.isEmpty) return null;
-    final uri = TomSecretsTotp.tryParseUri(t);
-    if (uri != null) return uri;
-    final secret = tomSecretsBase32Decode(t);
-    if (secret == null || secret.isEmpty) {
-      throw const FormatException(
-        'neither an otpauth:// URI nor a base32 secret',
-      );
-    }
-    return TomSecretsTotp(secret);
-  }
+  /// The field's TOTP: an otpauth:// URI, a one-account
+  /// otpauth-migration:// export, a base32 or a hex secret
+  /// ([TomSecretsTotp.parse]); saved as the URI and base32 (DP-38).
+  TomSecretsTotp? _parseOtp(String text) => TomSecretsTotp.parse(text);
 
-  /// The TOTP secret read from its QR code (an `otpauth://` URI, as the
-  /// service's setup page shows it): put in the field to save.
+  /// The TOTP secret read from its QR code with the phone's camera (an
+  /// `otpauth://` URI, as the service's setup page shows it).
   Future<void> _scanOtp(TomSecretsCodeScanner scanner) async {
     final text = await scanner.scan(
       context,
       title: 'Scan the one-time code\'s QR code',
     );
+    _takeQrText(text);
+  }
+
+  /// The TOTP secret read from a QR code in [image] (desktop: an image
+  /// file, the clipboard's picture, a capture of the screen); [image] null
+  /// means the user cancelled, [missing] what to say when there is none.
+  Future<void> _readQr(
+    Future<TomSecretsQrImage?> Function() image, {
+    required String missing,
+  }) async {
+    String? text;
+    try {
+      final picked = await image();
+      if (picked == null) {
+        if (missing.isNotEmpty && mounted) {
+          setState(() => _otpError = missing);
+        }
+        return;
+      }
+      text = await tomSecretsReadQr(picked);
+    } on TomSecretsQrException catch (e) {
+      if (mounted) setState(() => _otpError = e.message);
+      return;
+    }
+    if (text == null) {
+      if (mounted) setState(() => _otpError = 'no QR code was found there');
+      return;
+    }
+    _takeQrText(text);
+  }
+
+  /// Puts the text of a QR code into the field when it is a TOTP: an
+  /// export of one Google Authenticator account is written as its
+  /// otpauth:// URI.
+  void _takeQrText(String? text) {
     if (text == null || !mounted) return;
     String? problem;
+    TomSecretsTotp? totp;
     try {
-      if (_parseOtp(text) == null) problem = 'the QR code is empty';
+      totp = _parseOtp(text);
+      if (totp == null) problem = 'the QR code is empty';
     } on FormatException catch (e) {
       problem = 'the QR code holds ${e.message}';
     }
+    final t = text.trim();
     setState(() {
       _otpError = problem;
-      if (problem == null) {
-        _otp.text = text.trim();
+      if (totp != null) {
+        _otp.text = t.toLowerCase().startsWith('otpauth://') ? t : totp.toUri();
         _dirty = true;
       }
     });
   }
+
+  Future<TomSecretsQrImage?> _qrFromFile(TomSecretsFiles files) async {
+    final file = await files.pick();
+    if (file == null) return null;
+    return TomSecretsQrImage.encoded(file.bytes);
+  }
+
+  /// "Read a QR code…": an image file, the clipboard's picture, the screen.
+  Widget _readQrMenu(TomSecretsQrSources sources, TomSecretsFiles? files) =>
+      MenuAnchor(
+        menuChildren: [
+          if (files != null)
+            MenuItemButton(
+              key: const Key('tsm-otp-qr-file'),
+              leadingIcon: const Icon(Icons.image_outlined),
+              onPressed: () =>
+                  unawaited(_readQr(() => _qrFromFile(files), missing: '')),
+              child: const Text('From an image file…'),
+            ),
+          MenuItemButton(
+            key: const Key('tsm-otp-qr-clipboard'),
+            leadingIcon: const Icon(Icons.content_paste_rounded),
+            onPressed: () => unawaited(
+              _readQr(
+                sources.clipboardImage,
+                missing: 'the clipboard holds no picture',
+              ),
+            ),
+            child: const Text('From the clipboard'),
+          ),
+          if (sources.canCaptureScreen)
+            MenuItemButton(
+              key: const Key('tsm-otp-qr-screen'),
+              leadingIcon: const Icon(Icons.screenshot_monitor_rounded),
+              onPressed: () =>
+                  unawaited(_readQr(sources.captureScreen, missing: '')),
+              child: const Text('From the screen…'),
+            ),
+        ],
+        builder: (context, controller, _) => TextButton.icon(
+          key: const Key('tsm-otp-read-qr'),
+          icon: const Icon(Icons.qr_code_2_rounded),
+          label: const Text('Read a QR code…'),
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+        ),
+      );
 
   Future<void> _save() async {
     final keyError = _checkKey(_key.text.trim());
@@ -358,14 +430,7 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
           entry.removeString(key);
         }
       }
-      for (final k in [
-        TomSecretsTotpFields.otp,
-        TomSecretsTotpFields.otpAuth,
-        TomSecretsTotpFields.secretBase32,
-        TomSecretsTotpFields.length,
-        TomSecretsTotpFields.period,
-        TomSecretsTotpFields.algorithm,
-      ]) {
+      for (final k in TomSecretsTotpFields.all) {
         entry.removeString(k);
       }
       totp?.writeTo(entry);
@@ -1070,7 +1135,7 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
               TomSecretsTotpView(totp: totp, clipboard: widget.clipboard),
             TomSecretsProtectedField(
               name: 'otp',
-              label: 'otpauth:// URI or base32 secret',
+              label: 'otpauth:// URI, base32 or hex secret',
               controller: _otp,
               reveal: _reveal,
               clipboard: widget.clipboard,
@@ -1085,6 +1150,11 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
                   label: const Text('Scan a QR code'),
                   onPressed: () => unawaited(_scanOtp(host.scanner!)),
                 ),
+              ),
+            if (host.qrSources != null && readOnly == null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _readQrMenu(host.qrSources!, host.files),
               ),
             if (_otpError != null)
               Text(

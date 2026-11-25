@@ -106,6 +106,9 @@ Future<void> main(List<String> args) async {
     ),
     keyFiles: files,
     files: files,
+    // A TOTP's QR code from the clipboard's picture or the screen (an image
+    // file goes through files).
+    qrSources: TomSecretsDesktopQrSources(),
     printer: const TomSecretsDesktopPrinter(),
     openUrl: tomSecretsDesktopOpenUrl,
     clipboard: tomSecretsDesktopClipboard(),

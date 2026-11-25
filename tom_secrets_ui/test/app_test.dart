@@ -8,6 +8,7 @@
 /// only.
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 import 'support/fake_service.dart';
+import 'support/qr_images.dart';
 
 final class _Clipboard implements TomClipboardPort {
   final List<String> placed = [];
@@ -348,6 +350,187 @@ void main() {
     await tester.tap(find.text('Main'));
     await tester.pump();
     expect(find.byKey(const Key('tsm-otp-scan')), findsNothing);
+    expect(find.byKey(const Key('tsm-otp-read-qr')), findsNothing);
+  });
+
+  group('desktop: "Read a QR code…"', () {
+    const uri =
+        'otpauth://totp/Demo:demo-user?secret=JBSWY3DPEHPK3PXP&issuer=Demo';
+    late _FakeQrSources sources;
+    late _Files files;
+
+    Future<void> openMain(WidgetTester tester) async {
+      sources = _FakeQrSources();
+      files = _Files();
+      host = TomSecretsHost(
+        service: FakeHost(service),
+        preferences: TomSecretsMemoryPreferences(),
+        clipboard: clipboard,
+        files: files,
+        qrSources: sources,
+      );
+      await pumpApp(tester);
+      await unlock(tester);
+      await tester.tap(find.byKey(const Key('tsm-group-primary-Db')));
+      await tester.pump();
+      await tester.tap(find.text('Main'));
+      await tester.pump();
+      expect(find.byKey(const Key('tsm-otp-scan')), findsNothing);
+      await scrollTo(tester, 'tsm-otp-read-qr');
+    }
+
+    Future<void> choose(WidgetTester tester, String source) async {
+      await tester.tap(find.byKey(const Key('tsm-otp-read-qr')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key(source)));
+      // The decoding runs on real async work (the codec, zxing2).
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+    }
+
+    String field(WidgetTester tester) => tester
+        .widget<TextField>(find.byKey(const Key('tsm-field-otp')))
+        .controller!
+        .text;
+
+    Future<KdbxEntry> saveAndRead(WidgetTester tester) async {
+      await scrollTo(tester, 'tsm-save-entry');
+      await tester.tap(find.byKey(const Key('tsm-save-entry')));
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+      }
+      final saved = await tester.runAsync(
+        () => KdbxFormat().read(
+          service.store('primary').stored,
+          tomSecretsVaultCredentials(password: demoPassword),
+        ),
+      );
+      return saved!.body.rootGroup.getAllEntries().firstWhere(
+        (e) => e.label == 'Main' && e.parent?.name.get() == 'Db',
+      );
+    }
+
+    testWidgets('from an image file: its PNG fills the field and is saved', (
+      tester,
+    ) async {
+      await openMain(tester);
+      final png = (await tester.runAsync(() => qrPng(uri)))!;
+      files.next = (name: 'setup.png', bytes: png);
+      await choose(tester, 'tsm-otp-qr-file');
+      expect(find.byKey(const Key('tsm-otp-error')), findsNothing);
+      expect(field(tester), uri);
+      expect(png.every((b) => b == 0), isTrue, reason: 'the image cleared');
+      final main = await saveAndRead(tester);
+      expect(
+        TomSecretsTotp.fromEntry(main)?.secret,
+        tomSecretsBase32Decode('JBSWY3DPEHPK3PXP'),
+      );
+      await tester.pump(const Duration(seconds: 31));
+    });
+
+    testWidgets('from the clipboard: a picture with a code is read; none '
+        'says so', (tester) async {
+      await openMain(tester);
+      await choose(tester, 'tsm-otp-qr-clipboard');
+      expect(
+        tester.widget<Text>(find.byKey(const Key('tsm-otp-error'))).data,
+        'the clipboard holds no picture',
+      );
+      final code = qrPixels(uri);
+      sources.clipboard = TomSecretsQrImage.rgba(
+        code.width,
+        code.height,
+        code.pixels,
+      );
+      await choose(tester, 'tsm-otp-qr-clipboard');
+      expect(find.byKey(const Key('tsm-otp-error')), findsNothing);
+      expect(field(tester), uri);
+      await tester.pump(const Duration(seconds: 31));
+    });
+
+    testWidgets('from the screen: the capture is read; a picture without a '
+        'code and a Google Authenticator export of two accounts are named', (
+      tester,
+    ) async {
+      await openMain(tester);
+      final blank = Uint8List(100 * 100 * 4)..fillRange(0, 40000, 0xff);
+      sources.screen = TomSecretsQrImage.rgba(100, 100, blank);
+      await choose(tester, 'tsm-otp-qr-screen');
+      expect(
+        tester.widget<Text>(find.byKey(const Key('tsm-otp-error'))).data,
+        'no QR code was found there',
+      );
+
+      // An export of two accounts: per account the payload's field 1
+      // (6 bytes) holding its secret (field 1, 2 bytes) and its TOTP type
+      // (field 6 = 2).
+      List<int> account(int s) => [0x0a, 6, 0x0a, 2, s, s, 0x30, 2];
+      final payload = <int>[
+        for (final s in [1, 2]) ...account(s),
+      ];
+      final export =
+          'otpauth-migration://offline?data='
+          '${Uri.encodeQueryComponent(base64.encode(payload))}';
+      var screen = qrPixels(export);
+      sources.screen = TomSecretsQrImage.rgba(
+        screen.width,
+        screen.height,
+        screen.pixels,
+      );
+      await choose(tester, 'tsm-otp-qr-screen');
+      expect(
+        tester.widget<Text>(find.byKey(const Key('tsm-otp-error'))).data,
+        contains('2 accounts: export them one at a time'),
+      );
+
+      screen = qrPixels(
+        uri,
+        scale: 3,
+        canvasWidth: 900,
+        canvasHeight: 600,
+        left: 400,
+        top: 200,
+      );
+      sources.screen = TomSecretsQrImage.rgba(
+        screen.width,
+        screen.height,
+        screen.pixels,
+      );
+      await choose(tester, 'tsm-otp-qr-screen');
+      expect(find.byKey(const Key('tsm-otp-error')), findsNothing);
+      expect(field(tester), uri);
+      await tester.pump(const Duration(seconds: 31));
+    });
+
+    testWidgets('a hex secret typed in the field is saved as base32', (
+      tester,
+    ) async {
+      await openMain(tester);
+      // RFC 6238's SHA-1 seed "12345678901234567890" in hex.
+      await tester.enterText(
+        find.byKey(const Key('tsm-field-otp')),
+        'hex:3132333435363738393031323334353637383930',
+      );
+      final main = await saveAndRead(tester);
+      expect(
+        main.getString(TomSecretsTotpFields.secretBase32)?.getText(),
+        'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+      );
+      expect(
+        TomSecretsTotp.fromEntry(main)!.code(
+          DateTime.fromMillisecondsSinceEpoch(1111111109000, isUtc: true),
+        ),
+        '081804',
+      );
+      await tester.pump(const Duration(seconds: 31));
+    });
   });
 
   testWidgets('a key another entry of the vault has is refused', (
@@ -564,4 +747,40 @@ final class _FakeScanner implements TomSecretsCodeScanner {
     titles.add(title);
     return next;
   }
+}
+
+final class _FakeQrSources implements TomSecretsQrSources {
+  TomSecretsQrImage? clipboard;
+  TomSecretsQrImage? screen;
+
+  @override
+  bool get canCaptureScreen => true;
+
+  @override
+  Future<TomSecretsQrImage?> clipboardImage() async => clipboard;
+
+  @override
+  Future<TomSecretsQrImage?> captureScreen() async => screen;
+}
+
+final class _Files implements TomSecretsFiles {
+  ({String name, Uint8List bytes})? next;
+
+  @override
+  Future<({String name, Uint8List bytes})?> pick() async => next;
+
+  @override
+  Future<bool> save(String name, Uint8List bytes) async => false;
+
+  @override
+  Future<String?> choosePath({
+    required bool save,
+    String? suggestedName,
+  }) async => null;
+
+  @override
+  Future<Uint8List> read(String path) async => Uint8List(0);
+
+  @override
+  Future<bool> delete(String path) async => false;
 }

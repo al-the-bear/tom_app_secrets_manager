@@ -74,7 +74,8 @@ const Map<String, Map<String, String>> secretsLicenceExceptions = {
 const String _dbusReason =
     'MPL-2.0 (file-level copyleft), linked only on Linux, by '
     'flutter_local_notifications_linux for desktop notifications and by '
-    'bonsoir_linux for mDNS over Avahi (tom_secrets_ui\'s pairing discovery); '
+    'bonsoir_linux for mDNS over Avahi (tom_secrets_ui\'s pairing discovery), '
+    'and by tom_secrets_desktop for the XDG screenshot portal; '
     'unmodified, stated in THIRD_PARTY.md '
     'with its source, so a BSD-3 binary may carry it (tsm_a23).';
 

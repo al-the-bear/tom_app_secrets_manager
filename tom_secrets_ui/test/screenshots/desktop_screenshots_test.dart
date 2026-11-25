@@ -506,6 +506,7 @@ void main() {
     files: files,
     openUrl: openUrl,
     breachCheck: breachCheck ?? _quietBreachCheck(),
+    qrSources: const _QrSources(),
   );
 
   /// The app over [service] (default: the demo vaults) and [host],
@@ -858,6 +859,33 @@ void main() {
         await snap(tester, 'entry', state);
       });
     }
+
+    _shot('the one-time code read from a QR code', (tester) async {
+      await unlocked(
+        tester,
+        service: FakeService(await tester.runAsync(_browserStores) ?? []),
+        host: (s) => hostOf(s, files: _Files()),
+      );
+      await list(tester);
+      await openEntry(tester, 'Mail');
+      // The section's heading at the top, its field and button below.
+      final editor = find
+          .ancestor(
+            of: find.byKey(const Key('tsm-otp-read-qr')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('tsm-otp-read-qr')),
+        200,
+        scrollable: editor,
+      );
+      await tester.drag(editor, const Offset(0, 300));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tsm-otp-read-qr')));
+      await tester.pumpAndSettle();
+      await snap(tester, 'entry', 'readqr');
+    });
 
     _shot('the generator', (tester) async {
       await browser(tester);
@@ -1470,4 +1498,18 @@ void main() {
       await snap(tester, 'status', 'report');
     });
   });
+}
+
+/// The desktop's QR sources, so the entry editor shows "Read a QR code…".
+final class _QrSources implements TomSecretsQrSources {
+  const _QrSources();
+
+  @override
+  bool get canCaptureScreen => true;
+
+  @override
+  Future<TomSecretsQrImage?> clipboardImage() async => null;
+
+  @override
+  Future<TomSecretsQrImage?> captureScreen() async => null;
 }

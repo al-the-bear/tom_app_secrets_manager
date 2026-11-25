@@ -61,6 +61,7 @@ TomSecretsDesktopPlugin::TomSecretsDesktopPlugin(
       [this](HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
         return HandleWindowProc(hwnd, message, wparam, lparam);
       });
+  qr_ = std::make_unique<TomSecretsQrWindows>(registrar);
   // The session change messages come only to a window registered for them.
   HWND view = registrar->GetView() == nullptr
                   ? nullptr
