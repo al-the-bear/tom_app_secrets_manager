@@ -15390,9 +15390,9 @@ final _data = <r.Reflection, r.ReflectorData>{
                 allow = const [],
                 trustedProxies = const ['127.0.0.1', '::1'],
                 storageDirectory = 'relay-data',
-                requestsPerSecond = 2,
-                requestsPerMinute = 100,
-                requestsPerDay = 500,
+                requestsPerSecond = 10,
+                requestsPerMinute = 120,
+                requestsPerDay = 2000,
                 blockDurations = const [
                   const Duration(hours: 24),
                   const Duration(hours: 48),
@@ -110191,7 +110191,7 @@ final _data = <r.Reflection, r.ReflectorData>{
         175,
         const <int>[],
         const [],
-        2,
+        10,
         #requestsPerSecond,
       ),
       r.ParameterMirrorImpl(
@@ -110204,7 +110204,7 @@ final _data = <r.Reflection, r.ReflectorData>{
         175,
         const <int>[],
         const [],
-        100,
+        120,
         #requestsPerMinute,
       ),
       r.ParameterMirrorImpl(
@@ -110217,7 +110217,7 @@ final _data = <r.Reflection, r.ReflectorData>{
         175,
         const <int>[],
         const [],
-        500,
+        2000,
         #requestsPerDay,
       ),
       r.ParameterMirrorImpl(
