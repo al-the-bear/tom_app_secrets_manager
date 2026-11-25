@@ -13,6 +13,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 import 'package:tom_basics/utilities.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
@@ -168,6 +169,43 @@ void main() {
     await pumpApp(tester);
     expect(find.text('The service is not running'), findsOneWidget);
     await tester.tap(find.byKey(const Key('tsm-start-service')));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    expect(find.text('Unlock'), findsWidgets);
+  });
+
+  testWidgets('something else answers where the service would: the app '
+      'says what is wrong and what to do, and shows no password field', (
+    tester,
+  ) async {
+    final fake = FakeHost(service)
+      ..untrusted = TomSecretsAdminException(
+        'service_untrusted',
+        'the admin endpoint is not this user\'s service: the process '
+            'answering (pid 4711) runs as 1001, not as this user',
+        details: const {'reason': 'peer_user'},
+      );
+    host = TomSecretsHost(
+      service: fake,
+      preferences: TomSecretsMemoryPreferences(),
+    );
+    await pumpApp(tester);
+    expect(find.text('This is not your secrets service'), findsOneWidget);
+    final text = tester
+        .widget<Text>(find.byKey(const Key('tsm-service-gate-text')))
+        .data!;
+    expect(text, contains('pid 4711'));
+    expect(text, contains('Do not enter the master password'));
+    expect(text, contains('Nothing was sent to it.'));
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byKey(const Key('tsm-start-service')), findsNothing);
+    expect(find.byKey(const Key('tsm-claim-passphrase')), findsNothing);
+
+    // Once it is gone, "Look again" attaches.
+    fake.untrusted = null;
+    await tester.tap(find.byKey(const Key('tsm-retry')));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 100)),
     );

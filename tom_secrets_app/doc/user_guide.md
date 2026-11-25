@@ -252,8 +252,13 @@ Other screens you may meet before unlocking:
 - **"Service stopped"**: the service ended; start it again to go on.
 - **"Take over the service"**: a service runs that this app holds no key
   for (it was started from the command line, or another admin took it
-  over). Taking it over sends your master password to it; do it only on a
-  machine you trust.
+  over). Taking it over sends your master password to it. The app shows
+  this screen only after it checked that what answers is your service
+  (below).
+- **"This is not your secrets service"**: something answers where your
+  service would be that is not it. The app sends it nothing and asks for no
+  password; the screen says what is wrong and what to do. See
+  ["This is not your secrets service"](#this-is-not-your-secrets-service).
 
 ![The service is not running](images/connect-noservice-light.png)
 
@@ -1676,6 +1681,29 @@ rewritten branch…" (or "Choose…" on the Status screen):
 
 Check the password and that the key file is the vault's current one (after a
 rotation, the new one).
+
+### "This is not your secrets service"
+
+Before the app sends anything to the service, your master password
+included, it checks who answers: the service's runtime directory and
+socket are yours alone, the process answering runs as you, and it is the
+service that came with this app (or the one `TSM_SERVICE` names). When one
+of these fails, the screen names it:
+
+- **The directory or socket belongs to another user** (or is a link):
+  another user's files are where your service would be. This can happen on
+  a shared Linux machine. Do not enter your master password anywhere on
+  that machine until the directory named is gone; set `XDG_RUNTIME_DIR` to
+  a directory of your own and start the service again.
+- **The directory or socket is open to others**: close them (`chmod 700`
+  on the directory, `chmod 600` on its sockets) and choose "Look again".
+- **The process answering runs as another user**: find out what runs under
+  the process id named. Do not enter your master password.
+- **The process answering is not the service expected**: another program,
+  or a service installed elsewhere, answers. If it is a service of yours,
+  start the app that belongs to it, or name the service in `TSM_SERVICE`.
+
+"Look again" checks once more.
 
 ### "The service accepts no admin from this app here"
 

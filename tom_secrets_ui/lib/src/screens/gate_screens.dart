@@ -11,7 +11,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_credentials_ui/tom_credentials_ui.dart';
-import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_client/admin.dart'
+    show TomSecretsAdminException, tomSecretsUntrustedAdvice;
 
 import '../ports/desktop_ports.dart';
 import '../state/os_unlock.dart';
@@ -76,8 +77,15 @@ class TomSecretsGateCard extends StatelessWidget {
   );
 }
 
+/// [text] ending as a sentence, its first letter a capital.
+String _sentence(String text) {
+  if (text.isEmpty) return text;
+  final t = '${text[0].toUpperCase()}${text.substring(1)}';
+  return RegExp(r'[.!?]$').hasMatch(t) ? t : '$t.';
+}
+
 /// Attaching, no service, starting, a start that failed, a dropped
-/// connection.
+/// connection, an endpoint that is not this user's service.
 class TomSecretsConnectionScreen extends StatelessWidget {
   /// The screen.
   const TomSecretsConnectionScreen({super.key});
@@ -118,18 +126,35 @@ class TomSecretsConnectionScreen extends StatelessWidget {
         c.message ?? '',
         false,
       ),
+      // What is wrong, then what to do; never a password field.
+      TomSecretsConnectionPhase.untrusted => (
+        'This is not your secrets service',
+        '${_sentence(c.message ?? '')}\n\n'
+            '${tomSecretsUntrustedAdvice(c.untrustedReason)}\n\n'
+            'Nothing was sent to it.',
+        false,
+      ),
       _ => ('', '', false),
     };
+    final startable =
+        c.phase != TomSecretsConnectionPhase.cannotStart &&
+        c.phase != TomSecretsConnectionPhase.untrusted;
     return TomSecretsGateCard(
       title: title,
-      icon: Icons.dns_outlined,
+      icon: c.phase == TomSecretsConnectionPhase.untrusted
+          ? Icons.gpp_bad_outlined
+          : Icons.dns_outlined,
       children: [
-        Text(text, textAlign: TextAlign.center),
+        Text(
+          text,
+          key: const Key('tsm-service-gate-text'),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 20),
         if (busy)
           const Center(child: CircularProgressIndicator())
         else ...[
-          if (c.phase != TomSecretsConnectionPhase.cannotStart)
+          if (startable)
             FilledButton(
               key: const Key('tsm-start-service'),
               onPressed: () => unawaited(c.startService()),

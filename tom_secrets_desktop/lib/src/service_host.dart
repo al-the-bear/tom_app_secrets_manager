@@ -59,6 +59,7 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
     Map<String, String>? environment,
     String? executableDirectory,
     TomSecretStore? keychain,
+    this.endpointInspector = const TomSecretsSystemEndpointInspector(),
   }) : environment = environment ?? Platform.environment,
        executableDirectory =
            executableDirectory ?? File(Platform.resolvedExecutable).parent.path,
@@ -70,6 +71,26 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
   /// Where the service executable is looked for when `TSM_SERVICE` names
   /// none.
   final String executableDirectory;
+
+  /// Reads who answers on the admin endpoint (protocol.md 6.0).
+  final TomSecretsEndpointInspector endpointInspector;
+
+  /// The check every admin connection runs before it sends anything
+  /// (protocol.md 6.0): the service expected is `tom_secrets_service`
+  /// beside the app, the one in its distribution's `tsm/bin`, or the one
+  /// `TSM_SERVICE` names.
+  TomSecretsServiceTrust get serviceTrust => TomSecretsServiceTrust(
+    executables: tomSecretsExpectedServiceExecutables(
+      ownExecutable:
+          '$executableDirectory${Platform.pathSeparator}'
+          '$tomSecretsAppExecutable',
+      environment: environment,
+    ),
+    inspector: endpointInspector,
+  );
+
+  static TomSecretsServiceUntrusted _untrusted(TomSecretsAdminException e) =>
+      TomSecretsServiceUntrusted(e.details['reason'] as String?, e.message);
 
   TomSecretStore? _keychain;
   bool _keychainChecked = false;
@@ -139,6 +160,15 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
       stored = null;
     }
     if (keyring == null || stored == null) {
+      // A claim is offered (and the master password asked for) only for an
+      // endpoint that is this user's service.
+      try {
+        await TomSecretsAdminClient.checkService(rt, trust: serviceTrust);
+      } on TomSecretsAdminException catch (e) {
+        if (e.kind == 'not_running') return const TomSecretsNoService();
+        if (e.kind == tomSecretsServiceUntrusted) return _untrusted(e);
+        rethrow;
+      }
       return const TomSecretsClaimNeeded();
     }
     try {
@@ -146,12 +176,14 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
         rt,
         stored,
         client: tomSecretsAppClient,
+        trust: serviceTrust,
       );
       _attachedStart = start;
       await _pruneOthers(keyring, start);
       return TomSecretsAttached(TomSecretsAdminClientChannel(client));
     } on TomSecretsAdminException catch (e) {
       if (e.kind == 'not_running') return const TomSecretsNoService();
+      if (e.kind == tomSecretsServiceUntrusted) return _untrusted(e);
       // The key was revoked by a claim since: only a claim attaches.
       return const TomSecretsClaimNeeded();
     }
@@ -193,6 +225,7 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
       password: password,
       keyFile: keyFile,
       client: tomSecretsAppClient,
+      trust: serviceTrust,
     );
     if (start is int) {
       _attachedStart = start;

@@ -14,6 +14,7 @@ import 'package:tom_secrets_client/admin.dart'
     show
         TomSecretsAdminException,
         TomSecretsUnlockBundle,
+        tomSecretsServiceUntrusted,
         tomSecretsRandomBytes;
 
 import 'package:tom_secrets_core/tom_secrets_core.dart'
@@ -44,6 +45,10 @@ enum TomSecretsConnectionPhase {
 
   /// A service runs that only a claim attaches to (DP-16).
   claimNeeded,
+
+  /// What answers on the admin endpoint is not this user's service
+  /// (protocol.md 6.0): nothing is sent to it.
+  untrusted,
 
   /// Attached and subscribed.
   attached,
@@ -288,10 +293,26 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     await _take(await _guard(host.start));
   }
 
+  /// Why the endpoint is not trusted (the admin library's
+  /// `details.reason`), in the phase
+  /// [TomSecretsConnectionPhase.untrusted].
+  String? get untrustedReason => _untrustedReason;
+  String? _untrustedReason;
+
   /// Claims the running service with the master [password] (and
   /// [keyFile]). Throws `TomSecretsAdminException` for a wrong password.
-  Future<void> claim(String password, {Uint8List? keyFile}) async =>
-      _take(await host.claim(password, keyFile: keyFile));
+  /// An endpoint that is not this user's service gets nothing: the phase
+  /// becomes [TomSecretsConnectionPhase.untrusted].
+  Future<void> claim(String password, {Uint8List? keyFile}) async {
+    try {
+      await _take(await host.claim(password, keyFile: keyFile));
+    } on TomSecretsAdminException catch (e) {
+      if (e.kind != tomSecretsServiceUntrusted) rethrow;
+      await _take(
+        TomSecretsServiceUntrusted(e.details['reason'] as String?, e.message),
+      );
+    }
+  }
 
   /// Unlocks with the master [password] (and [keyFile]). Throws
   /// `TomSecretsAdminException` (`denied`, reason `bad_password`).
@@ -421,9 +442,14 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     try {
       return await f();
     } on TomSecretsAdminException catch (e) {
-      return e.kind == 'not_running'
-          ? const TomSecretsNoService()
-          : TomSecretsServiceStartFailed(e.message);
+      return switch (e.kind) {
+        'not_running' => const TomSecretsNoService(),
+        tomSecretsServiceUntrusted => TomSecretsServiceUntrusted(
+          e.details['reason'] as String?,
+          e.message,
+        ),
+        _ => TomSecretsServiceStartFailed(e.message),
+      };
     }
   }
 
@@ -438,6 +464,10 @@ class TomSecretsServiceConnection extends ChangeNotifier {
         _set(TomSecretsConnectionPhase.notSetUp);
       case TomSecretsClaimNeeded():
         _set(TomSecretsConnectionPhase.claimNeeded);
+      case TomSecretsServiceUntrusted(:final reason, :final message):
+        _message = message;
+        _untrustedReason = reason;
+        _set(TomSecretsConnectionPhase.untrusted);
       case TomSecretsCannotStart(:final message):
         _message = message;
         _set(TomSecretsConnectionPhase.cannotStart);

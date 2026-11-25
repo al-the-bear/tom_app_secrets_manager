@@ -65,6 +65,37 @@ void main() {
       expect(connection.phase, TomSecretsConnectionPhase.attached);
     });
 
+    test('what answers is not this user\'s service: the phase says so, at '
+        'the attach and at a claim, and no claim is made', () async {
+      final why = TomSecretsAdminException(
+        'service_untrusted',
+        'the admin endpoint is not this user\'s service: the runtime '
+            'directory belongs to user 1001, not to this user (1000)',
+        details: const {'reason': 'owner'},
+      );
+      host.untrusted = why;
+      await connection.connect();
+      expect(connection.phase, TomSecretsConnectionPhase.untrusted);
+      expect(connection.untrustedReason, 'owner');
+      expect(connection.message, contains('belongs to user 1001'));
+
+      // The endpoint changed between the attach and the claim.
+      host
+        ..untrusted = null
+        ..claimNeeded = true;
+      await connection.connect();
+      expect(connection.phase, TomSecretsConnectionPhase.claimNeeded);
+      host.untrusted = why;
+      await connection.claim('demo-password');
+      expect(connection.phase, TomSecretsConnectionPhase.untrusted);
+      expect(host.claims, isEmpty);
+
+      host.untrusted = null;
+      await connection.claim('demo-password');
+      expect(connection.phase, TomSecretsConnectionPhase.attached);
+      expect(host.claims, ['demo-password']);
+    });
+
     test('stopping the service shuts it down and tells the host, which drops '
         'its admin key', () async {
       await connection.connect();

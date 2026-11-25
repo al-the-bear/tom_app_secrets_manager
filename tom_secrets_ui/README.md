@@ -183,7 +183,10 @@ offering the import and the pairing.
   master password with …" where the host has an OS unlock
   (`TomSecretsOsUnlock`); a store with a password of its own opened on the vault
   browser (BP-8); the warning before a claim sends the master password (DP-16);
-  starting a service that is not running.
+  starting a service that is not running; "This is not your secrets service"
+  (`TomSecretsServiceUntrusted`, the phase `untrusted`) when what answers on
+  the admin endpoint is not the user's service, with what is wrong and what
+  to do and no password field (protocol.md 6.0).
 - `TomSecretsMainShell`: The rail (Vaults, Environments, Conflicts with the
   count of conflicted entries, Clients with the count of waiting approvals,
   Proposals with the count of proposed logins, Health, Keys with the count

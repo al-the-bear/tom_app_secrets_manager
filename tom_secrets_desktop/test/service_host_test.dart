@@ -261,6 +261,38 @@ void main() {
     },
   );
 
+  test('what answers is not this user\'s service: no claim is offered and '
+      'none is sent (the socket opened to others; another user\'s process); '
+      'closed again, the claim is offered', () async {
+    await launch(tomSecretsRandomBytes());
+    final socket = TomSecretsRuntime.current(environment: env).adminSocket;
+    Process.runSync('chmod', ['666', socket]);
+    final loose = await host.attach();
+    expect(loose, isA<TomSecretsServiceUntrusted>());
+    expect((loose as TomSecretsServiceUntrusted).reason, 'mode');
+    expect(loose.message, contains('admin socket is open to others'));
+    await expectLater(
+      host.claim(_password),
+      throwsA(
+        isA<TomSecretsAdminException>()
+            .having((e) => e.kind, 'kind', tomSecretsServiceUntrusted)
+            .having((e) => e.details['reason'], 'reason', 'mode'),
+      ),
+    );
+    // With the key in the keychain too: no proof is sent.
+    Process.runSync('chmod', ['600', socket]);
+    final other = TomSecretsDesktopServiceHost(
+      environment: env,
+      keychain: keychain,
+      endpointInspector: const _OtherUsersPeer(),
+    );
+    final refused = await other.attach();
+    expect(refused, isA<TomSecretsServiceUntrusted>());
+    expect((refused as TomSecretsServiceUntrusted).reason, 'peer_user');
+
+    expect(await host.attach(), isA<TomSecretsClaimNeeded>());
+  }, testOn: '!windows');
+
   test('attaching prunes the keys of services that are gone; a stopped '
       'service\'s key leaves the keychain', () async {
     final keyring = TomSecretsAdminKeyring(
@@ -356,4 +388,31 @@ void main() {
     expect(opened, lessThan(const Duration(seconds: 15)), reason: '$opened');
     printOnFailure('saved in $saved, opened in $opened');
   });
+}
+
+/// The endpoint as it is, but the process answering runs as another user.
+final class _OtherUsersPeer implements TomSecretsEndpointInspector {
+  const _OtherUsersPeer();
+
+  static const _system = TomSecretsSystemEndpointInspector();
+
+  @override
+  TomSecretsEndpointFacts files(TomSecretsRuntime runtime) =>
+      _system.files(runtime);
+
+  @override
+  TomSecretsEndpointFacts withPeer(TomSecretsEndpointFacts f, Socket s) =>
+      TomSecretsEndpointFacts(
+        operatingSystem: f.operatingSystem,
+        ownUser: f.ownUser,
+        ownPid: f.ownPid,
+        directory: f.directory,
+        socket: f.socket,
+        directoryGrantees: f.directoryGrantees,
+        peer: const TomSecretsServicePeer(
+          pid: 4711,
+          user: 'another-user',
+          executable: '/opt/demo/tom_secrets_service',
+        ),
+      );
 }

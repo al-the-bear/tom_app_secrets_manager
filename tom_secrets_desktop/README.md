@@ -49,7 +49,13 @@ the app's, listed in [`tom_secrets_app`](../tom_secrets_app/README.md).
   directory); attaching with the admin key kept in the OS keychain under tsm's
   handle (`tsm.admin.<start>`, service `tom-secrets-manager`, through
   `tom_core_storage`'s `TomDesktopSecretStore`), so the app and tsm share it;
-  claiming with the master password; a machine without `bootstrap.yaml` answers
+  claiming with the master password. Before either, and before a claim is
+  offered at all, it checks who answers (`serviceTrust`, protocol.md 6.0):
+  the runtime directory and socket are the user's alone and the process
+  answering is the user's and the service expected (beside the app, in its
+  `tsm/bin`, or `TSM_SERVICE`); else it answers
+  `TomSecretsServiceUntrusted` and sends nothing. A machine without
+  `bootstrap.yaml` answers
   not set up, and its first run (`TomSecretsFirstRun`) writes into the data
   directory (`TSM_DATA_DIR`, else the platform's) and the OS keychain.
 - **AutoFill** (macOS): `TomSecretsMacAutofill` (`tomSecretsDesktopAutofill()`)

@@ -1372,8 +1372,25 @@ final class FakeHost implements TomSecretsServiceHost {
 
   bool get _setUp => setup == null || File(setup!.bootstrapPath).existsSync();
 
+  /// What the check of who answers found wrong (protocol.md 6.0), or
+  /// null: an attach then answers it, a claim throws it.
+  TomSecretsAdminException? untrusted;
+
+  /// Whether only a claim attaches.
+  bool claimNeeded = false;
+
+  /// The passwords claims were made with.
+  final List<String> claims = [];
+
   @override
-  Future<TomSecretsAttach> attach() async => running
+  Future<TomSecretsAttach> attach() async => untrusted != null
+      ? TomSecretsServiceUntrusted(
+          untrusted!.details['reason'] as String?,
+          untrusted!.message,
+        )
+      : claimNeeded
+      ? const TomSecretsClaimNeeded()
+      : running
       ? TomSecretsAttached(service)
       : _setUp
       ? const TomSecretsNoService()
@@ -1398,8 +1415,11 @@ final class FakeHost implements TomSecretsServiceHost {
       setup ?? (throw StateError('set up already'));
 
   @override
-  Future<TomSecretsAttach> claim(String password, {Uint8List? keyFile}) async =>
-      TomSecretsAttached(service);
+  Future<TomSecretsAttach> claim(String password, {Uint8List? keyFile}) async {
+    if (untrusted != null) throw untrusted!;
+    claims.add(password);
+    return TomSecretsAttached(service);
+  }
 }
 
 /// The demo stores: `primary` with a login, an API token with a key, a

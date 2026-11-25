@@ -88,12 +88,29 @@ final class TomSecretsServiceStartFailed extends TomSecretsAttach {
   final String message;
 }
 
+/// What answers on the admin endpoint is not this user's service
+/// (protocol.md 6.0): nothing was sent, and no master password is asked
+/// for.
+final class TomSecretsServiceUntrusted extends TomSecretsAttach {
+  /// An endpoint refused for [reason] (`owner`, `mode`, `peer_user`,
+  /// `peer_executable`), [message] saying what is wrong.
+  const TomSecretsServiceUntrusted(this.reason, this.message);
+
+  /// The admin library's `details.reason`.
+  final String? reason;
+
+  /// What is wrong, for the user.
+  final String message;
+}
+
 /// Starts, attaches to and claims the service of this user.
 abstract interface class TomSecretsServiceHost {
   /// Attaches with the admin key the device keychain keeps for the running
   /// service's start: [TomSecretsAttached], [TomSecretsNoService] (or
-  /// [TomSecretsNotSetUp] when the machine has no bootstrap either) or
-  /// [TomSecretsClaimNeeded].
+  /// [TomSecretsNotSetUp] when the machine has no bootstrap either),
+  /// [TomSecretsClaimNeeded], or [TomSecretsServiceUntrusted] when what
+  /// answers there is not this user's service (checked before a claim is
+  /// offered).
   Future<TomSecretsAttach> attach();
 
   /// Starts the service (the admin key handed over and kept in the keychain)
@@ -103,7 +120,8 @@ abstract interface class TomSecretsServiceHost {
   /// Claims the running service with the master [password] (and
   /// [keyFile]); the new admin key is kept in the keychain. Throws the admin
   /// library's `TomSecretsAdminException` (`denied`, reason `bad_password`)
-  /// for a wrong password.
+  /// for a wrong password, and `service_untrusted` (nothing sent) when what
+  /// answers is not this user's service.
   Future<TomSecretsAttach> claim(String password, {Uint8List? keyFile});
 
   /// The first run of this machine: its data directory and the device
