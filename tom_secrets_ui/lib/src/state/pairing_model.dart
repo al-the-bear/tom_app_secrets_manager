@@ -494,7 +494,8 @@ class TomSecretsPairingModel extends ChangeNotifier {
           'approverKey': keys.approverKey!.toJson(),
           'linkKey': keys.linkKey.toJson(),
         },
-      'record': {'keyIds': keyIds},
+      // The receiving device's platform, as its done answer names it.
+      'record': {'keyIds': keyIds, 'platform': ?given.receiverPlatform},
       // The relay link both sides agreed on (part-relay).
       if (_identity != null)
         if (tomSecretsPairingLink(_identity!, keys) case final link?)

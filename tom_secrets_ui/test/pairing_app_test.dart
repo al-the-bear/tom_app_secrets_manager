@@ -230,9 +230,21 @@ void main() {
     });
     expect(record['record'], {
       'keyIds': [keyFile.hash, repositoryKey.keyIdHex],
+      // The receiving side's platform, from its done answer.
+      'platform': Platform.operatingSystem,
     });
     await until(tester, find.byKey(const Key('tsm-paired-bigbeast')));
     expect(find.textContaining(keyFile.hash), findsOneWidget);
+    expect(
+      find.text(
+        'bigbeast · ${tomSecretsPlatformLabel(Platform.operatingSystem)}',
+      ),
+      findsOneWidget,
+      reason: 'the device list names the platform',
+    );
+    expect(tomSecretsPlatformLabel('macos'), 'macOS');
+    expect(tomSecretsPlatformLabel('android'), 'Android');
+    expect(tomSecretsPlatformLabel('haiku'), 'haiku');
   });
 
   testWidgets('declined: nothing is sent, nothing recorded', (tester) async {
@@ -290,7 +302,7 @@ void main() {
       ),
     );
     await pairingScreen(tester);
-    expect(find.textContaining('legiondary01 · windows'), findsOneWidget);
+    expect(find.textContaining('legiondary01 · Windows'), findsOneWidget);
     expect(find.textContaining('paired 2026-11-02 by mbp'), findsOneWidget);
     expect(
       find.textContaining('approver key since 2026-11-02'),

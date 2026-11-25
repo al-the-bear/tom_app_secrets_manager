@@ -424,7 +424,11 @@ class _PairingState extends State<TomSecretsPairingView> {
               color: d.isRevoked ? theme.colorScheme.error : null,
             ),
             title: Text(
-              [d.device, ?d.platform].join(' · '),
+              [
+                d.device,
+                if (d.platform case final platform?)
+                  tomSecretsPlatformLabel(platform),
+              ].join(' · '),
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             subtitle: Text(
@@ -509,3 +513,15 @@ String tomSecretsLostDeviceGitHubAdvice(TomSecretsGitHubAuth? auth) =>
             'GitHub Apps); every signed-in device must sign in again.',
       null => '',
     };
+
+/// How a device's platform (`macos`, `ios`, ...) is shown; another name
+/// is shown as it is.
+String tomSecretsPlatformLabel(String platform) => switch (platform) {
+  'macos' => 'macOS',
+  'ios' => 'iOS',
+  'windows' => 'Windows',
+  'linux' => 'Linux',
+  'android' => 'Android',
+  'fuchsia' => 'Fuchsia',
+  _ => platform,
+};
