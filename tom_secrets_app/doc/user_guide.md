@@ -352,8 +352,12 @@ recycle bin", "Clear the marks".
 
 ![The vault browser as a list, a login in the editor](images/vaults-list-light.png)
 
-A vault served from its offline copy is marked "offline copy:" with the
-reason and its age, and opens read-only.
+A vault GitHub cannot serve now is marked with the reason and its age.
+By default the vaults are kept in memory only: the vault is marked
+"offline, changes wait in memory", and a change is kept in memory and
+written when GitHub answers (the Status screen counts it; it is lost if the
+service stops or locks first). With the offline cache on, it is marked
+"offline copy" and opens read-only.
 
 ### A new vault
 
@@ -929,7 +933,8 @@ keys. Then save copies of the new key file and repository key, and replace
 your emergency sheet ("Print the emergency sheet…", "Save it as a PDF…").
 After rotating the primary's key file or repository key this way, your
 other devices need them: pair them again or copy the keys by hand; until
-then they open their offline copy only. With several devices, use the guided
+then they serve the copy they hold, read-only. With several devices, use
+the guided
 rotation below instead.
 
 If a re-keyed save failed, a banner says the rotation is not finished;
@@ -1439,7 +1444,10 @@ is kept in, is in the
 - "Seconds a request waits for an approval";
 - "Minutes an approval code is valid";
 - "Minutes between pulls of the GitHub vaults (0: off)";
-- "Keep the last fetched vault files as an offline cache";
+- "Keep the last fetched vault files on this disk as an offline cache"
+  (off by default: the vaults are kept in memory only, and a restarted
+  service waits for GitHub; on, the service starts without GitHub, but a
+  copy of each vault stays on the disk; turning it off deletes the files);
 - "Days before a key expires that the reminders start";
 - "Approval link address (VPN or LAN address:port; empty: no link)".
 
@@ -1604,14 +1612,30 @@ token) reads as unreachable, with the relay's reason.
 
 ## Troubleshooting
 
-### A vault says "offline copy"
+### A vault says "offline"
 
 GitHub is not reachable, or the GitHub token expired. The vault is served
-from its last fetched copy and opens read-only; a change cannot be written
-("The vault is served from its offline copy"). A copy older than a week is
-flagged as possibly out of date. When the network is back, "Fetch every
-vault now" on the Status screen; when the token expired, renew it on
-[Keys](#keys).
+from the copy held. By default ("offline, changes wait in memory") a
+change is kept in memory and written when GitHub answers; it is lost if the
+service stops or locks first. With the offline cache on ("offline copy")
+the vault opens read-only and a change cannot be written ("The vault is
+served from the copy held"). A copy older than a week is flagged as
+possibly out of date. When the network is back, "Fetch every vault now" on
+the Status screen; when the token expired, renew it on [Keys](#keys).
+
+### The unlock waits for GitHub
+
+The vaults are kept in memory only, so a service that started again has
+no copy of the primary vault: it cannot be unlocked until GitHub answers
+("GitHub cannot be reached, and this device keeps no copy of the primary
+vault"). Unlock again once the network is back. To start without GitHub,
+turn the offline cache on in [Settings](#settings).
+
+### "The vaults are now kept in memory only"
+
+Shown once on a device set up before this was the default: its offline
+copies were deleted. Settings › "Keep the last fetched vault files on this
+disk" turns them on again.
 
 ### A vault says "its key changed on another device"
 

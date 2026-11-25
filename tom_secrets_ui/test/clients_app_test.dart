@@ -385,10 +385,14 @@ void main() {
         'Saved. The files served applies at the next unlock.',
       );
 
+      await tester.ensureVisible(find.byKey(const Key('tsm-settings-cli')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tsm-settings-cli')));
       await wait(tester);
       expect(service.cliApprovals, isTrue);
 
+      await tester.ensureVisible(find.byKey(const Key('tsm-settings-capture')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tsm-settings-capture')));
       await wait(tester);
       expect(
@@ -396,6 +400,8 @@ void main() {
         'off',
       );
       expect(capture.calls.last, isFalse);
+      await tester.ensureVisible(find.byKey(const Key('tsm-settings-login')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tsm-settings-login')));
       await wait(tester);
       expect(login.enabled, isFalse);

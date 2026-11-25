@@ -252,6 +252,8 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.byKey(const Key('tsm-settings-stop')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tsm-settings-stop')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tsm-settings-stop-confirm')));

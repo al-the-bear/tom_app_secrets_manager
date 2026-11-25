@@ -162,7 +162,8 @@ switch on their own.
 
 - `lib/src/mobile_engine.dart`: the engine, the admin protocol answered
   in-process over `tom_secrets_service`'s vault set and its GitHub opener
-  without an offline cache; the saves GitHub could not take yet.
+  without an offline cache, the vault set keeping the saves GitHub could
+  not take yet in memory (`keepUnwrittenSaves`).
 - `lib/src/mobile_documents.dart`: the documents port and its channel, the
   `file:` vaults' opener (`TomSecretsDocumentOpener`) and which document
   each locator is, the attachments' files.

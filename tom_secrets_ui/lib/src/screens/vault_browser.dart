@@ -306,7 +306,7 @@ class _VaultHeader extends StatelessWidget {
             )
           : offline
           ? Text(
-              'offline copy: ${state!.offlineReason}'
+              '${context.read<TomSecretsServiceConnection>().keepsUnwritten && !state!.keyChanged ? 'offline, changes wait in memory' : 'offline copy'}: ${state!.offlineReason}'
               '${state!.fetchedAt == null ? '' : ', from ${tomSecretsAge(state!.fetchedAt!)}'}'
               '${state!.isStaleAt(DateTime.now()) ? ' — it may be out of date' : ''}',
               key: Key('tsm-offline-${vault.store}'),

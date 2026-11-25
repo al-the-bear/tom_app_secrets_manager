@@ -219,8 +219,9 @@ offering the import and the pairing.
   (`TomSecretsCertificateSection`, `TomSecretsPgpKeySection`). Protected
   values are masked, revealed
   one at a time for 30 seconds and copied through the protected clipboard
-  (cleared after 30 seconds). A vault served from its offline copy opens
-  read-only.
+  (cleared after 30 seconds). A vault served from the offline cache opens
+  read-only; one the service holds in memory through an outage is edited,
+  the change waiting in memory (`keepsUnwritten`).
 - `TomSecretsResolutionModel`: The open vaults as the service's resolver sees
   them: the primary's configuration (the dimensions in priority order), every
   vault as a store; the dimension values a matrix has rows for (hosts from the
@@ -275,7 +276,7 @@ offering the import and the pairing.
 - `TomSecretsSettingsView`: Each setting says whose it is. This machine
   (`settings.get` / `settings.set`): the files served, the default environment,
   the lock mode and its times, the approval timeout and the code's validity, the
-  pull interval, the offline cache, the reminder period, the approval link;
+  pull interval, the offline cache (off by default), the reminder period, the approval link;
   command-line approvals (DP-19). This app: screen capture (DP-33; Linux cannot
   exclude a window), start at login, stopping the service. Shared: `tsm.config`
   in the primary vault, checked before it is saved.; Integrations (with

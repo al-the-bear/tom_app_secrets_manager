@@ -166,22 +166,27 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
       clock: _clock,
     );
     this.documents = documents;
-    _vaults = TomSecretsVaultSet(
-      opener: TomSecretsKdfGuardedOpener(
-        TomSecretsLocatorOpener(
-          // Without documents no locator is this phone's: every `file:`
-          // vault is another device's.
-          file: TomSecretsDocumentOpener(
-            documents: documents ?? const TomSecretsNoDocuments(),
-            registry: documentRegistry,
+    _vaults =
+        TomSecretsVaultSet(
+            opener: TomSecretsKdfGuardedOpener(
+              TomSecretsLocatorOpener(
+                // Without documents no locator is this phone's: every `file:`
+                // vault is another device's.
+                file: TomSecretsDocumentOpener(
+                  documents: documents ?? const TomSecretsNoDocuments(),
+                  registry: documentRegistry,
+                  clock: _clock,
+                ),
+                github: _github,
+              ),
+              limit: kdfMemoryLimit,
+            ),
             clock: _clock,
-          ),
-          github: _github,
-        ),
-        limit: kdfMemoryLimit,
-      ),
-      clock: _clock,
-    )..onPrimaryKeysChanged = _primaryKeysChanged;
+          )
+          ..onPrimaryKeysChanged = _primaryKeysChanged
+          // The phone keeps nothing on the disk: a save GitHub cannot take
+          // waits in memory (part-mobile, Saving).
+          ..keepUnwrittenSaves = true;
   }
 
   /// The memory a vault's key derivation may take when the device's is not
@@ -235,17 +240,10 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   bool _closed = false;
   Future<void> _queue = Future<void>.value();
 
-  /// The saves GitHub could not take (no network, a refused token), by
-  /// store: held in memory, shown as a change not written, written at the
-  /// next refresh that reaches GitHub, dropped by the lock (part-mobile,
-  /// Saving).
-  final Map<String, _Pending> _pending = {};
-
-  /// [status] as the screens see it: a store with a save waiting has one
-  /// change not written.
+  /// [status] as the screens see it: a store with a save waiting in the
+  /// vault set's memory (`keepUnwrittenSaves`) counts it in `notPushed`.
   Map<String, Object?> _stateOf(TomSecretsStoreStatus status) => {
     ...status.toJson(),
-    if (_pending.containsKey(status.name)) 'notPushed': 1,
     'fetchedBytes': ?_sizes[status.name],
   };
 
@@ -681,7 +679,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
 
   /// Closes every vault: nothing of them stays on the device.
   void lock() {
-    _pending.clear();
+    // The vault set's lock drops the saves that wait.
     // Keys a background refresh took up are dropped; the next unlock takes
     // them from the keychain's next keys.
     _keysToKeep = null;
@@ -713,13 +711,15 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
       return const TomSecretsRefreshReport();
     }
     _vaults.refreshInterval = Duration(minutes: settings.refreshMinutes);
-    final waiting = _pending.keys.toSet();
+    final waiting = {
+      for (final s in _vaults.status)
+        if (s.notPushed > 0) s.name,
+    };
     final TomSecretsRefreshReport report;
     _inBackground = background;
     try {
-      report = await _vaults.refresh(
-        force: force || (!background && waiting.isNotEmpty),
-      );
+      // In the background nothing is written: the saves that wait stay.
+      report = await _vaults.refresh(force: force, writeUnwritten: !background);
     } finally {
       _inBackground = false;
     }
@@ -741,8 +741,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
       _nextKeysDue = false;
       await _takeNextKeys();
     }
-    final written = await _writePending();
-    final changed = {...report.reopened, ...written};
+    final changed = report.reopened.toSet();
     if (changed.isNotEmpty) await _recordSizes();
     _report(report, waiting, changed);
     return report;
@@ -778,43 +777,6 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     }
   }
 
-  static bool _unreachable(String kind) =>
-      kind == TomSecretsStoreState.offline.wireName ||
-      kind == TomSecretsStoreState.tokenExpired.wireName;
-
-  /// Writes every save that waits, once its store reaches GitHub again; a
-  /// file another device moved meanwhile (the refresh brought it in) is
-  /// merged three-way first, the copy the save was made on as the base.
-  /// Answers the stores written.
-  Future<List<String>> _writePending() async {
-    final written = <String>[];
-    for (final MapEntry(key: name, value: waiting)
-        in _pending.entries.toList()) {
-      final status = _vaults.statusOf(name);
-      if (status == null) {
-        _pending.remove(name);
-        continue;
-      }
-      if (_unreachable(status.state.wireName)) continue;
-      var pending = waiting;
-      try {
-        if (status.revision != pending.base) {
-          pending = await _mergedOnto(name, pending);
-          _pending[name] = pending;
-        }
-        await _vaults.save(name, pending.stored, baseRevision: pending.base);
-        _pending.remove(name);
-        written.add(name);
-      } on TomSecretsSaveException catch (e) {
-        // Not reachable after all: it waits for the next refresh. Refused
-        // for another reason (the vault re-keyed elsewhere, ...): the change
-        // cannot be written and is dropped.
-        if (!_unreachable(e.kind)) _pending.remove(name);
-      }
-    }
-    return written;
-  }
-
   /// The credentials and outer key of [name] as the vault set holds them.
   (Credentials, String?) _keysOf(String name) {
     final keys =
@@ -832,33 +794,6 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
             : null,
       ),
       keys['outerKey'] as String?,
-    );
-  }
-
-  /// [pending] merged onto the copy of [name] held now.
-  Future<_Pending> _mergedOnto(String name, _Pending pending) async {
-    final held = await _vaults.vaultFile(name);
-    final (credentials, outerKey) = _keysOf(name);
-    final opener = _vaults.opener;
-    Future<KdbxFile> open(Uint8List stored) =>
-        opener.decode(held.location, stored, credentials, outerKey: outerKey);
-    final ours = await open(pending.stored);
-    tomSecretsMergeVaults(
-      base: await open(pending.baseStored),
-      ours: ours,
-      theirs: await open(held.stored),
-      location: held.location,
-    );
-    return _Pending(
-      // The held file's outer cipher is kept.
-      await tomSecretsEncodeStored(
-        held.location,
-        ours,
-        outerKey: outerKey,
-        like: held.stored,
-      ),
-      held.revision,
-      held.stored,
     );
   }
 
@@ -924,8 +859,8 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         ),
         'baseRevision': held.revision,
       });
-      if (_pending.containsKey(primary)) {
-        _pending.remove(primary);
+      if (_vaults.hasUnwritten(primary)) {
+        _vaults.dropUnwritten(primary);
         _refuse(
           'offline',
           'the primary could not be written to GitHub: add the file when '
@@ -987,6 +922,8 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     'expiring': _expiring(),
     'admins': 1,
     'hardening': const <String, Object?>{},
+    // A save GitHub cannot take waits in memory (part-mobile, Saving).
+    if (!isLocked) 'keepsUnwritten': true,
   };
 
   static Object? _plain(Object? value) => switch (value) {
@@ -1080,16 +1017,16 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
           _refuse('malformed', 'vaultFile names a store', {'reason': 'store'});
         }
         try {
+          // A save that waits is what the screens edit on: the vault set
+          // answers it.
           final file = await _vaults.vaultFile(store);
-          // A save that waits is what the screens edit on.
-          final waiting = _pending[store];
           return {
             'op': 'vaultFileData',
             'store': store,
             'location': file.location,
-            'revision': waiting != null ? waiting.base : file.revision,
+            'revision': file.revision,
             if (!file.served) 'served': false,
-            'bytes': base64.encode(waiting?.stored ?? file.stored),
+            'bytes': base64.encode(file.stored),
           };
         } on StateError catch (e) {
           _refuse('not_found', 'no store ${e.message}');
@@ -1118,37 +1055,28 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         }
         final stored = base64.decode(bytes);
         try {
+          // GitHub out of reach: the vault set keeps the change in memory
+          // (a later save of the same vault replaces it; it carries the
+          // first one's base) and answers it pending.
           final result = await _serial(() async {
             final saved = await _vaults.save(
               store,
               stored,
               baseRevision: base as String?,
             );
-            if (store == _vaults.primaryName) await _takeNextKeys();
+            if (!saved.pending && store == _vaults.primaryName) {
+              await _takeNextKeys();
+            }
             return saved;
           });
-          _pending.remove(store);
           _emit({
             'op': 'store_changed',
             'store': store,
             'revision': result.revision,
           });
-          return {'op': 'ok'};
+          return {'op': 'ok', if (result.pending) 'pending': true};
         } on TomSecretsSaveException catch (e) {
-          if (!_unreachable(e.kind)) {
-            _refuse(e.kind, e.message, {'reason': ?e.reason});
-          }
-          // GitHub is out of reach: the change waits in memory (a later
-          // save of the same vault replaces it; it carries the first).
-          final waiting = _pending[store];
-          _pending[store] = waiting != null
-              ? _Pending(stored, waiting.base, waiting.baseStored)
-              : _Pending(
-                  stored,
-                  base as String?,
-                  (await _vaults.vaultFile(store)).stored,
-                );
-          return {'op': 'ok', 'pending': true};
+          _refuse(e.kind, e.message, {'reason': ?e.reason});
         } finally {
           for (final s in _vaults.status) {
             if (s.name == store) _emit({'op': 'store_state', ..._stateOf(s)});
@@ -1322,14 +1250,4 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   /// Test support: the bytes held for [store].
   Future<Uint8List> heldBytesForTest(String store) async =>
       (await _vaults.vaultFile(store)).stored;
-}
-
-/// A save GitHub has not taken yet: the file, the revision it was made on and
-/// that revision's file (the merge base when the vault moved meanwhile).
-final class _Pending {
-  _Pending(this.stored, this.base, this.baseStored);
-
-  final Uint8List stored;
-  final String? base;
-  final Uint8List baseStored;
 }

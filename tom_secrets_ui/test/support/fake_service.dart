@@ -147,6 +147,10 @@ final class FakeService implements TomSecretsAdminChannel {
   /// The service's lock mode letter (`status`).
   String lockMode = 'a';
 
+  /// Whether a save GitHub cannot take waits in memory
+  /// (`statusReport.keepsUnwritten`, the offline cache off).
+  bool keepsUnwritten = false;
+
   /// The bundles `unlock {vault, bundle}` was given, in order.
   final List<({String vault, Uint8List compositeKey, String? outerKey})>
   bundles = [];
@@ -377,6 +381,7 @@ final class FakeService implements TomSecretsAdminChannel {
                 },
           ],
           if (!locked) 'links': links,
+          if (!locked && keepsUnwritten) 'keepsUnwritten': true,
         };
       case 'unlock':
         if (args['password'] != demoPassword) {

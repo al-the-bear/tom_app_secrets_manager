@@ -530,7 +530,7 @@ String tomSecretsDescribeAdminError(TomSecretsAdminException e) => switch ((
   // refusal says what to do itself.
   ('offline', 'no_copy') || ('token_expired', 'no_copy') => e.message,
   ('offline', _) || ('token_expired', _) =>
-    'The vault is served from its offline copy: '
+    'The vault is served from the copy held: '
         '${e.kind == 'offline' ? 'GitHub is not reachable' : 'the GitHub token expired'}. '
         'The change could not be written.',
   ('denied', 'token_refused') =>

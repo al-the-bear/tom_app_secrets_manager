@@ -66,6 +66,7 @@ final class TomSecretsStoreState {
     this.rewrittenHead,
     this.fetchedBytes,
     this.keyChanged = false,
+    this.reason,
   });
 
   /// Read from a `statusReport` store or a `store_state` event.
@@ -80,8 +81,14 @@ final class TomSecretsStoreState {
       rewrittenHead: (m['rewritten'] as Map?)?['head'] as String?,
       fetchedBytes: m['fetchedBytes'] is int ? m['fetchedBytes']! as int : null,
       keyChanged: m['keyChanged'] == true,
+      reason: m['reason'] as String?,
     );
   }
+
+  /// Why an `unavailable` store waits for GitHub: `offline` (GitHub cannot
+  /// be reached) or `token_expired`, while no copy of it is held (the
+  /// offline cache off); null otherwise.
+  final String? reason;
 
   /// **[C]** Whether it is served read-only from a copy under its old key:
   /// another device re-keyed it and its new key is not here yet
@@ -112,7 +119,8 @@ final class TomSecretsStoreState {
   /// it (the mobile app: every unlock fetches it again, on mobile data too).
   final int? fetchedBytes;
 
-  /// Whether it is served from its offline copy.
+  /// Whether it is served from the copy held (GitHub cannot serve it now):
+  /// in memory, or the offline cache.
   bool get isOffline =>
       state == 'offline' || state == 'token_expired' || source == 'cache';
 
@@ -133,7 +141,7 @@ final class TomSecretsStoreState {
           'with the primary, a shared vault\'s recipients file or pairing)',
     'token_expired' => 'the GitHub token expired',
     'offline' => 'GitHub is not reachable',
-    _ => source == 'cache' ? 'served from the offline copy' : null,
+    _ => source == 'cache' ? 'served from the copy held' : null,
   };
 }
 
@@ -176,6 +184,11 @@ class TomSecretsServiceConnection extends ChangeNotifier {
 
   /// The last `statusReport` (the Status view).
   Map<String, Object?> get report => _report;
+
+  /// Whether a save GitHub cannot take waits in the service's memory
+  /// (`statusReport.keepsUnwritten`: the offline cache off, the phone):
+  /// an offline vault can then be edited.
+  bool get keepsUnwritten => _report['keepsUnwritten'] == true;
 
   /// The stores, by name, as the service reports them.
   Map<String, TomSecretsStoreState> get stores => Map.unmodifiable(_stores);

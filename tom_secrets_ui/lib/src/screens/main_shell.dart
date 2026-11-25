@@ -186,6 +186,9 @@ class _MainShellState extends State<TomSecretsMainShell> {
 
   bool _integrationsChecked = false;
 
+  /// The preference holding the `offlineCacheRemoved` time already told.
+  static const String _cacheRemovedSeen = 'offlineCacheRemovedSeen';
+
   /// At every start (part-os-integration, "Keeping it right"): the
   /// installed integrations still name this machine's agent and helper,
   /// else they are written again and the user is told.
@@ -207,6 +210,23 @@ class _MainShellState extends State<TomSecretsMainShell> {
             'Updated the ${repaired.map((i) => i.name).join(' and ')} '
             'integration to name this machine\'s '
             '${repaired.length == 1 && repaired.single.name == 'git' ? 'helper' : 'agent'}.',
+      );
+    }
+    // Once, after the service applied the in-memory default to this
+    // device's settings and deleted its offline cache.
+    final connection = context.read<TomSecretsServiceConnection>();
+    final removed = connection.report['offlineCacheRemoved'];
+    final preferences = context.read<TomSecretsHost>().preferences;
+    if (removed is String && preferences.read(_cacheRemovedSeen) != removed) {
+      await preferences.write(_cacheRemovedSeen, removed);
+      if (!mounted) return;
+      tomShowNotice(
+        ScaffoldMessenger.maybeOf(context),
+        kind: 'offline-cache-removed',
+        message:
+            'The vaults are now kept in memory only: this device\'s offline '
+            'copies were deleted. Settings › "Keep the last fetched vault '
+            'files on this disk" turns them on again.',
       );
     }
     if (browsers.isNotEmpty) {

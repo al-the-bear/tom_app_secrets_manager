@@ -95,17 +95,27 @@ class TomSecretsStatusView extends StatelessWidget {
                 switch (s.state) {
                   'current' => 'synced',
                   'needs_unlock' => 'needs its own password',
-                  'unavailable' => 'unavailable',
+                  'unavailable' => switch (s.reason) {
+                    'offline' => 'waiting for GitHub',
+                    'token_expired' => 'waiting: GitHub refused the token',
+                    _ => 'unavailable',
+                  },
                   _ => s.offlineReason ?? s.state,
                 },
-                if (s.source != null) 'from ${s.source}',
+                if (s.source != null)
+                  s.source == 'cache'
+                      ? 'from the copy held'
+                      : 'from ${s.source}',
                 if (s.fetchedAt != null)
                   'fetched ${tomSecretsAge(s.fetchedAt!)}',
                 if (s.isStaleAt(DateTime.now()))
-                  'the offline copy is over a week old and may be out of date',
+                  'the copy held is over a week old and may be out of date',
                 if (s.rewrittenHead != null)
                   'its branch on GitHub was rewritten: a choice is needed',
-                if (s.notPushed > 0) '${s.notPushed} changes not yet on GitHub',
+                if (s.notPushed > 0)
+                  '${s.notPushed} change${s.notPushed == 1 ? '' : 's'} not yet '
+                      'on GitHub: kept in memory and written when GitHub '
+                      'answers; lost if the service stops or locks first',
               ].join(' · '),
             ),
           ),

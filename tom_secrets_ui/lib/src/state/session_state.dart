@@ -1256,7 +1256,10 @@ class TomSecretsSession extends ChangeNotifier {
       _index.where((e) => e.ref == ref).firstOrNull;
 
   /// Whether [store] cannot be saved now (served from its offline copy, so
-  /// a save is refused until the store is reachable), with why.
+  /// a save is refused until the store is reachable), with why. A service
+  /// that keeps a save GitHub cannot take in memory
+  /// ([TomSecretsServiceConnection.keepsUnwritten]) takes edits of an
+  /// offline store.
   String? readOnlyReason(String store) {
     if (systemVaultsReadOnly) {
       final file = _vaultOf(store)?.file;
@@ -1268,6 +1271,7 @@ class TomSecretsSession extends ChangeNotifier {
     // A file under a newer repository key than this device holds (a guided
     // rotation's two slots) is read, never written, also while current.
     if (state == null || !(state.isOffline || state.keyChanged)) return null;
+    if (!state.keyChanged && connection.keepsUnwritten) return null;
     return 'read-only: ${state.offlineReason}';
   }
 

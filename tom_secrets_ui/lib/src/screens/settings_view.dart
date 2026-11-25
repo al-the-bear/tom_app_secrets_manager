@@ -523,10 +523,18 @@ class _SettingsState extends State<TomSecretsSettingsView> {
           dense: true,
           contentPadding: EdgeInsets.zero,
           title: const Text(
-            'Keep the last fetched vault files as an offline '
+            'Keep the last fetched vault files on this disk as an offline '
             'cache',
           ),
-          value: _draft['offlineCache'] != false,
+          subtitle: const Text(
+            'Off (the default): the vaults are kept in memory only; a '
+            'restarted service fetches them again and waits for GitHub. '
+            'On: the service also starts without GitHub, but a copy of '
+            'each vault stays on this disk (encrypted as stored): with the '
+            'disk and the master password it opens anywhere, and old '
+            'copies outlive a rotation. Turning it off deletes the files.',
+          ),
+          value: _draft['offlineCache'] == true,
           onChanged: (v) => _set('offlineCache', v),
         ),
         _number(

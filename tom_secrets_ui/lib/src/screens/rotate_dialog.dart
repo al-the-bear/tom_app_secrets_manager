@@ -402,7 +402,8 @@ class _RotateState extends State<TomSecretsRotateDialog> {
           'history cut, so no commit keeps a file under the old keys.'
           '${_isPrimary ? ' The primary\'s new key file and repository key '
                     'reach your other devices by pairing or by hand; '
-                    'until then they open their offline copy only.' : ''}',
+                    'until then they serve the copy they hold, '
+                    'read-only.' : ''}',
           style: theme.textTheme.bodySmall,
         ),
         if (_error != null) ...[

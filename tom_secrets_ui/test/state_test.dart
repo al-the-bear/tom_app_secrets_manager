@@ -300,6 +300,15 @@ void main() {
       expect(session.readOnlyReason('primary'), isNull);
     });
 
+    test('an offline store is edited when the service keeps a save GitHub '
+        'cannot take in memory (the offline cache off)', () async {
+      service.store('team').state = 'offline';
+      service.keepsUnwritten = true;
+      await unlocked();
+      expect(connection.keepsUnwritten, isTrue);
+      expect(session.readOnlyReason('team'), isNull);
+    });
+
     test('locking drops every vault, the index and the selection', () async {
       await unlocked();
       session.selectedEntry = session.index.first.ref;
