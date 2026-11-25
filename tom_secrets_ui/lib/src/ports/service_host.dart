@@ -99,14 +99,59 @@ final class TomSecretsServiceStartFailed extends TomSecretsAttach {
 /// for.
 final class TomSecretsServiceUntrusted extends TomSecretsAttach {
   /// An endpoint refused for [reason] (`owner`, `mode`, `peer_user`,
-  /// `peer_executable`), [message] saying what is wrong.
-  const TomSecretsServiceUntrusted(this.reason, this.message);
+  /// `peer_executable`, `unpinned`, `no_identity`), [message] saying what
+  /// is wrong.
+  const TomSecretsServiceUntrusted(this.reason, this.message, {this.words});
 
   /// The admin library's `details.reason`.
   final String? reason;
 
   /// What is wrong, for the user.
   final String message;
+
+  /// With `unpinned`: the words of the identity key the service presents,
+  /// for the user to compare (protocol.md 6.1).
+  final String? words;
+}
+
+/// The service presents another identity key than the one this user's
+/// programs pinned (protocol.md 6.1): nothing was sent, and there is no
+/// going on with it.
+final class TomSecretsServiceKeyChanged extends TomSecretsAttach {
+  /// A changed key: the words [pinned] and the words [presented].
+  const TomSecretsServiceKeyChanged(
+    this.message, {
+    this.pinned,
+    this.presented,
+  });
+
+  /// What is wrong, for the user.
+  final String message;
+
+  /// The words of the key pinned.
+  final String? pinned;
+
+  /// The words of the key the service presents.
+  final String? presented;
+}
+
+/// A host that checks which service answers by its identity key and keeps
+/// the pins (the desktop; a phone runs no service).
+abstract interface class TomSecretsServiceIdentityHost
+    implements TomSecretsServiceHost {
+  /// Pins the key the service presents when its words are [words] (the
+  /// user compared them), then attaches; a service presenting other words
+  /// is [TomSecretsServiceKeyChanged].
+  Future<TomSecretsAttach> trustService(String words);
+
+  /// Forgets the pin of this machine's service (the user set the service
+  /// up anew), then attaches: the service is then not pinned, and its
+  /// words are compared again.
+  Future<TomSecretsAttach> forgetServicePin();
+
+  /// Pins the service keys the primary's device records name ([devices],
+  /// the `devices` of `pair.list`) for their hosts.
+  Future<void> pinDevices(List<Object?> devices);
 }
 
 /// Starts, attaches to and claims the service of this user.

@@ -2,6 +2,17 @@
 
 ## 0.1.0
 
+- The service's identity key (protocol.md 6.1): the gate screens show a
+  service the app has not met with its identity words and "The words are
+  the same: trust it" (no password field), and a service whose key changed
+  with the pinned and the presented words and no way on but "I set this
+  service up anew: compare the new identity"
+  (`TomSecretsConnectionPhase.keyChanged`, `TomSecretsServiceKeyChanged`,
+  `TomSecretsServiceIdentityHost`). Status shows the service's words with
+  "New key…" (`keys.rotate {identity}`); the Pairing screen's device list
+  shows each device's service identity; an unlock pins the other devices'
+  service keys; a pairing records the new device's service key, and the
+  First run names this machine's.
 - Attachments are shown in the editor from memory: a picture (PNG, JPEG,
   GIF, WebP, BMP, told by its bytes) in a zoomable viewer, UTF-8 text as
   selectable monospace text (the first 2 MiB); nothing is written to a

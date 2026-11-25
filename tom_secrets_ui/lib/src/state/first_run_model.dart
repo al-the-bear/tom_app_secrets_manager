@@ -7,6 +7,7 @@
 /// unlocked.
 library;
 
+import 'dart:convert' show base64;
 import 'dart:io' show InternetAddress, Platform;
 
 import 'package:flutter/foundation.dart';
@@ -229,6 +230,7 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
             device: host,
             linkAddress: link,
             linkRelay: _linkRelay(relayId),
+            serviceKey: await _serviceKey(),
           );
           _update(() {
             _receipt = receipt;
@@ -252,6 +254,7 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
         device: host,
         linkAddress: link,
         linkRelay: _linkRelay(relayId),
+        serviceKey: await _serviceKey(),
       );
       _update(() {
         _receipt = receipt;
@@ -667,6 +670,18 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
     ),
   );
 
+  TomSecretsServiceIdentityKey? _identityKey;
+
+  /// The identity key of the service this machine will run (protocol.md
+  /// 6.1), named in the pairing so the giving machine records it; written
+  /// into the data directory once the machine is set up.
+  Future<String> _serviceKey() async => base64.encode(
+    (_identityKey ??= await TomSecretsServiceIdentityKey.loadOrCreate(
+      firstRun.dataDirectory,
+      write: false,
+    )).publicKey,
+  );
+
   /// Sets the machine up, starts the service, attaches and unlocks it with
   /// the master password (the keys come from the keychain), then shows the
   /// last step. A refusal of the setup goes back to the step it is about.
@@ -683,6 +698,7 @@ class TomSecretsFirstRunModel extends ChangeNotifier implements TomTokenKeeper {
               deviceKey: deviceKey,
             )
           : await firstRun.run(setup);
+      _identityKey?.store();
     } on TomSecretsFirstRunException catch (e) {
       _busy = false;
       _step = switch (e.problem) {

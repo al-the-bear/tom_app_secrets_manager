@@ -1083,7 +1083,13 @@ gets:":
 ends it early; leaving the screen or locking closes it too.
 
 **"Paired devices"** lists each device with its platform, when it was
-paired, the key ids it received and its key-pair dates. **"Revoke"** ends
+paired, the key ids it received and its key-pair dates. A device that runs
+a secrets service also shows its **service identity**, eight words such as
+`harbor-violet-cedar-lantern-maple-orbit-pebble-quill`: the same words
+that machine's Status screen and its `tsm status` show. When the app or
+`tsm` on a machine asks ["Is this your secrets
+service?"](#is-this-your-secrets-service), this is where you look the
+words up. **"Revoke"** ends
 the mutual approvals. The device keeps the keys it received: if it is lost
 or no longer trusted, rotate those keys on the [Keys](#keys) screen (the
 confirmation names them).
@@ -1610,10 +1616,19 @@ stores:
 ![The Status screen](images/status-report-light.png)
 
 **Status** shows the service ("Running since", "Version and protocol",
-"Lock mode", "Admins attached"), each vault with its state, source, last
-fetch and changes not yet on GitHub, the approval links, and the hardening
-the service achieved. "Fetch every vault now" pulls the GitHub vaults at
-once.
+"Identity", "Lock mode", "Admins attached"), each vault with its state,
+source, last fetch and changes not yet on GitHub, the approval links, and
+the hardening the service achieved. "Fetch every vault now" pulls the
+GitHub vaults at once.
+
+**"Identity"** is the service's identity key, shown as eight words. The
+app and `tsm` remember it and talk only to the service that proves it
+holds this key; your other devices show the same words for this machine in
+their Pairing screen. "New key…" gives the service a new identity key: the
+old key vouches for the new one, so the app and `tsm` on this machine
+follow by themselves, and the words your other devices show change after
+their next sync. You need this only when you think the key file in the
+service's data directory was copied.
 
 **Approval links** lists every paired machine this one approves for
 ("Approving for bigbeast") and every machine that approves for this one
@@ -1709,8 +1724,52 @@ of these fails, the screen names it:
 - **The process answering is not the service expected**: another program,
   or a service installed elsewhere, answers. If it is a service of yours,
   start the app that belongs to it, or name the service in `TSM_SERVICE`.
+- **The service is older than this app** and has no identity key: stop it
+  (Settings › "Stop the service" in the app that belongs to it, or
+  `tsm stop`) and start the service that came with this app.
 
 "Look again" checks once more.
+
+### "Is this your secrets service?"
+
+Every secrets service has an identity key of its own, and the app talks
+only to the service whose key it knows. It learns the key by itself when
+it starts the service, when the machine is set up by pairing, and from
+your other devices. This screen appears when a service is already running
+that the app did not start and has no key for, for example one started
+with `tsm start` in a terminal by an older version, or after you removed
+the app's settings.
+
+The screen shows the service's identity as eight words. Nothing was sent
+to the service yet, and there is no password field.
+
+**To trust it:**
+
+1. Find the words for this machine somewhere you trust: the Pairing screen
+   of the app on another of your devices ("Paired devices", "service
+   identity"), or what `tsm status` printed on this machine earlier.
+2. Compare them with the words on the screen.
+3. When they are the same, choose "The words are the same: trust it". The
+   app remembers the key and goes on to the unlock.
+
+When the words differ, or you have nothing to compare with and did not
+start a service yourself, do not trust it: stop the service (`tsm stop`,
+or end its process) and choose "Start the service".
+
+### "The service's identity changed"
+
+The service that answers presents another identity key than the one the
+app remembered for this machine. The app sent nothing, and it offers no
+way to enter your password anyway.
+
+- **You set the service up anew**, restored or replaced its data
+  directory, or removed `service-identity.json`: choose "I set this
+  service up anew: compare the new identity". The app forgets the old key
+  and shows the new words to compare, as above.
+- **You did none of that**: something else answers in the service's place.
+  Do not enter your master password. Find out which process holds the
+  service's socket (`service.json` in the runtime directory names its
+  process id), stop it, and start the service from the app.
 
 ### "The service accepts no admin from this app here"
 

@@ -84,9 +84,17 @@ void main() {
       'TSM_RUNTIME_DIR': '${dir.path}/run',
       'TSM_DATA_DIR': '${dir.path}/data',
       'TSM_SERVICE': '${dir.path}/no-such-service',
+      // The app's pin file (never the user's).
+      'TSM_CONFIG_DIR': '${dir.path}/config',
     };
     keychain = TomInMemorySecretStore();
     host = TomSecretsDesktopServiceHost(environment: env, keychain: keychain);
+    // The tests' own admin connections check the service they started.
+    TomSecretsServiceTrust.fallbackIdentity = TomSecretsIdentityTrust(
+      pins: TomSecretsMemoryPins(),
+      crypto: const TomSecretsPqcIdentityCrypto(),
+      pinOnFirstUse: true,
+    );
   });
 
   tearDown(() async {
@@ -100,7 +108,12 @@ void main() {
     }
   });
 
-  Future<TomSecretsService> launch(List<int> adminKey) async {
+  /// Starts the service in this process; with [pinned] its identity key
+  /// is pinned as the host pins the key of a service it started.
+  Future<TomSecretsService> launch(
+    List<int> adminKey, {
+    bool pinned = true,
+  }) async {
     final service = await TomSecretsService.launch(
       TomSecretsServiceConfig(
         runtime: TomSecretsRuntime('${dir.path}/run', transport: transport),
@@ -115,8 +128,133 @@ void main() {
       ),
     );
     addTearDown(service.stop);
+    if (pinned) {
+      await host.pins.pin(
+        host.identityTrust.host,
+        '${dir.path}/run',
+        service.identityKey,
+        TomSecretsPinSource.start,
+      );
+    }
     return service;
   }
+
+  group('the service\'s identity key (protocol.md 6.1)', () {
+    test('a service the app did not start and has no pin for: no claim is '
+        'offered, its words are shown; trusted with the words compared, it '
+        'is pinned in the file the app shares with tsm', () async {
+      final key = tomSecretsRandomBytes();
+      final service = await launch(key, pinned: false);
+      final words = tomSecretsIdentityWords(service.identityKey);
+      for (final withKey in [false, true]) {
+        if (withKey) {
+          await keychain.write(
+            tomSecretsAdminKeyHandle(service.startedAt),
+            base64.encode(key),
+          );
+        }
+        final met = await host.attach();
+        expect(met, isA<TomSecretsServiceUntrusted>());
+        expect((met as TomSecretsServiceUntrusted).reason, 'unpinned');
+        expect(met.words, words);
+      }
+      await expectLater(
+        host.claim(_password),
+        throwsA(
+          isA<TomSecretsAdminException>()
+              .having((e) => e.kind, 'kind', tomSecretsServiceUntrusted)
+              .having((e) => e.details['reason'], 'reason', 'unpinned'),
+        ),
+      );
+      // Other words than the service presents pin nothing.
+      final wrong = await host.trustService('harbor-violet-cedar');
+      expect(wrong, isA<TomSecretsServiceKeyChanged>());
+      expect((wrong as TomSecretsServiceKeyChanged).presented, words);
+      expect(await host.pins.all(), isEmpty);
+
+      expect(await host.trustService(words), isA<TomSecretsAttached>());
+      final file = File('${dir.path}/config/services');
+      expect(file.existsSync(), isTrue);
+      if (!Platform.isWindows) {
+        expect(file.statSync().mode & 0x1ff, 0x180, reason: '0600');
+      }
+      final pin = (await host.pins.all()).single;
+      expect(pin.key, service.identityKey);
+      expect(pin.source, TomSecretsPinSource.trust);
+      expect(pin.runtime, '${dir.path}/run');
+      // tsm reads the same file.
+      expect(
+        (await TomSecretsPinFile(
+          File(tomSecretsPinFile(environment: env)),
+        ).all()).single.key,
+        service.identityKey,
+      );
+    });
+
+    test('a service with another key than the pinned one: nothing is sent, '
+        'no claim is offered; forgetting the pin leads back to comparing '
+        'the words', () async {
+      final key = tomSecretsRandomBytes();
+      final service = await launch(key, pinned: false);
+      final other = await TomSecretsServiceIdentityKey.generate();
+      addTearDown(other.dispose);
+      await host.pins.pin(
+        host.identityTrust.host,
+        '${dir.path}/run',
+        other.publicKey,
+        TomSecretsPinSource.start,
+      );
+      await keychain.write(
+        tomSecretsAdminKeyHandle(service.startedAt),
+        base64.encode(key),
+      );
+      final changed = await host.attach();
+      expect(changed, isA<TomSecretsServiceKeyChanged>());
+      expect(
+        (changed as TomSecretsServiceKeyChanged).pinned,
+        tomSecretsIdentityWords(other.publicKey),
+      );
+      expect(changed.presented, tomSecretsIdentityWords(service.identityKey));
+      await expectLater(
+        host.claim(_password),
+        throwsA(
+          isA<TomSecretsAdminException>().having(
+            (e) => e.kind,
+            'kind',
+            tomSecretsServiceKeyChanged,
+          ),
+        ),
+      );
+      expect(service.isLocked, isTrue);
+      final asked = await host.forgetServicePin();
+      expect(asked, isA<TomSecretsServiceUntrusted>());
+      expect((asked as TomSecretsServiceUntrusted).reason, 'unpinned');
+      expect(asked.words, tomSecretsIdentityWords(service.identityKey));
+    });
+
+    test('the keys of the other devices\' services, from the primary\'s '
+        'device records, are pinned for their hosts; a revoked device\'s '
+        'pin goes', () async {
+      final peer = await TomSecretsServiceIdentityKey.generate();
+      addTearDown(peer.dispose);
+      final record = {
+        'device': 'bigbeast',
+        'serviceKey': base64.encode(peer.publicKey),
+      };
+      await host.pinDevices([
+        record,
+        {'device': 'phone'},
+      ]);
+      final pin = (await host.pins.all()).single;
+      expect((pin.host, pin.runtime), ('bigbeast', null));
+      expect(pin.key, peer.publicKey);
+      expect(pin.source, TomSecretsPinSource.pairing);
+      await host.pinDevices([
+        {...record, 'revoked': '2026-11-25T10:00:00.000Z'},
+      ]);
+      expect(await host.pins.all(), isEmpty);
+    });
+  });
 
   test('the service: TSM_SERVICE, else beside the app, else in the app\'s '
       'distribution (tsm/bin)', () {

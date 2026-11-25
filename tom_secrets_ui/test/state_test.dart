@@ -96,6 +96,40 @@ void main() {
       expect(host.claims, ['demo-password']);
     });
 
+    test('a service not pinned yet and a service whose key changed: the '
+        'phases, at the attach and at a claim; the unlock pins the other '
+        'devices\' service keys', () async {
+      host.untrusted = TomSecretsAdminException(
+        'service_untrusted',
+        'this service is not known here yet',
+        details: const {'reason': 'unpinned', 'words': 'a-b-c'},
+      );
+      await connection.connect();
+      expect(connection.phase, TomSecretsConnectionPhase.untrusted);
+      expect(connection.untrustedReason, 'unpinned');
+      expect(connection.untrustedWords, 'a-b-c');
+      expect(connection.canTrustService, isTrue);
+      await connection.trustService();
+      expect(host.trusted, ['a-b-c']);
+      expect(connection.phase, TomSecretsConnectionPhase.attached);
+      expect(host.pinnedDevices, isEmpty, reason: 'locked: no records yet');
+
+      host
+        ..claimNeeded = true
+        ..untrusted = TomSecretsAdminException(
+          'service_key_changed',
+          'the service\'s identity key changed',
+          details: const {'pinned': 'a-b-c', 'presented': 'd-e-f'},
+        );
+      await connection.claim('demo-password');
+      expect(connection.phase, TomSecretsConnectionPhase.keyChanged);
+      expect(connection.changedKey, (pinned: 'a-b-c', presented: 'd-e-f'));
+      expect(host.claims, isEmpty);
+      await connection.forgetServicePin();
+      expect(connection.phase, TomSecretsConnectionPhase.untrusted);
+      expect(connection.untrustedWords, 'd-e-f');
+    });
+
     test('stopping the service shuts it down and tells the host, which drops '
         'its admin key', () async {
       await connection.connect();

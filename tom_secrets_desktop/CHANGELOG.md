@@ -2,6 +2,12 @@
 
 ## 0.1.0
 
+- The service host checks the service's identity key on every admin
+  connection (protocol.md 6.1): the pins in the file it shares with `tsm`
+  (`TomSecretsDesktopServiceHost.pins`, `TSM_CONFIG_DIR`), the primitives
+  in process; it pins the key of a service it started, of a service whose
+  words the user compared (`trustService`), and of the other devices'
+  services (`pinDevices`).
 - AutoFill passkeys (macOS 14): `ASPasskeyCredentialIdentity` beside the
   password identities; the pending file of the passkeys the extension made,
   read with the lasting pending key and replaced only when unchanged

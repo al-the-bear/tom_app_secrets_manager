@@ -9,10 +9,12 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
+import 'package:tom_secrets_client/admin.dart'
+    show TomSecretsAdminException, tomSecretsIdentityWords;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
@@ -447,6 +449,9 @@ class _PairingState extends State<TomSecretsPairingView> {
                   'GitHub: a pasted token'
                       '${d.githubTokenExpires == null ? '' : ' until ${date(d.githubTokenExpires)}'}',
                 if (d.isRevoked) 'revoked ${date(d.revoked)}',
+                // What that machine's `tsm status` and Status show.
+                if (_serviceWords(d) case final words?)
+                  'service identity: $words',
               ].join(' · '),
             ),
             trailing: d.isRevoked
@@ -525,3 +530,15 @@ String tomSecretsPlatformLabel(String platform) => switch (platform) {
   'fuchsia' => 'Fuchsia',
   _ => platform,
 };
+
+/// The words of the identity key [d]'s service presents, or null for a
+/// device that runs none (a phone) or has not said it yet.
+String? _serviceWords(TomSecretsDeviceRecord d) {
+  final key = d.serviceKey;
+  if (key == null) return null;
+  try {
+    return tomSecretsIdentityWords(base64.decode(key));
+  } on FormatException {
+    return null;
+  }
+}

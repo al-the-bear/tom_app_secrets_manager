@@ -95,6 +95,32 @@ void main() {
     await wait(10);
     await tester.tap(find.text('Status'));
     await tester.pumpAndSettle();
+    // The service's identity, as words, and a new key for it.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tsm-status-identity')),
+        matching: find.textContaining(
+          'harbor-violet-cedar-lantern-maple-orbit-pebble-quill',
+        ),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('tsm-identity-rotate')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tsm-identity-rotate-go')));
+    await wait(3);
+    expect(service.pairRotations.single, {
+      'approver': false,
+      'link': false,
+      'identity': true,
+    });
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tsm-status-identity')),
+        matching: find.textContaining('walrus-dahlia-cherry'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Approval links'), findsOneWidget);
     expect(
       find.byKey(const Key('tsm-status-link-host-bigbeast')),

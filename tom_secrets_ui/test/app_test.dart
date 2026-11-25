@@ -176,6 +176,86 @@ void main() {
     expect(find.text('Unlock'), findsWidgets);
   });
 
+  testWidgets('a service the app has not met: its identity words are shown '
+      'to compare, with no password field; trusted, the app attaches', (
+    tester,
+  ) async {
+    const words = 'harbor-violet-cedar-lantern-maple-orbit-pebble-quill';
+    final fake = FakeHost(service)
+      ..untrusted = TomSecretsAdminException(
+        'service_untrusted',
+        'this service is not known here yet; its identity is: $words',
+        details: const {'reason': 'unpinned', 'words': words},
+      );
+    host = TomSecretsHost(
+      service: fake,
+      preferences: TomSecretsMemoryPreferences(),
+    );
+    await pumpApp(tester);
+    expect(find.text('Is this your secrets service?'), findsOneWidget);
+    expect(
+      tester
+          .widget<SelectableText>(find.byKey(const Key('tsm-service-words')))
+          .data,
+      words,
+    );
+    expect(find.textContaining('Nothing was sent to it yet'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byKey(const Key('tsm-start-service')), findsNothing);
+    await tester.tap(find.byKey(const Key('tsm-trust-service')));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    expect(fake.trusted, [words]);
+    expect(find.text('Unlock'), findsWidgets);
+  });
+
+  testWidgets('the service\'s identity changed: the app says which was '
+      'pinned and which answers, offers no password field and no way on '
+      'but comparing the new identity', (tester) async {
+    final fake = FakeHost(service)
+      ..untrusted = TomSecretsAdminException(
+        'service_key_changed',
+        'the service\'s identity key changed',
+        details: const {
+          'pinned': 'harbor-violet-cedar-lantern-maple-orbit-pebble-quill',
+          'presented':
+              'walrus-dahlia-cherry-bronze-ladder-canyon-fountain-mint',
+        },
+      );
+    host = TomSecretsHost(
+      service: fake,
+      preferences: TomSecretsMemoryPreferences(),
+    );
+    await pumpApp(tester);
+    expect(find.text('The service\'s identity changed'), findsOneWidget);
+    final text = tester
+        .widget<Text>(find.byKey(const Key('tsm-service-gate-text')))
+        .data!;
+    expect(text, contains('harbor-violet-cedar'));
+    expect(text, contains('walrus-dahlia-cherry'));
+    expect(text, contains('do not enter the master password'));
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byKey(const Key('tsm-start-service')), findsNothing);
+    expect(find.byKey(const Key('tsm-trust-service')), findsNothing);
+
+    // Set up anew: the old pin goes, the new words are compared.
+    await tester.tap(find.byKey(const Key('tsm-forget-pin')));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    expect(fake.forgotten, 1);
+    expect(find.text('Is this your secrets service?'), findsOneWidget);
+    expect(
+      tester
+          .widget<SelectableText>(find.byKey(const Key('tsm-service-words')))
+          .data,
+      'walrus-dahlia-cherry-bronze-ladder-canyon-fountain-mint',
+    );
+  });
+
   testWidgets('something else answers where the service would: the app '
       'says what is wrong and what to do, and shows no password field', (
     tester,

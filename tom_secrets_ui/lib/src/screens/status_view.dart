@@ -10,12 +10,57 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tom_secrets_client/admin.dart' show TomSecretsAdminException;
 
 import '../state/service_connection.dart';
+import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 import 'rewritten_question.dart';
 import 'vault_browser.dart' show tomSecretsAge;
 
 /// The Status screen.
+/// Asks, then gives the service a new identity key.
+Future<void> _rotateIdentity(
+  BuildContext context,
+  TomSecretsServiceConnection c,
+) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      key: const Key('tsm-identity-rotate-dialog'),
+      title: const Text('A new identity key for this service'),
+      content: const SizedBox(
+        width: 520,
+        child: Text(
+          'The service makes a new identity key, and its old key signs the '
+          'new one: this app and tsm on this machine follow by themselves '
+          'at their next connection. The words your other devices show for '
+          'this machine change once they have synced.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('tsm-identity-rotate-go'),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Make a new key'),
+        ),
+      ],
+    ),
+  );
+  if (go != true) return;
+  String message;
+  try {
+    message = 'The service\'s identity is now ${await c.rotateIdentityKey()}.';
+  } on TomSecretsAdminException catch (e) {
+    message = tomSecretsDescribeAdminError(e);
+  }
+  messenger?.showSnackBar(SnackBar(content: Text(message)));
+}
+
 class TomSecretsStatusView extends StatelessWidget {
   /// The screen.
   const TomSecretsStatusView({super.key});
@@ -62,6 +107,20 @@ class TomSecretsStatusView extends StatelessWidget {
             '${service?['version'] ?? '—'}, protocol ${report['protocol'] ?? '—'}',
           ),
         ),
+        if (c.identityWords case final words?)
+          ListTile(
+            key: const Key('tsm-status-identity'),
+            title: const Text('Identity'),
+            subtitle: SelectableText(
+              '$words\nThe words your other devices and `tsm status` show '
+              'for this machine\'s service.',
+            ),
+            trailing: TextButton(
+              key: const Key('tsm-identity-rotate'),
+              onPressed: () => unawaited(_rotateIdentity(context, c)),
+              child: const Text('New key…'),
+            ),
+          ),
         ListTile(
           title: const Text('Lock mode'),
           subtitle: Text(switch (c.lockMode) {

@@ -369,6 +369,7 @@ final class FakeService implements TomSecretsAdminChannel {
           'lockMode': lockMode,
           'protocol': 1,
           'service': {'version': '0.1.0', 'start': 1763100000000},
+          'identity': {'words': identityWords, 'fingerprint': '5c1e' * 16},
           'stores': [
             if (!locked)
               for (final s in stores)
@@ -795,6 +796,17 @@ final class FakeService implements TomSecretsAdminChannel {
       case 'keys.rotate':
         _unlocked();
         pairRotations.add(args);
+        if (args['identity'] == true) {
+          identityWords =
+              'walrus-dahlia-cherry-bronze-ladder-canyon-mint-quill';
+          return {
+            'op': 'keysRotated',
+            'resigned': 0,
+            'delivered': const <String>[],
+            'pending': const <String>[],
+            'identity': {'words': identityWords},
+          };
+        }
         return {
           'op': 'keysRotated',
           'approverKeyId': 'fedcba98765432100123456789abcdef',
@@ -892,6 +904,7 @@ final class FakeService implements TomSecretsAdminChannel {
               ],
               approverKeyId: args['approver'] == null ? null : 'a1b2c3d4',
               linkKeySince: DateTime.utc(2026, 11, 15),
+              serviceKey: record?['serviceKey'] as String?,
             ),
           );
         return {'op': 'ok'};
@@ -1359,6 +1372,9 @@ final class FakeService implements TomSecretsAdminChannel {
   /// The relay servers' instance tokens kept (`relay.token.set`).
   final Map<String, String> relayTokens = {};
 
+  /// The words of the service's identity key (`statusReport.identity`).
+  String identityWords = 'harbor-violet-cedar-lantern-maple-orbit-pebble-quill';
+
   /// The approval links `status` reports (`statusReport.links`).
   List<Map<String, Object?>> links = [];
 
@@ -1382,7 +1398,7 @@ final class FakeService implements TomSecretsAdminChannel {
 
 /// A host whose service is [service], attachable at once; with [setup],
 /// a machine that is not set up until that first run wrote its bootstrap.
-final class FakeHost implements TomSecretsServiceHost {
+final class FakeHost implements TomSecretsServiceIdentityHost {
   FakeHost(this.service, {this.running = true, this.setup});
 
   final FakeService service;
@@ -1404,12 +1420,58 @@ final class FakeHost implements TomSecretsServiceHost {
   /// The passwords claims were made with.
   final List<String> claims = [];
 
+  /// The words [trustService] was called with.
+  final List<String> trusted = [];
+
+  /// How often the pin was forgotten.
+  int forgotten = 0;
+
+  /// The device lists handed to [pinDevices].
+  final List<List<Object?>> pinnedDevices = [];
+
+  TomSecretsAttach _refusal(TomSecretsAdminException e) =>
+      e.kind == 'service_key_changed'
+      ? TomSecretsServiceKeyChanged(
+          e.message,
+          pinned: e.details['pinned'] as String?,
+          presented: e.details['presented'] as String?,
+        )
+      : TomSecretsServiceUntrusted(
+          e.details['reason'] as String?,
+          e.message,
+          words: e.details['words'] as String?,
+        );
+
+  /// Pins what answers when it presents [words].
+  @override
+  Future<TomSecretsAttach> trustService(String words) async {
+    trusted.add(words);
+    if (untrusted?.details['words'] == words) untrusted = null;
+    return attach();
+  }
+
+  /// A changed key becomes a key not pinned yet.
+  @override
+  Future<TomSecretsAttach> forgetServicePin() async {
+    forgotten++;
+    final was = untrusted;
+    if (was != null && was.kind == 'service_key_changed') {
+      untrusted = TomSecretsAdminException(
+        'service_untrusted',
+        'this service is not known here yet',
+        details: {'reason': 'unpinned', 'words': was.details['presented']},
+      );
+    }
+    return attach();
+  }
+
+  @override
+  Future<void> pinDevices(List<Object?> devices) async =>
+      pinnedDevices.add(devices);
+
   @override
   Future<TomSecretsAttach> attach() async => untrusted != null
-      ? TomSecretsServiceUntrusted(
-          untrusted!.details['reason'] as String?,
-          untrusted!.message,
-        )
+      ? _refusal(untrusted!)
       : claimNeeded
       ? const TomSecretsClaimNeeded()
       : running

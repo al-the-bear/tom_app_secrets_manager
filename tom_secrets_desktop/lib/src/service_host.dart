@@ -15,7 +15,8 @@ import 'package:tom_core_storage/io.dart' show TomDesktopSecretStore;
 import 'package:tom_core_storage/settings.dart'
     show TomSecretStore, TomSecretStoreAvailability, TomSecretStoreException;
 import 'package:tom_secrets_client/admin.dart';
-import 'package:tom_secrets_core/tom_secrets_core.dart' show TomSecretsFirstRun;
+import 'package:tom_secrets_core/tom_secrets_core.dart'
+    show TomSecretsFirstRun, TomSecretsPqcIdentityCrypto;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 /// How the app names itself to the service (shown, never trusted: the
@@ -51,7 +52,8 @@ final class TomSecretsAdminClientChannel implements TomSecretsAdminChannel {
 }
 
 /// The desktop's [TomSecretsServiceHost].
-final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
+final class TomSecretsDesktopServiceHost
+    implements TomSecretsServiceIdentityHost {
   /// A host for this user's service: [environment] (default the process's;
   /// `TSM_RUNTIME_DIR`, `TSM_DATA_DIR`, `TSM_SERVICE`), the service
   /// executable beside [executableDirectory] (default the app's), the
@@ -61,7 +63,9 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
     String? executableDirectory,
     TomSecretStore? keychain,
     this.endpointInspector = const TomSecretsSystemEndpointInspector(),
-  }) : environment = environment ?? Platform.environment,
+    TomSecretsServicePins? pins,
+  }) : _pins = pins,
+       environment = environment ?? Platform.environment,
        executableDirectory =
            executableDirectory ?? File(Platform.resolvedExecutable).parent.path,
        _keychain = keychain;
@@ -88,10 +92,84 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
       environment: environment,
     ),
     inspector: endpointInspector,
+    identity: identityTrust,
   );
 
-  static TomSecretsServiceUntrusted _untrusted(TomSecretsAdminException e) =>
-      TomSecretsServiceUntrusted(e.details['reason'] as String?, e.message);
+  TomSecretsServicePins? _pins;
+
+  /// The pins of the services this user's app and `tsm` know (protocol.md
+  /// 6.1): the file both share.
+  TomSecretsServicePins get pins => _pins ??= TomSecretsPinFile(
+    File(tomSecretsPinFile(environment: environment)),
+  );
+
+  /// What the service's identity key is checked with: the pins, and the
+  /// primitives in this process.
+  late final TomSecretsIdentityTrust identityTrust = TomSecretsIdentityTrust(
+    pins: pins,
+    crypto: const TomSecretsPqcIdentityCrypto(),
+  );
+
+  /// What a refusal to send anything came to: an endpoint that is not this
+  /// user's service or not pinned yet, or a service whose key changed;
+  /// null for any other error.
+  static TomSecretsAttach? _refused(TomSecretsAdminException e) =>
+      switch (e.kind) {
+        tomSecretsServiceUntrusted => TomSecretsServiceUntrusted(
+          e.details['reason'] as String?,
+          e.message,
+          words: e.details['words'] as String?,
+        ),
+        tomSecretsServiceKeyChanged => TomSecretsServiceKeyChanged(
+          e.message,
+          pinned: e.details['pinned'] as String?,
+          presented: e.details['presented'] as String?,
+        ),
+        _ => null,
+      };
+
+  @override
+  Future<TomSecretsAttach> trustService(String words) async {
+    final rt = runtime;
+    final TomSecretsServiceIdentity presented;
+    try {
+      presented = await TomSecretsAdminClient.presentedIdentity(
+        rt,
+        trust: serviceTrust,
+      );
+    } on TomSecretsAdminException catch (e) {
+      if (e.kind == 'not_running') return const TomSecretsNoService();
+      final refused = _refused(e);
+      if (refused != null) return refused;
+      rethrow;
+    }
+    // What answers now may not be what showed the words.
+    if (!tomSecretsIdentityNamedBy(words, presented.publicKey)) {
+      return TomSecretsServiceKeyChanged(
+        'the service presents another identity than the one compared',
+        pinned: words,
+        presented: presented.words,
+      );
+    }
+    await pins.pin(
+      identityTrust.host,
+      rt.directory,
+      presented.publicKey,
+      TomSecretsPinSource.trust,
+    );
+    return attach();
+  }
+
+  @override
+  Future<TomSecretsAttach> forgetServicePin() async {
+    await pins.remove(identityTrust.host, runtime.directory);
+    return attach();
+  }
+
+  @override
+  Future<void> pinDevices(List<Object?> devices) async {
+    await tomSecretsPinDevices(pins, devices);
+  }
 
   TomSecretStore? _keychain;
   bool _keychainChecked = false;
@@ -167,7 +245,8 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
         await TomSecretsAdminClient.checkService(rt, trust: serviceTrust);
       } on TomSecretsAdminException catch (e) {
         if (e.kind == 'not_running') return const TomSecretsNoService();
-        if (e.kind == tomSecretsServiceUntrusted) return _untrusted(e);
+        final refused = _refused(e);
+        if (refused != null) return refused;
         rethrow;
       }
       return const TomSecretsClaimNeeded();
@@ -184,7 +263,8 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
       return TomSecretsAttached(TomSecretsAdminClientChannel(client));
     } on TomSecretsAdminException catch (e) {
       if (e.kind == 'not_running') return const TomSecretsNoService();
-      if (e.kind == tomSecretsServiceUntrusted) return _untrusted(e);
+      final refused = _refused(e);
+      if (refused != null) return refused;
       // The key was revoked by a claim since: only a claim attaches.
       return const TomSecretsClaimNeeded();
     }
@@ -206,9 +286,20 @@ final class TomSecretsDesktopServiceHost implements TomSecretsServiceHost {
       environment: environment,
     );
     switch (result) {
-      case TomSecretsStarted(:final adminKey):
+      case TomSecretsStarted(:final adminKey, :final identity):
         final start = (await runtime.readInfo())?['start'];
         if (start is int) await _keep(start, adminKey);
+        // First contact (protocol.md 6.1): the process this app started
+        // said its identity key on its standard output; it is pinned, and
+        // every connection from now on checks it.
+        if (identity != null) {
+          await pins.pin(
+            identityTrust.host,
+            runtime.directory,
+            identity,
+            TomSecretsPinSource.start,
+          );
+        }
         return attach();
       case TomSecretsAlreadyStarted():
         return attach();

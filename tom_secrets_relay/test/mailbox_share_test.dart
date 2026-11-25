@@ -85,6 +85,7 @@ void main() {
       ),
     );
     addTearDown(service.stop);
+    trustTestServices();
     admin = await TomSecretsAdminClient.connect(runtime, adminKey);
     addTearDown(admin.close);
     await admin.unlock(_password);

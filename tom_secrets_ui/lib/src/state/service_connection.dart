@@ -14,6 +14,7 @@ import 'package:tom_secrets_client/admin.dart'
     show
         TomSecretsAdminException,
         TomSecretsUnlockBundle,
+        tomSecretsServiceKeyChanged,
         tomSecretsServiceUntrusted,
         tomSecretsRandomBytes;
 
@@ -49,6 +50,10 @@ enum TomSecretsConnectionPhase {
   /// What answers on the admin endpoint is not this user's service
   /// (protocol.md 6.0): nothing is sent to it.
   untrusted,
+
+  /// The service presents another identity key than the one pinned
+  /// (protocol.md 6.1): nothing is sent to it.
+  keyChanged,
 
   /// Attached and subscribed.
   attached,
@@ -299,6 +304,76 @@ class TomSecretsServiceConnection extends ChangeNotifier {
   String? get untrustedReason => _untrustedReason;
   String? _untrustedReason;
 
+  /// With the reason `unpinned`: the words of the identity key the service
+  /// presents, which the user compares before [trustService].
+  String? get untrustedWords => _untrustedWords;
+  String? _untrustedWords;
+
+  /// In the phase [TomSecretsConnectionPhase.keyChanged]: the words of the
+  /// key pinned and of the key the service presents.
+  ({String? pinned, String? presented}) get changedKey => _changedKey;
+  ({String? pinned, String? presented}) _changedKey = (
+    pinned: null,
+    presented: null,
+  );
+
+  /// Whether the host keeps pins the user can set here (the desktop).
+  bool get canTrustService => host is TomSecretsServiceIdentityHost;
+
+  /// The user compared [untrustedWords] with what another device shows for
+  /// this machine: the service is pinned and attached to.
+  Future<void> trustService() async {
+    final identity = host;
+    final words = _untrustedWords;
+    if (identity is! TomSecretsServiceIdentityHost || words == null) return;
+    _set(TomSecretsConnectionPhase.connecting);
+    await _take(await _guard(() => identity.trustService(words)));
+  }
+
+  /// The user set this machine's service up anew: the old pin is
+  /// forgotten, and the new key's words are compared
+  /// ([TomSecretsConnectionPhase.untrusted], `unpinned`).
+  Future<void> forgetServicePin() async {
+    final identity = host;
+    if (identity is! TomSecretsServiceIdentityHost) return;
+    _set(TomSecretsConnectionPhase.connecting);
+    await _take(await _guard(identity.forgetServicePin));
+  }
+
+  /// The words of the attached service's identity key
+  /// (`statusReport.identity`), or null.
+  String? get identityWords =>
+      (_report['identity'] as Map?)?['words'] as String?;
+
+  /// Gives the service a new identity key (`keys.rotate {identity}`): the
+  /// old key signs the new one, so this app and `tsm` follow at their next
+  /// connection. Answers the new words.
+  Future<String?> rotateIdentityKey() async {
+    final answer = await request('keys.rotate', {
+      'approver': false,
+      'link': false,
+      'identity': true,
+    });
+    await refreshStatus();
+    return (answer['identity'] as Map?)?['words'] as String?;
+  }
+
+  /// A refusal of the admin library as what attaching came to, or null.
+  static TomSecretsAttach? _refusal(TomSecretsAdminException e) =>
+      switch (e.kind) {
+        tomSecretsServiceUntrusted => TomSecretsServiceUntrusted(
+          e.details['reason'] as String?,
+          e.message,
+          words: e.details['words'] as String?,
+        ),
+        tomSecretsServiceKeyChanged => TomSecretsServiceKeyChanged(
+          e.message,
+          pinned: e.details['pinned'] as String?,
+          presented: e.details['presented'] as String?,
+        ),
+        _ => null,
+      };
+
   /// Claims the running service with the master [password] (and
   /// [keyFile]). Throws `TomSecretsAdminException` for a wrong password.
   /// An endpoint that is not this user's service gets nothing: the phase
@@ -307,10 +382,9 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     try {
       await _take(await host.claim(password, keyFile: keyFile));
     } on TomSecretsAdminException catch (e) {
-      if (e.kind != tomSecretsServiceUntrusted) rethrow;
-      await _take(
-        TomSecretsServiceUntrusted(e.details['reason'] as String?, e.message),
-      );
+      final refusal = _refusal(e);
+      if (refusal == null) rethrow;
+      await _take(refusal);
     }
   }
 
@@ -421,6 +495,28 @@ class TomSecretsServiceConnection extends ChangeNotifier {
           MapEntry(k['key'] as String, k.cast<String, Object?>()),
       ]);
     notifyListeners();
+    if (_locked) {
+      _devicesPinned = false;
+    } else {
+      unawaited(_pinDevices());
+    }
+  }
+
+  bool _devicesPinned = false;
+
+  /// Once per unlock: the keys of the other devices' services, which the
+  /// primary's device records name, are pinned for their hosts.
+  Future<void> _pinDevices() async {
+    final identity = host;
+    if (_devicesPinned || identity is! TomSecretsServiceIdentityHost) return;
+    _devicesPinned = true;
+    try {
+      final devices = (await request('pair.list'))['devices'];
+      if (devices is List) await identity.pinDevices(devices);
+    } on Object {
+      // A convenience: the next unlock tries again.
+      _devicesPinned = false;
+    }
   }
 
   /// Sends [op] over the attached connection. Throws
@@ -443,14 +539,9 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     try {
       return await f();
     } on TomSecretsAdminException catch (e) {
-      return switch (e.kind) {
-        'not_running' => const TomSecretsNoService(),
-        tomSecretsServiceUntrusted => TomSecretsServiceUntrusted(
-          e.details['reason'] as String?,
-          e.message,
-        ),
-        _ => TomSecretsServiceStartFailed(e.message),
-      };
+      return e.kind == 'not_running'
+          ? const TomSecretsNoService()
+          : _refusal(e) ?? TomSecretsServiceStartFailed(e.message);
     }
   }
 
@@ -465,10 +556,23 @@ class TomSecretsServiceConnection extends ChangeNotifier {
         _set(TomSecretsConnectionPhase.notSetUp);
       case TomSecretsClaimNeeded():
         _set(TomSecretsConnectionPhase.claimNeeded);
-      case TomSecretsServiceUntrusted(:final reason, :final message):
+      case TomSecretsServiceUntrusted(
+        :final reason,
+        :final message,
+        :final words,
+      ):
         _message = message;
         _untrustedReason = reason;
+        _untrustedWords = words;
         _set(TomSecretsConnectionPhase.untrusted);
+      case TomSecretsServiceKeyChanged(
+        :final message,
+        :final pinned,
+        :final presented,
+      ):
+        _message = message;
+        _changedKey = (pinned: pinned, presented: presented);
+        _set(TomSecretsConnectionPhase.keyChanged);
       case TomSecretsCannotStart(:final message):
         _message = message;
         _set(TomSecretsConnectionPhase.cannotStart);
@@ -483,6 +587,7 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     await _channel?.close();
     _channel = channel;
     _message = null;
+    _devicesPinned = false;
     _phase = TomSecretsConnectionPhase.attached;
     _subscription = channel.events.listen(
       _onEvent,

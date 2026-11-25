@@ -17,6 +17,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tom_basics/utilities.dart';
+import 'package:tom_secrets_client/admin.dart'
+    show tomSecretsIdentityKeyLength, tomSecretsIdentityWords;
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
@@ -299,10 +301,21 @@ void main() {
         approverKeyId: 'a1b2c3d4',
         approverKeySince: DateTime.utc(2026, 11, 2),
         linkKeySince: DateTime.utc(2026, 11, 2),
+        // The identity key of that machine's service (demo bytes).
+        serviceKey: base64.encode(
+          Uint8List(tomSecretsIdentityKeyLength)..fillRange(0, 40, 7),
+        ),
       ),
     );
     await pairingScreen(tester);
     expect(find.textContaining('legiondary01 · Windows'), findsOneWidget);
+    // Its words, as that machine's `tsm status` shows them.
+    expect(
+      find.textContaining(
+        'service identity: ${tomSecretsIdentityWords(Uint8List(tomSecretsIdentityKeyLength)..fillRange(0, 40, 7))}',
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('paired 2026-11-02 by mbp'), findsOneWidget);
     expect(
       find.textContaining('approver key since 2026-11-02'),

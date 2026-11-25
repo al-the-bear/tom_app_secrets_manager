@@ -12,7 +12,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tom_credentials_ui/tom_credentials_ui.dart';
 import 'package:tom_secrets_client/admin.dart'
-    show TomSecretsAdminException, tomSecretsUntrustedAdvice;
+    show
+        TomSecretsAdminException,
+        tomSecretsKeyChangedAdvice,
+        tomSecretsUntrustedAdvice;
 
 import '../ports/desktop_ports.dart';
 import '../state/os_unlock.dart';
@@ -93,6 +96,11 @@ class TomSecretsConnectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<TomSecretsServiceConnection>();
+    final unpinned =
+        c.phase == TomSecretsConnectionPhase.untrusted &&
+        c.untrustedReason == 'unpinned' &&
+        c.untrustedWords != null &&
+        c.canTrustService;
     final (title, text, busy) = switch (c.phase) {
       TomSecretsConnectionPhase.connecting => (
         'Connecting',
@@ -126,6 +134,13 @@ class TomSecretsConnectionScreen extends StatelessWidget {
         c.message ?? '',
         false,
       ),
+      // A service this app has not met: its words, to compare.
+      TomSecretsConnectionPhase.untrusted when unpinned => (
+        'Is this your secrets service?',
+        'A secrets service runs on this machine that this app did not '
+            'start and has not met before. Its identity is:',
+        false,
+      ),
       // What is wrong, then what to do; never a password field.
       TomSecretsConnectionPhase.untrusted => (
         'This is not your secrets service',
@@ -134,14 +149,27 @@ class TomSecretsConnectionScreen extends StatelessWidget {
             'Nothing was sent to it.',
         false,
       ),
+      TomSecretsConnectionPhase.keyChanged => (
+        'The service\'s identity changed',
+        'This app pinned the identity '
+            '${c.changedKey.pinned ?? '(unknown)'} for the secrets service '
+            'on this machine; what answers now presents '
+            '${c.changedKey.presented ?? 'another one'}.\n\n'
+            '$tomSecretsKeyChangedAdvice',
+        false,
+      ),
       _ => ('', '', false),
     };
+    final refused =
+        c.phase == TomSecretsConnectionPhase.untrusted ||
+        c.phase == TomSecretsConnectionPhase.keyChanged;
     final startable =
-        c.phase != TomSecretsConnectionPhase.cannotStart &&
-        c.phase != TomSecretsConnectionPhase.untrusted;
+        c.phase != TomSecretsConnectionPhase.cannotStart && !refused;
     return TomSecretsGateCard(
       title: title,
-      icon: c.phase == TomSecretsConnectionPhase.untrusted
+      icon: unpinned
+          ? Icons.fingerprint
+          : refused
           ? Icons.gpp_bad_outlined
           : Icons.dns_outlined,
       children: [
@@ -150,10 +178,43 @@ class TomSecretsConnectionScreen extends StatelessWidget {
           key: const Key('tsm-service-gate-text'),
           textAlign: TextAlign.center,
         ),
+        if (unpinned) ...[
+          const SizedBox(height: 12),
+          SelectableText(
+            c.untrustedWords!,
+            key: const Key('tsm-service-words'),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Compare these words with the ones another of your devices '
+            'shows for this machine (Pairing, the device list), or with '
+            'what `tsm status` showed here. Trust it only when they are '
+            'the same: from then on this app talks to this service alone. '
+            'Nothing was sent to it yet.',
+            textAlign: TextAlign.center,
+          ),
+        ],
         const SizedBox(height: 20),
         if (busy)
           const Center(child: CircularProgressIndicator())
         else ...[
+          if (unpinned)
+            FilledButton(
+              key: const Key('tsm-trust-service'),
+              onPressed: () => unawaited(c.trustService()),
+              child: const Text('The words are the same: trust it'),
+            ),
+          if (c.phase == TomSecretsConnectionPhase.keyChanged &&
+              c.canTrustService)
+            OutlinedButton(
+              key: const Key('tsm-forget-pin'),
+              onPressed: () => unawaited(c.forgetServicePin()),
+              child: const Text(
+                'I set this service up anew: compare the new identity',
+              ),
+            ),
           if (startable)
             FilledButton(
               key: const Key('tsm-start-service'),

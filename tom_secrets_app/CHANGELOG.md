@@ -2,6 +2,12 @@
 
 ## 0.1.2
 
+- The app talks only to the secrets service whose identity key it pinned
+  (when it started it, by pairing, or after you compared its words), and
+  the master password of a claim is encrypted to that service. A service
+  it has not met shows its identity words to compare; a service whose key
+  changed is refused. Status and the Pairing screen's device list show the
+  words (`tom_secrets_service` 0.26.0, `tom_secrets_client` 0.2.25).
 - Imported fields keep their own labels (`tom_secrets_core` 0.2.28): no
   section prefix such as `Weitere Details · `.
 - Attachments are shown in the app, from memory only: pictures (PNG, JPEG,

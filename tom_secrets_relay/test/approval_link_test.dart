@@ -57,6 +57,7 @@ final class _Machine {
   }
 
   Future<TomSecretsAdminClient> admin() async {
+    trustTestServices();
     final c = await TomSecretsAdminClient.connect(runtime, adminKey);
     addTearDown(c.close);
     await c.unlock(_password);

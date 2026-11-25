@@ -252,6 +252,7 @@ class TomSecretsPairingModel extends ChangeNotifier {
       revoked: time('revoked'),
       githubAuth: TomSecretsGitHubAuth.of(m['githubAuth'] as String?),
       githubTokenExpires: time('githubTokenExpires'),
+      serviceKey: m['serviceKey'] as String?,
     );
   }
 
@@ -495,7 +496,12 @@ class TomSecretsPairingModel extends ChangeNotifier {
           'linkKey': keys.linkKey.toJson(),
         },
       // The receiving device's platform, as its done answer names it.
-      'record': {'keyIds': keyIds, 'platform': ?given.receiverPlatform},
+      'record': {
+        'keyIds': keyIds,
+        'platform': ?given.receiverPlatform,
+        // The identity key of the service that device will run.
+        'serviceKey': ?keys.serviceKey,
+      },
       // The relay link both sides agreed on (part-relay).
       if (_identity != null)
         if (tomSecretsPairingLink(_identity!, keys) case final link?)
