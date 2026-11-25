@@ -10,6 +10,8 @@
 library;
 
 import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -20,7 +22,10 @@ import 'package:tom_secrets_mobile/tom_secrets_mobile.dart';
 import 'package:tom_secrets_service/tom_secrets_service.dart'
     show TomSecretsAdminException, TomSecretsUnlockBundle;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart'
-    show TomSecretsMemoryPreferences;
+    show
+        TomSecretsMemoryPreferences,
+        TomSecretsServiceConnection,
+        TomSecretsSession;
 
 import 'support/demo_vaults.dart';
 import 'support/net_switch.dart';
@@ -153,6 +158,73 @@ void main() {
       ),
       containsAll(['From the phone', 'From mbp']),
     );
+  });
+
+  test('a vault of 1,000 entries and 2 MB of attachments: saved through '
+      'the session (no frames here: the engine is in the app\'s process), '
+      'written to GitHub, and opened again by another engine, in a few '
+      'seconds', () async {
+    Future<TomSecretsSession> open(TomSecretsMobileEngine phone) async {
+      final connection = TomSecretsServiceConnection(
+        TomSecretsMobileServiceHost(phone),
+      );
+      addTearDown(connection.dispose);
+      await connection.connect();
+      await connection.unlock(demoPassword);
+      final session = TomSecretsSession(
+        connection,
+        TomSecretsMemoryPreferences(),
+        systemVaultsReadOnly: true,
+      );
+      addTearDown(session.dispose);
+      await session.load();
+      return session;
+    }
+
+    final session = await open(engine);
+    final file = session.vault('primary')!.file;
+    final group = file.body.rootGroup;
+    final before = group.entries.length;
+    final random = Random(1);
+    for (var i = 0; i < 1000; i++) {
+      final entry = KdbxEntry.create(file, group)..label = 'Demo $i';
+      entry.setString(
+        KdbxKeyCommon.PASSWORD,
+        ProtectedValue.fromString('demo-password-$i'),
+      );
+      if (i % 200 == 0) {
+        // Five demo images of 400 KB, as an export carries them.
+        entry.createBinary(
+          isProtected: false,
+          name: 'image$i.png',
+          bytes: Uint8List.fromList(
+            List.generate(400 * 1000, (_) => random.nextInt(256)),
+          ),
+        );
+      }
+      group.addEntry(entry);
+    }
+
+    final watch = Stopwatch()..start();
+    await session.save('primary');
+    final saved = watch.elapsed;
+    // The engine reports no progress: nothing is sent in parts.
+    expect(session.saveProgress, isNull);
+    final onGitHub = await demo.fetch(demoPrimary, primaryCredentials());
+    expect(onGitHub.body.rootGroup.entries, hasLength(before + 1000));
+
+    final other = newEngine();
+    addTearDown(other.close);
+    watch.reset();
+    final again = await open(other);
+    final opened = watch.elapsed;
+    final entries = again.vault('primary')!.file.body.rootGroup.entries;
+    expect(entries, hasLength(before + 1000));
+    expect(entries.where((e) => e.binaryEntries.isNotEmpty).length, 5);
+    // A few seconds each (the debug VM, Argon2 light here).
+    expect(saved, lessThan(const Duration(seconds: 15)), reason: '$saved');
+    expect(opened, lessThan(const Duration(seconds: 15)), reason: '$opened');
+    printOnFailure('saved in $saved, opened in $opened');
   });
 
   test('the background refresh (DP-151): another device\'s change comes into '

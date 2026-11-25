@@ -228,8 +228,86 @@ void main() {
       again.dispose();
     });
 
-    test('an edit is saved against the revision read, and the vault is read '
-        'back', () async {
+    test(
+      'a save the service wrote as it was sent reads nothing back; a '
+      'merged one, and a service that names no revision, are read back',
+      () async {
+        await unlocked();
+        final main = session.index.firstWhere((e) => e.title == 'Main');
+        Future<int> readsOfASave() async {
+          final before = service.requests.length;
+          await session.updateEntry(
+            main.ref,
+            (e) =>
+                e.setString(KdbxKeyCommon.URL, PlainValue('https://a.example')),
+          );
+          expect(
+            session.vault('primary')!.revision,
+            service.store('primary').revision,
+          );
+          return service.requests
+              .skip(before)
+              .where((r) => r['op'] == 'vaultFile')
+              .length;
+        }
+
+        expect(await readsOfASave(), 0);
+        service.mergeNextSave = true;
+        expect(await readsOfASave(), 1);
+        service
+          ..mergeNextSave = false
+          ..saveAnswersRevision = false;
+        expect(await readsOfASave(), 1);
+      },
+    );
+
+    test('a large save reports how far it was sent, from 1 MiB on; it is '
+        'gone once the save ended', () async {
+      await unlocked();
+      final main = session.index.firstWhere((e) => e.title == 'Main');
+      final seen = <String>[];
+      void watch() {
+        final p = session.saveProgress;
+        if (p != null) seen.add('${p.store} ${p.sent}/${p.total} ${p.isSent}');
+      }
+
+      session.addListener(watch);
+      addTearDown(() => session.removeListener(watch));
+      const mib = 1024 * 1024;
+      service.progressSteps = const [(mib, 4 * mib), (4 * mib, 4 * mib)];
+      await session.updateEntry(
+        main.ref,
+        (e) => e.setString(KdbxKeyCommon.URL, PlainValue('https://b.example')),
+      );
+      expect(seen.toSet(), {
+        'primary $mib/${4 * mib} false',
+        'primary ${4 * mib}/${4 * mib} true',
+      });
+      expect(session.saveProgress, isNull);
+      expect(
+        tomSecretsSaveProgressText(
+          const TomSecretsSaveProgress('primary', mib, 4 * mib),
+        ),
+        'Saving primary: 1.0 of 4.0 MB sent',
+      );
+      expect(
+        tomSecretsSaveProgressText(
+          const TomSecretsSaveProgress('primary', 4 * mib, 4 * mib),
+        ),
+        'Sent 4.0 MB; the service is writing primary…',
+      );
+
+      // A save of 1 MiB or less shows none.
+      seen.clear();
+      service.progressSteps = const [(1000, mib), (mib, mib)];
+      await session.updateEntry(
+        main.ref,
+        (e) => e.setString(KdbxKeyCommon.URL, PlainValue('https://c.example')),
+      );
+      expect(seen, isEmpty);
+    });
+
+    test('an edit is saved against the revision read', () async {
       await unlocked();
       final main = session.index.firstWhere((e) => e.title == 'Main');
       final before = service.store('primary').revision;

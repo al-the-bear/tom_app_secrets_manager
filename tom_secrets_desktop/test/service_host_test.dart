@@ -261,6 +261,98 @@ void main() {
     },
   );
 
+  test(
+    'a vault with 40 MB of attachments: saved and opened again through '
+    'the session in under 10 seconds each; the save reports how far it '
+    'was sent, and the copy held takes the written file\'s revision',
+    () async {
+      final key = tomSecretsRandomBytes();
+      final service = await launch(key);
+      await keychain.write(
+        tomSecretsAdminKeyHandle(service.startedAt),
+        base64.encode(key),
+      );
+      Future<TomSecretsSession> open(TomSecretsServiceConnection c) async {
+        final session = TomSecretsSession(c, TomSecretsMemoryPreferences());
+        addTearDown(session.dispose);
+        await c.connect();
+        if (c.locked) await c.unlock(_password);
+        for (
+          var i = 0;
+          i < 1200 && (session.loading || session.vaults.isEmpty);
+          i++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+        return session;
+      }
+
+      final connection = TomSecretsServiceConnection(host);
+      addTearDown(connection.dispose);
+      final session = await open(connection);
+      final file = session.vault('primary')!.file;
+      final group = file.body.rootGroup;
+      final random = Random(1);
+      for (var i = 0; i < 1000; i++) {
+        final entry = KdbxEntry.create(file, group)..label = 'Demo $i';
+        entry.setString(
+          KdbxKeyCommon.PASSWORD,
+          ProtectedValue.fromString('demo-password-$i'),
+        );
+        if (i % 25 == 0) {
+          // Forty demo attachments of 1 MB.
+          entry.createBinary(
+            isProtected: false,
+            name: 'scan$i.pdf',
+            bytes: Uint8List.fromList(
+              List.generate(1000 * 1000, (_) => random.nextInt(256)),
+            ),
+          );
+        }
+        group.addEntry(entry);
+      }
+
+      final progress = <TomSecretsSaveProgress>[];
+      void watchProgress() {
+        final p = session.saveProgress;
+        if (p != null && (progress.isEmpty || progress.last.sent != p.sent)) {
+          progress.add(p);
+        }
+      }
+
+      session.addListener(watchProgress);
+      final watch = Stopwatch()..start();
+      await session.save('primary');
+      final saved = watch.elapsed;
+      session.removeListener(watchProgress);
+
+      // Sent in steps, over 40 MB in all (the file as base64), to the end.
+      expect(progress.length, greaterThan(20));
+      expect(progress.first.store, 'primary');
+      expect(progress.last.total, greaterThan(40 * 1000 * 1000));
+      expect(progress.last.isSent, isTrue);
+      expect(session.saveProgress, isNull);
+      // The copy held is the file written: its revision is the service's.
+      final written = File('${dir.path}/primary.kdbx').readAsBytesSync();
+      expect(session.vault('primary')!.revision, tomSecretsBlobId(written));
+      expect(written.length, greaterThan(40 * 1000 * 1000));
+
+      final other = TomSecretsServiceConnection(host);
+      addTearDown(other.dispose);
+      watch.reset();
+      final again = await open(other);
+      final opened = watch.elapsed;
+      final entries = again.vault('primary')!.file.body.rootGroup.entries;
+      expect(entries, hasLength(1001));
+      expect(entries.where((e) => e.binaryEntries.isNotEmpty).length, 40);
+      expect(saved, lessThan(const Duration(seconds: 10)), reason: '$saved');
+      expect(opened, lessThan(const Duration(seconds: 10)), reason: '$opened');
+      // ignore: avoid_print
+      print('40 MB: saved in $saved, opened in $opened');
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
+
   test('what answers is not this user\'s service: no claim is offered and '
       'none is sent (the socket opened to others; another user\'s process); '
       'closed again, the claim is offered', () async {

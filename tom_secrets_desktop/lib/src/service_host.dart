@@ -36,7 +36,8 @@ final class TomSecretsAdminClientChannel implements TomSecretsAdminChannel {
   Future<Map<String, Object?>> request(
     String op, [
     Map<String, Object?> args = const {},
-  ]) => client.request(op, args);
+    void Function(int sent, int total)? onProgress,
+  ]) => client.request(op, args, onProgress);
 
   @override
   Stream<Map<String, Object?>> get events => client.events;

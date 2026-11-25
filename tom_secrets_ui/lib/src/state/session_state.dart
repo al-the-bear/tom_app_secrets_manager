@@ -25,6 +25,28 @@ import 'rotation.dart';
 import 'service_connection.dart';
 import 'shares.dart';
 
+/// A save is shown with its progress from this many bytes on.
+const int tomSecretsSaveProgressFrom = 1024 * 1024;
+
+/// How far the save of [store] has been sent: [sent] of [total] bytes.
+@immutable
+final class TomSecretsSaveProgress {
+  /// [sent] of [total] bytes of [store]'s save.
+  const TomSecretsSaveProgress(this.store, this.sent, this.total);
+
+  /// The store being saved.
+  final String store;
+
+  /// The bytes handed to the service so far.
+  final int sent;
+
+  /// The bytes of the whole save.
+  final int total;
+
+  /// Whether everything was sent: the service is writing it now.
+  bool get isSent => sent >= total;
+}
+
 /// A vault open in the app's memory.
 final class TomSecretsOpenVault {
   TomSecretsOpenVault._({
@@ -1708,6 +1730,12 @@ class TomSecretsSession extends ChangeNotifier {
   TomSecretsOpenVault? _vaultOf(String store) =>
       _vaults[store] ?? _editOnly[store];
 
+  /// The save being sent, while it is over 1 MiB
+  /// ([tomSecretsSaveProgressFrom]) and on its way to the service; null
+  /// otherwise.
+  TomSecretsSaveProgress? get saveProgress => _saveProgress;
+  TomSecretsSaveProgress? _saveProgress;
+
   /// Saves [store]'s file through the service (protocol.md 6.4) against the
   /// revision it was read at, then reads back what was written. Throws
   /// `TomSecretsAdminException`; on `stale_base` the vault is read again and
@@ -1730,14 +1758,36 @@ class TomSecretsSession extends ChangeNotifier {
     );
     _ownSaves.add(store);
     try {
-      await connection.request('save', {
-        'store': store,
-        'bytes': base64.encode(bytes),
-        'baseRevision': vault.revision,
-        'keys': ?keys,
-        if (recipients != null) 'recipients': base64.encode(recipients),
-      });
-      await _reopen(store);
+      final answer = await connection.request(
+        'save',
+        {
+          'store': store,
+          'bytes': base64.encode(bytes),
+          'baseRevision': vault.revision,
+          'keys': ?keys,
+          if (recipients != null) 'recipients': base64.encode(recipients),
+        },
+        (sent, total) {
+          // Shown for a save that takes time to send: over 1 MiB.
+          if (total <= tomSecretsSaveProgressFrom) return;
+          _saveProgress = TomSecretsSaveProgress(store, sent, total);
+          notifyListeners();
+        },
+      );
+      final revision = answer['revision'];
+      if (revision is String &&
+          answer['merged'] != true &&
+          keys == null &&
+          recipients == null) {
+        // The service wrote the file as it was sent: the copy held here is
+        // that file, and nothing is read back (with large attachments the
+        // read-back cost as much as the save).
+        vault.revision = revision;
+      } else {
+        // Merged with what another device wrote, re-keyed, or a service
+        // that does not say: read what is there now.
+        await _reopen(store);
+      }
     } on TomSecretsAdminException catch (e) {
       if (e.details['reason'] == 'stale_base') {
         await _reopen(store);
@@ -1745,6 +1795,7 @@ class TomSecretsSession extends ChangeNotifier {
       rethrow;
     } finally {
       bytes.fillRange(0, bytes.length, 0);
+      _saveProgress = null;
       _ownSaves.remove(store);
       _reindex();
       notifyListeners();

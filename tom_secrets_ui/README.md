@@ -418,6 +418,11 @@ offering the import and the pairing.
   `toPdf` renders it to an A4 PDF (`pdf`). `TomSecretsSession.emergencySheet`
   makes it as the keys are now, `TomSecretsFirstRunModel.emergencySheet` for the
   primary being created.
+- `TomSecretsSaveProgressLine`: How far a large save has been sent
+  (`TomSecretsSession.saveProgress`, from 1 MiB on: the bytes the admin
+  connection has written, then "the service is writing"), below the Import
+  screen's "Import" and the entry editor's "Save". A save the service wrote
+  as it was sent reads nothing back (`ok`'s `revision`, protocol.md 6.4).
 - `TomSecretsEmergencySheetOffer`: "Print the emergency sheet…" (the host's
   `TomSecretsPrinter`) and "Save it as a PDF…" (`TomSecretsFiles.save`), in the
   First run wizard's protection step and the rotation's result.

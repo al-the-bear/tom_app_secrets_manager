@@ -410,7 +410,11 @@ An entry is a "Login", an "API token", a "Secure note" or an "SSH key"
 - "Notes";
 - "Custom fields" ("Add a field"; each field can be protected);
 - "Tags and expiry": tags separated by commas, and "Expires" with a date;
-- "Attachments": "Attach a file", "Save as…", "Remove";
+- "Attachments": "Attach a file", "Save as…", "Remove". A vault with many
+  megabytes of attachments takes some seconds to save: below "Save" a bar
+  then shows how much of the file has been sent to the service ("Saving
+  primary: 12.0 of 53.4 MB sent"), and "the service is writing" once it is
+  all there;
 - "How clients name it": the "Path" and the "Key (tsm.key)", the name a
   program asks for (lower-case dotted names, for example
   `telegram.bot_token`, unique in the vault);
@@ -811,7 +815,10 @@ plaintext.
 3. **"Preview"** shows what would happen without writing anything: the
    counts (added, updated, imported as conflicts, unchanged, left out, not
    imported), "What the format loses", the "Largest attachments" and every
-   item. **"Import"** writes it and shows the report.
+   item. **"Import"** writes it and shows the report. An export with large
+   attachments takes some seconds to save: a bar shows how much of the
+   vault's file has been sent to the service, then that the service is
+   writing it.
 
 Importing the same export again updates what changed and skips the rest; a
 CSV row is recognised by its title, address and user name, whichever app

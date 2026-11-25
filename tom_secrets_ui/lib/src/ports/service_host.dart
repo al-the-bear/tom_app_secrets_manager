@@ -16,9 +16,15 @@ import 'package:tom_secrets_core/tom_secrets_core.dart' show TomSecretsFirstRun;
 abstract interface class TomSecretsAdminChannel {
   /// Sends [op] with [args] and answers the answer message; an `error`
   /// answer throws the admin library's `TomSecretsAdminException`.
+  ///
+  /// A request sent in parts (a large vault's `save` over the admin
+  /// socket) reports [onProgress] as it is written: the bytes sent so far
+  /// and the bytes in all. A channel that sends nothing in parts (the
+  /// phone's engine, in the app's own process) never calls it.
   Future<Map<String, Object?>> request(
     String op, [
     Map<String, Object?> args = const {},
+    void Function(int sent, int total)? onProgress,
   ]);
 
   /// The events after `subscribe`; the stream closes when the connection

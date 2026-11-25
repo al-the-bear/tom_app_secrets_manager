@@ -939,6 +939,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   Future<Map<String, Object?>> request(
     String op, [
     Map<String, Object?> args = const {},
+    void Function(int sent, int total)? onProgress,
   ]) async {
     if (_closed) _refuse('closed', 'the engine is closed');
     switch (op) {
@@ -1074,7 +1075,14 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
             'store': store,
             'revision': result.revision,
           });
-          return {'op': 'ok', if (result.pending) 'pending': true};
+          // As the service answers a save (protocol.md 6.4): the revision
+          // now, and whether the file was merged.
+          return {
+            'op': 'ok',
+            'revision': result.revision,
+            if (result.merged) 'merged': true,
+            if (result.pending) 'pending': true,
+          };
         } on TomSecretsSaveException catch (e) {
           _refuse(e.kind, e.message, {'reason': ?e.reason});
         } finally {

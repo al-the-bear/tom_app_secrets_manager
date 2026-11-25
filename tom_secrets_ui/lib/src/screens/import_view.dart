@@ -28,6 +28,7 @@ import '../ports/desktop_ports.dart';
 import '../state/import_model.dart';
 import '../state/session_state.dart';
 import 'new_vault_dialog.dart';
+import '../widgets/save_progress.dart';
 import '../widgets/style.dart';
 import 'gate_screens.dart' show tomSecretsDescribeAdminError;
 
@@ -579,6 +580,8 @@ class _ImportState extends State<TomSecretsImportView> {
                             ),
                         ],
                       ),
+                      // A large vault's save, as it is sent.
+                      const TomSecretsSaveProgressLine(),
                       if (source.notImported.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
@@ -697,6 +700,7 @@ class _ImportState extends State<TomSecretsImportView> {
               ),
           ],
         ),
+        const TomSecretsSaveProgressLine(),
         if (_kdbxResult != null)
           Text(_kdbxResult!, key: const Key('tsm-import-kdbx-result')),
       ],

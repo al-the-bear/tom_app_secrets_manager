@@ -74,5 +74,6 @@ export 'src/widgets/emergency_sheet_offer.dart';
 export 'src/widgets/generator_dialog.dart';
 export 'src/widgets/protected_field.dart';
 export 'src/widgets/qr_code.dart';
+export 'src/widgets/save_progress.dart';
 export 'src/widgets/style.dart';
 export 'src/widgets/totp_view.dart';

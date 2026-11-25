@@ -28,6 +28,7 @@ import '../state/qr_reader.dart';
 import '../state/session_state.dart';
 import '../widgets/generator_dialog.dart';
 import '../widgets/protected_field.dart';
+import '../widgets/save_progress.dart';
 import '../widgets/style.dart';
 import '../widgets/totp_view.dart';
 import 'attachment_viewer.dart';
@@ -1475,6 +1476,8 @@ class _EntryEditorState extends State<TomSecretsEntryEditor> {
               ],
             ),
           ),
+          // A large vault's save (attachments), as it is sent.
+          const TomSecretsSaveProgressLine(),
           _section('History', Icons.history_rounded, [
             if (entry.history.isEmpty) const Text('No earlier versions.'),
             for (final version in entry.history.reversed)

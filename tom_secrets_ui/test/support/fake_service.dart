@@ -337,12 +337,28 @@ final class FakeService implements TomSecretsAdminChannel {
     emit({'op': 'store_changed', 'store': name, 'revision': s.revision});
   }
 
+  /// Whether a save answers its revision (a service before 0.25.10 did
+  /// not: the app then reads the file back).
+  bool saveAnswersRevision = true;
+
+  /// Whether saves answer `merged` (the file had moved on another device).
+  bool mergeNextSave = false;
+
+  /// What a request reports as its progress (sent, total), in order, each
+  /// before its answer (a large save going in chunks).
+  List<(int, int)> progressSteps = const [];
+
   @override
   Future<Map<String, Object?>> request(
     String op, [
     Map<String, Object?> args = const {},
+    void Function(int sent, int total)? onProgress,
   ]) async {
     requests.add({'op': op, ...args});
+    for (final (sent, total) in progressSteps) {
+      onProgress?.call(sent, total);
+      await Future<void>.delayed(Duration.zero);
+    }
     switch (op) {
       case 'subscribe':
         return {'op': 'ok'};
@@ -483,7 +499,13 @@ final class FakeService implements TomSecretsAdminChannel {
         s.stored = bytes;
         s.revision = tomSecretsBlobId(s.stored);
         emit({'op': 'store_changed', 'store': s.name, 'revision': s.revision});
-        return {'op': 'ok'};
+        // As the service answers (protocol.md 6.4): the revision now, and
+        // whether the file was merged with another device's.
+        return {
+          'op': 'ok',
+          if (saveAnswersRevision) 'revision': s.revision,
+          if (mergeNextSave) 'merged': true,
+        };
       case 'approve':
         _unlocked();
         final id = args['approvalId'];

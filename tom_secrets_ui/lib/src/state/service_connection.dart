@@ -428,6 +428,7 @@ class TomSecretsServiceConnection extends ChangeNotifier {
   Future<Map<String, Object?>> request(
     String op, [
     Map<String, Object?> args = const {},
+    void Function(int sent, int total)? onProgress,
   ]) {
     final channel = _channel;
     if (channel == null || _phase != TomSecretsConnectionPhase.attached) {
@@ -435,7 +436,7 @@ class TomSecretsServiceConnection extends ChangeNotifier {
         TomSecretsAdminException('not_running', 'not attached to the service'),
       );
     }
-    return channel.request(op, args);
+    return channel.request(op, args, onProgress);
   }
 
   Future<TomSecretsAttach> _guard(Future<TomSecretsAttach> Function() f) async {
