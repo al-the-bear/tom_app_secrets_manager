@@ -24,7 +24,7 @@ dependencies:
   tom_secrets_client: ^0.2.24
   # The First run (TomSecretsFirstRun) the desktop hands the wizard, writing
   # into this device's data directory and keychain.
-  tom_secrets_core: ^0.2.36
+  tom_secrets_core: ^0.2.37
   # The OS keychain tsm keeps the admin key in (TomDesktopSecretStore), so
   # the app and tsm share it.
   tom_core_storage: ^0.1.3
