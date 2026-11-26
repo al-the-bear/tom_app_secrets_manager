@@ -30,17 +30,17 @@ apt-get update -qq >/dev/null && apt-get install -y -qq clang gcc libc6-dev proc
   >/dev/null || { echo "FAIL: apt-get"; exit 1; }
 
 echo "== the working tree"
-mkdir -p /src/tom_ai/secrets_manager /src/tom_ai/secrets_clients/clients/dart
+mkdir -p /src/manager /src/clients
 tar -C /mnt/manager --exclude=.dart_tool --exclude=build --exclude=testlog \
   -cf - tom_secrets_service tom_secrets_core tom_secrets_age \
-  | tar -C /src/tom_ai/secrets_manager -xf -
+  | tar -C /src/manager -xf -
 tar -C /mnt/clients/clients/dart --exclude=.dart_tool --exclude=build \
   --exclude=testlog -cf - tom_secrets_client tsm \
-  | tar -C /src/tom_ai/secrets_clients/clients/dart -xf -
+  | tar -C /src/clients -xf -
 
 echo "== build"
-service=/src/tom_ai/secrets_manager/tom_secrets_service
-tsmsrc=/src/tom_ai/secrets_clients/clients/dart/tsm
+service=/src/manager/tom_secrets_service
+tsmsrc=/src/clients/tsm
 (cd "$service" && dart pub get >/dev/null && dart build cli \
   -t bin/tom_secrets_service.dart -o /build >/dev/null) \
   || { echo "FAIL: build the service"; exit 1; }
