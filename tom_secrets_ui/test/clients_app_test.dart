@@ -407,6 +407,65 @@ void main() {
       expect(login.enabled, isFalse);
     });
 
+    testWidgets('run the service on its own: installed, a failed removal '
+        'said, removed; on Windows without the install the service ends '
+        'with the app', (tester) async {
+      final installer = _Installer(endsWithApp: true);
+      host = TomSecretsHost(
+        service: FakeHost(service),
+        preferences: preferences,
+        clipboard: _Clipboard(),
+        serviceInstaller: installer,
+      );
+      await unlocked(tester);
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await wait(tester);
+      final install = find.byKey(const Key('tsm-settings-service-install'));
+      await tester.ensureVisible(install);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('tsm-settings-service-ends-with-app')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('tsm-settings-service-uninstall')),
+        findsNothing,
+      );
+      await tester.tap(install);
+      await wait(tester);
+      expect(installer.calls, ['install']);
+      expect(
+        find.byKey(const Key('tsm-settings-service-ends-with-app')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const Key('tsm-settings-service-install-state')),
+            )
+            .data,
+        contains('/demo/install (0.2.18)'),
+      );
+      expect(find.text('Update from this app'), findsOneWidget);
+      installer.refuse = 'the installed service runs: stop it first';
+      await tester.tap(find.byKey(const Key('tsm-settings-service-uninstall')));
+      await wait(tester);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const Key('tsm-settings-service-install-message')),
+            )
+            .data,
+        'the installed service runs: stop it first',
+      );
+      installer.refuse = null;
+      await tester.tap(find.byKey(const Key('tsm-settings-service-uninstall')));
+      await wait(tester);
+      expect(installer.calls, ['install', 'uninstall', 'uninstall']);
+      expect(find.text('Install'), findsOneWidget);
+    });
+
     testWidgets('the shared configuration: refused when it does not read, '
         'else saved in the primary vault', (tester) async {
       await unlocked(tester);
@@ -438,4 +497,38 @@ void main() {
       expect(config.dimension('env')!.defaultValue, 'dev');
     });
   });
+}
+
+final class _Installer implements TomSecretsServiceInstaller {
+  _Installer({required this.endsWithApp});
+
+  final bool endsWithApp;
+  bool installed = false;
+  String? refuse;
+  final calls = <String>[];
+
+  @override
+  Future<TomSecretsServiceInstallState> state() async =>
+      TomSecretsServiceInstallState(
+        installed: installed,
+        directory: installed ? '/demo/install' : null,
+        version: installed ? '0.2.18' : null,
+        endsWithApp: !installed && endsWithApp,
+      );
+
+  @override
+  Future<TomSecretsServiceInstallState> install() async {
+    calls.add('install');
+    if (refuse != null) throw TomSecretsServiceInstallException(refuse!);
+    installed = true;
+    return state();
+  }
+
+  @override
+  Future<TomSecretsServiceInstallState> uninstall() async {
+    calls.add('uninstall');
+    if (refuse != null) throw TomSecretsServiceInstallException(refuse!);
+    installed = false;
+    return state();
+  }
 }

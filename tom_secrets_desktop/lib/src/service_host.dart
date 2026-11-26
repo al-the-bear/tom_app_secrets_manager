@@ -186,13 +186,26 @@ final class TomSecretsDesktopServiceHost
     return _keychain;
   }
 
-  /// Where the service executable is: `TSM_SERVICE`, else the first of
-  /// `tom_secrets_service` beside the app and the one in the app's
-  /// distribution (`tsm/bin`, `tomSecretsServiceCandidates`) that exists,
-  /// else the one beside the app (for the message saying it is missing).
+  /// The service installed on its own for this user (`tsm install`), or
+  /// null.
+  TomSecretsUserInstall? get userInstall =>
+      TomSecretsUserInstall.read(environment: environment);
+
+  /// Where the service executable is: `TSM_SERVICE`, else the service
+  /// installed on its own for this user ([userInstall], which keeps running
+  /// when the app quits, is ended or is updated), else the app's own
+  /// ([distributionServiceExecutable]).
   String get serviceExecutable {
     final named = environment['TSM_SERVICE'];
     if (named != null) return named;
+    return userInstall?.serviceExecutable ?? distributionServiceExecutable;
+  }
+
+  /// The service the app brings: the first of `tom_secrets_service` beside
+  /// the app and the one in the app's distribution (`tsm/bin`,
+  /// `tomSecretsServiceCandidates`) that exists, else the one beside the app
+  /// (for the message saying it is missing).
+  String get distributionServiceExecutable {
     final candidates = tomSecretsServiceCandidates(
       executableDirectory,
       operatingSystem: Platform.operatingSystem,
@@ -203,10 +216,17 @@ final class TomSecretsDesktopServiceHost
     );
   }
 
-  /// `tsm` beside the service executable (the distribution's `tsm/bin`, or a
-  /// development layout), where the git integration links its helper.
-  String get tsmExecutable {
-    final service = serviceExecutable;
+  /// `tsm` beside the service executable (the installed one, the
+  /// distribution's `tsm/bin`, or a development layout), where the git
+  /// integration links its helper.
+  String get tsmExecutable => _tsmBeside(serviceExecutable);
+
+  /// `tsm` beside the app's own service, which installs and removes the
+  /// service installed on its own.
+  String get distributionTsmExecutable =>
+      _tsmBeside(distributionServiceExecutable);
+
+  static String _tsmBeside(String service) {
     final cut = service.lastIndexOf(RegExp(r'[/\\]'));
     final dir = cut < 0 ? '.' : service.substring(0, cut);
     return '$dir${Platform.pathSeparator}tsm${Platform.isWindows ? '.exe' : ''}';
@@ -379,6 +399,117 @@ final class TomSecretsDesktopServiceHost
     } on TomSecretStoreException {
       // Tried again the next time a key is kept or used.
     }
+  }
+}
+
+/// Runs a program: [executable] with [arguments] in [environment].
+typedef TomSecretsProgramRunner =
+    Future<ProcessResult> Function(
+      String executable,
+      List<String> arguments,
+      Map<String, String> environment,
+    );
+
+Future<ProcessResult> _runProgram(
+  String executable,
+  List<String> arguments,
+  Map<String, String> environment,
+) => Process.run(executable, arguments, environment: environment);
+
+/// The desktop's [TomSecretsServiceInstaller]: the `tsm install` and `tsm
+/// uninstall` of the app's distribution (tsm_d12), the app named in the
+/// install record so the installed service admits it.
+final class TomSecretsDesktopServiceInstaller
+    implements TomSecretsServiceInstaller {
+  /// The installer of [host]'s service; [appExecutable] (default the app's)
+  /// is recorded as an admin, [run] runs `tsm` (tests hand in their own).
+  TomSecretsDesktopServiceInstaller(
+    this.host, {
+    String? appExecutable,
+    String? operatingSystem,
+    TomSecretsProgramRunner run = _runProgram,
+  }) : appExecutable = appExecutable ?? Platform.resolvedExecutable,
+       operatingSystem = operatingSystem ?? Platform.operatingSystem,
+       _run = run;
+
+  /// The host whose service and environment are installed.
+  final TomSecretsDesktopServiceHost host;
+
+  /// The app recorded in the install.
+  final String appExecutable;
+
+  /// The OS (Windows: the service the app starts ends with its package).
+  final String operatingSystem;
+
+  final TomSecretsProgramRunner _run;
+
+  bool get _packaged =>
+      operatingSystem == 'windows' &&
+      appExecutable.toLowerCase().contains(r'\windowsapps\');
+
+  @override
+  Future<TomSecretsServiceInstallState> state() async {
+    final install = host.userInstall;
+    return TomSecretsServiceInstallState(
+      installed: install != null,
+      directory: install?.directory,
+      version: install == null || install.version.isEmpty
+          ? null
+          : install.version,
+      endsWithApp: install == null && _packaged,
+    );
+  }
+
+  /// Names this app in the install record when the service is installed
+  /// and the record lacks it (the app moved, or another app installed it);
+  /// the installed service admits it from its next start.
+  void recordApp() {
+    final install = host.userInstall;
+    if (install == null || install.apps.contains(appExecutable)) return;
+    try {
+      install.withApp(appExecutable).writeRecord();
+    } on FileSystemException {
+      // Not writable: an app that is not named stays a claim's.
+    }
+  }
+
+  Future<void> _tsm(List<String> arguments) async {
+    final tsm = host.distributionTsmExecutable;
+    if (!File(tsm).existsSync()) {
+      throw TomSecretsServiceInstallException(
+        'This app brings no tsm to install the service with ($tsm).',
+      );
+    }
+    final ProcessResult result;
+    try {
+      result = await _run(tsm, arguments, host.environment);
+    } on ProcessException catch (e) {
+      throw TomSecretsServiceInstallException('tsm: ${e.message}');
+    }
+    if (result.exitCode != 0) {
+      final text = '${result.stderr}'.trim();
+      throw TomSecretsServiceInstallException(
+        text.isEmpty ? 'tsm exited ${result.exitCode}' : text,
+      );
+    }
+  }
+
+  @override
+  Future<TomSecretsServiceInstallState> install() async {
+    await _tsm([
+      'install',
+      '--service',
+      host.distributionServiceExecutable,
+      '--app',
+      appExecutable,
+    ]);
+    return state();
+  }
+
+  @override
+  Future<TomSecretsServiceInstallState> uninstall() async {
+    await _tsm(['uninstall']);
+    return state();
   }
 }
 

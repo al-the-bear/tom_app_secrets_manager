@@ -5,7 +5,10 @@
 # The system install of the service (tsm install --system, tsm_d11), checked
 # as root in a throwaway Linux container (ci.sh :system starts it): the
 # service and tsm built from the working tree, installed, used by three demo
-# users, uninstalled. Demo data only; nothing leaves the container.
+# users, uninstalled. Then the install for one user (tsm install, tsm_d12):
+# the tools in the user's folder, the systemd user unit, the installed
+# service started first, uninstalled. Demo data only; nothing leaves the
+# container.
 #
 # Mounted: /mnt/manager (tom_secrets_manager), /mnt/clients
 # (tom_secrets_clients). Prints PASS / FAIL lines; exits 1 on a FAIL.
@@ -26,7 +29,7 @@ as() { local who="$1"; shift; su - "$who" -c "$*"; }
 password='primary-demo-pw'
 
 echo "== tools"
-apt-get update -qq >/dev/null && apt-get install -y -qq clang gcc libc6-dev procps \
+apt-get update -qq >/dev/null && apt-get install -y -qq clang gcc libc6-dev procps systemd \
   >/dev/null || { echo "FAIL: apt-get"; exit 1; }
 
 echo "== the working tree"
@@ -150,6 +153,39 @@ expect "the identity keys stay" test -f "$keyfile"
 "$release/tsm" uninstall --system --purge >/dev/null 2>&1 || bad "purge"
 expect "--purge removes the keys" test ! -e /var/lib/tom-secrets-manager
 refuse "--purge removes the group" getent group tsm-identity
+
+echo "== one user: the service installed on its own (tsm install)"
+inst=/home/demo/.local/lib/tom-secrets-manager
+unit=/home/demo/.config/systemd/user/tom-secrets-manager.service
+as demo "mkdir -p ~/.local/bin"
+out=$(as demo "$release/tsm install" 2>&1)
+echo "$out" | grep -q '^installed in' && ok "installed" || { echo "$out"; bad "installed"; }
+expect "the tools are in the user's folder" test -x "$inst/bin/tom_secrets_service"
+expect "the record is written" grep -q '"version"' "$inst/install.json"
+expect "the unit runs the installed tsm" grep -qx "ExecStart=\"$inst/bin/tsm\" start" "$unit"
+expect "systemd reads the unit" systemd-analyze verify "$unit"
+expect "~/.local/bin/tsm links the installed tsm" test "$(readlink /home/demo/.local/bin/tsm)" = "$inst/bin/tsm"
+started=$(as demo "printf '%s\n' $password | $release/tsm --password-stdin start --unlock" 2>&1)
+pid=$(pidof_service demo)
+exe=$(tr '\0' '\n' < /proc/"$pid"/cmdline 2>/dev/null | head -1)
+if [ "$exe" = "$inst/bin/tom_secrets_service" ]; then
+  ok "the tsm of the release starts the installed service first"
+else
+  echo "$started"; echo "pid=$pid exe=$exe"
+  bad "the tsm of the release starts the installed service first"
+fi
+echo "$started" | grep -q '^unlocked' && ok "the tsm that installed it unlocks it" \
+  || { echo "$started"; bad "the tsm that installed it unlocks it"; }
+as demo "mkdir -p /tmp/othertsm && cp $release/tsm /tmp/othertsm/tsm"
+other=$(as demo "/tmp/othertsm/tsm status" 2>&1)
+echo "$other" | grep -q "wrong_executable" && echo "$other" | grep -q "run $inst/bin/tsm" \
+  && ok "another copy of tsm is refused and told which tsm to run" \
+  || { echo "$other"; bad "another copy of tsm is refused and told which tsm to run"; }
+as demo "printf '%s\n' $password | $inst/bin/tsm --password-stdin stop" >/dev/null 2>&1
+out=$(as demo "$release/tsm uninstall" 2>&1) || { echo "$out"; bad "uninstalled"; }
+expect "the tools are gone" test ! -e "$inst"
+expect "the unit is gone" test ! -e "$unit"
+expect "the link is gone" test ! -e /home/demo/.local/bin/tsm
 
 echo "== $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

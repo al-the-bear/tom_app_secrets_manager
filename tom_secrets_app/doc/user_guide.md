@@ -1474,6 +1474,30 @@ which. **"Command-line approvals"** lets `tsm allow` and `tsm approve-code`
 on this machine pre-approve clients and make approval tokens without a
 person; it is off by default and switched only here.
 
+**"Run the service on its own"** installs the service for you, so it
+starts at login and keeps running when the app quits, is ended or is
+updated. Without it the service runs from the app's own folder; on Windows
+the app's package then ends the service with the app (when the app is
+ended in Task Manager or updated), and the section says so.
+
+- **"Install"** copies the service and `tsm` into a folder of yours
+  (macOS `~/Library/Application Support/TomSecretsManagerService`, Linux
+  `~/.local/lib/tom-secrets-manager`, Windows
+  `%LOCALAPPDATA%\Programs\TomSecretsManager`) and starts it at login. The
+  service running now goes on until it is stopped; the installed one
+  starts at the next login, or when the app or `tsm start` starts it.
+- **An update of the app does nothing to it.** It keeps running, and the
+  updated app attaches to it. "Update from this app" copies the app's
+  version over it; stop the service and open the app again to run it.
+- **To stop it:** "Stop the service" below; it starts again at the next
+  login.
+- **"Remove"** removes the install and its start at login (on Windows
+  stop the service first). The app then starts the service from its own
+  folder again.
+
+The same from the command line: `tsm install` and `tsm uninstall` (the
+`tsm` user guide).
+
 **This app** (kept in its preferences): "Keep the window out of screenshots
 and screen sharing" (Linux cannot), "Check passwords against known
 breaches" (the [breach check](#the-breach-check), on by default), "Start
@@ -1773,9 +1797,11 @@ way to enter your password anyway.
 
 ### "The service accepts no admin from this app here"
 
-The app must be installed beside the service it talks to, or named in the
-service's bootstrap. Start the app from the installed folder rather than a
-copy elsewhere.
+The app must be installed beside the service it talks to, named in the
+service's bootstrap, or (a service installed on its own) named in its
+install record, which the app does at its start; that service admits it
+from its next start. Start the app from the installed folder rather than
+a copy elsewhere, or stop the service and open the app again.
 
 ### A program waits and no prompt appears
 

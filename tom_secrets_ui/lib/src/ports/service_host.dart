@@ -183,3 +183,58 @@ abstract interface class TomSecretsServiceHost {
   /// key leaves the keychain.
   Future<void> serviceStopped();
 }
+
+/// The service installed on its own for this user (`tsm install`): where
+/// it is and which version, or not installed.
+final class TomSecretsServiceInstallState {
+  /// A state: [installed] in [directory] at [version]; [endsWithApp]: the
+  /// service the app starts without the install ends with the app (Windows:
+  /// the app's MSIX package ends the processes it started).
+  const TomSecretsServiceInstallState({
+    required this.installed,
+    this.directory,
+    this.version,
+    this.endsWithApp = false,
+  });
+
+  /// Whether the service is installed on its own.
+  final bool installed;
+
+  /// The install folder.
+  final String? directory;
+
+  /// The version installed.
+  final String? version;
+
+  /// Whether the service started from the app ends with the app.
+  final bool endsWithApp;
+}
+
+/// Installs the service on its own for this user, so it keeps running when
+/// the app quits, is ended or is updated (the desktop; Settings › This
+/// machine › "Run the service on its own").
+abstract interface class TomSecretsServiceInstaller {
+  /// The install as it is now.
+  Future<TomSecretsServiceInstallState> state();
+
+  /// Installs (or updates) it from the app's distribution, started at
+  /// login; throws [TomSecretsServiceInstallException].
+  Future<TomSecretsServiceInstallState> install();
+
+  /// Removes it and its start at login; throws
+  /// [TomSecretsServiceInstallException] (on Windows while the installed
+  /// service runs: stop it first).
+  Future<TomSecretsServiceInstallState> uninstall();
+}
+
+/// An install or removal that failed, [message] saying why.
+final class TomSecretsServiceInstallException implements Exception {
+  /// A failure.
+  const TomSecretsServiceInstallException(this.message);
+
+  /// Why, for the user.
+  final String message;
+
+  @override
+  String toString() => message;
+}

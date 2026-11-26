@@ -340,6 +340,7 @@ final class TomSecretsHost {
     this.macOS = false,
     this.sendsShares = true,
     this.mailboxRelayFor,
+    this.serviceInstaller,
   });
 
   /// A host with the service only, for tests and a host without desktop
@@ -384,6 +385,10 @@ final class TomSecretsHost {
 
   /// The secrets service.
   final TomSecretsServiceHost service;
+
+  /// Installs the service on its own (tsm_d12), or null where the host has
+  /// no install (the phone, a test).
+  final TomSecretsServiceInstaller? serviceInstaller;
 
   /// The tray icon, where the platform has one.
   final TomSecretsTray? tray;

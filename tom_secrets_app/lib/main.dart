@@ -90,10 +90,15 @@ Future<void> main(List<String> args) async {
   }
   const files = TomSecretsDesktopFiles();
   final serviceHost = TomSecretsDesktopServiceHost();
+  // The service installed on its own (tsm install, tsm_d12): found first,
+  // and this app named in its record so it stays admitted.
+  final serviceInstaller = TomSecretsDesktopServiceInstaller(serviceHost)
+    ..recordApp();
   final home =
       Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
   final host = TomSecretsHost(
     service: serviceHost,
+    serviceInstaller: serviceInstaller,
     tray: tray,
     window: window,
     notifier: notifier,
@@ -104,10 +109,12 @@ Future<void> main(List<String> args) async {
     osUnlock: tomSecretsDesktopOsUnlock(),
     sessionEvents: TomSecretsDesktopSessionEvents(),
     autofill: tomSecretsDesktopAutofill(),
-    // Windows 11: the passkey plugin beside the service (the MSIX package),
-    // its passkeys' names listed in Windows' passkey dialog.
+    // Windows 11: the passkey plugin in the app's MSIX package, its
+    // passkeys' names listed in Windows' passkey dialog.
+    // The plugin is the package's (Windows starts it from there), also
+    // when the service runs installed on its own.
     windowsPasskeys: tomSecretsDesktopWindowsPasskeys(
-      serviceExecutable: serviceHost.serviceExecutable,
+      serviceExecutable: serviceHost.distributionServiceExecutable,
     ),
     // Auto-type (FFI into the OS; X11 only on Linux, DP-41) and the global
     // hotkeys of quick access and auto-type (part-app).

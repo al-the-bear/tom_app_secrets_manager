@@ -123,8 +123,8 @@ Log and step names are paths relative to the folder that holds all three.
 - `:release`: not part of `:all`: the release for this platform, below.
 - `:mobile`: not part of `:all`: the mobile app's Android release, below.
 - `:relay`: not part of `:all`: the relay server's container image, below.
-- `:system`: not part of `:all`: the Linux system install checked in a
-  container, below.
+- `:system`: not part of `:all`: the Linux system install and the install
+  for one user checked in a container, below.
 
 The packages are found, never listed: every directory with a `pubspec.yaml`
 (an npm package: a `package.json` with its `package-lock.json`; a Cargo
@@ -320,6 +320,11 @@ working tree, installs them, and checks with three demo users:
 - that the environment does not move its runtime directory;
 - that a key from before the install signs the new one;
 - uninstall and `--purge`.
+
+Then `tsm install` for one user (the service installed on its own): the
+tools in `~/.local/lib/tom-secrets-manager`, the systemd user unit read by
+`systemd-analyze verify`, the `~/.local/bin/tsm` link, the release's `tsm`
+starting the installed service first, and `tsm uninstall`.
 
 It prints a PASS or FAIL line per check (`system.container.log`).
 

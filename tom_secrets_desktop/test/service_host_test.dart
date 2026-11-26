@@ -283,6 +283,160 @@ void main() {
     expect(host.serviceExecutable, '${dir.path}/no-such-service');
   });
 
+  group('the service installed on its own (tsm_d12)', () {
+    late String installDir;
+    late Map<String, String> plain;
+    final ext = Platform.isWindows ? '.exe' : '';
+    final sep = Platform.pathSeparator;
+
+    setUp(() {
+      installDir = '${dir.path}${sep}installed';
+      File(
+        '$installDir${sep}bin${sep}tom_secrets_service$ext',
+      ).createSync(recursive: true);
+      plain = {...env, 'TSM_INSTALL_DIR': installDir}..remove('TSM_SERVICE');
+    });
+
+    test('found first: the app uses and expects the installed service, its '
+        'tsm for the integrations, and installs from its own', () {
+      final appDir = '${dir.path}${sep}app';
+      final own = File('$appDir${sep}tom_secrets_service$ext')
+        ..createSync(recursive: true);
+      final h = TomSecretsDesktopServiceHost(
+        environment: plain,
+        executableDirectory: appDir,
+        keychain: keychain,
+      );
+      final installed = '$installDir${sep}bin${sep}tom_secrets_service$ext';
+      expect(h.serviceExecutable, installed);
+      expect(h.tsmExecutable, '$installDir${sep}bin${sep}tsm$ext');
+      expect(h.distributionServiceExecutable, own.path);
+      expect(h.distributionTsmExecutable, '$appDir${sep}tsm$ext');
+      expect(
+        h.serviceTrust.executables,
+        contains(File(installed).resolveSymbolicLinksSync()),
+      );
+      expect(
+        TomSecretsDesktopServiceHost(
+          environment: {...plain, 'TSM_SERVICE': '/named'},
+          executableDirectory: appDir,
+        ).serviceExecutable,
+        '/named',
+        reason: 'TSM_SERVICE first',
+      );
+    });
+
+    test('the app attaches to an installed service that already runs '
+        '(started at login with tsm, its key under tsm\'s handle)', () async {
+      final key = tomSecretsRandomBytes();
+      final service = await launch(key);
+      await keychain.write(
+        tomSecretsAdminKeyHandle(service.startedAt),
+        base64.encode(key),
+      );
+      final h = TomSecretsDesktopServiceHost(
+        environment: plain,
+        keychain: keychain,
+        pins: host.pins,
+      );
+      expect(h.serviceExecutable, startsWith(installDir));
+      final attached = await h.attach();
+      expect(attached, isA<TomSecretsAttached>());
+      final channel = (attached as TomSecretsAttached).channel;
+      final status = await channel.request('status');
+      expect(status['locked'], isTrue);
+      await channel.close();
+    });
+
+    test('the installer runs the distribution\'s tsm with the app named; a '
+        'failure is told; the app is added to the record', () async {
+      final appDir = '${dir.path}${sep}app';
+      File('$appDir${sep}tom_secrets_service$ext').createSync(recursive: true);
+      final tsm = File('$appDir${sep}tsm$ext')..createSync();
+      final h = TomSecretsDesktopServiceHost(
+        environment: plain,
+        executableDirectory: appDir,
+        keychain: keychain,
+      );
+      final runs = <List<String>>[];
+      var exit = 0;
+      final installer = TomSecretsDesktopServiceInstaller(
+        h,
+        appExecutable: '$appDir${sep}tom_secrets_app$ext',
+        run: (exe, args, environment) async {
+          runs.add([exe, ...args]);
+          expect(environment['TSM_INSTALL_DIR'], installDir);
+          return ProcessResult(0, exit, '', exit == 0 ? '' : 'stop it first');
+        },
+      );
+      final state = await installer.install();
+      expect(runs.single, [
+        tsm.path,
+        'install',
+        '--service',
+        '$appDir${sep}tom_secrets_service$ext',
+        '--app',
+        '$appDir${sep}tom_secrets_app$ext',
+      ]);
+      expect(state.installed, isTrue);
+      expect(state.directory, installDir);
+      exit = 3;
+      await expectLater(
+        installer.uninstall(),
+        throwsA(
+          isA<TomSecretsServiceInstallException>().having(
+            (e) => e.message,
+            'message',
+            'stop it first',
+          ),
+        ),
+      );
+      expect(runs.last, [tsm.path, 'uninstall']);
+
+      installer.recordApp();
+      expect(h.userInstall!.apps, ['$appDir${sep}tom_secrets_app$ext']);
+      installer.recordApp();
+      expect(h.userInstall!.apps, hasLength(1), reason: 'once');
+
+      tsm.deleteSync();
+      await expectLater(
+        installer.install(),
+        throwsA(isA<TomSecretsServiceInstallException>()),
+      );
+    });
+
+    test('on Windows the service an app from its package starts ends with '
+        'the package, until it is installed on its own', () async {
+      Directory(installDir).deleteSync(recursive: true);
+      final h = TomSecretsDesktopServiceHost(
+        environment: plain,
+        keychain: keychain,
+      );
+      TomSecretsDesktopServiceInstaller at(String os, String app) =>
+          TomSecretsDesktopServiceInstaller(
+            h,
+            appExecutable: app,
+            operatingSystem: os,
+          );
+      const packaged =
+          r'C:\Program Files\WindowsApps\TomSecretsManager_0.1.1.0_x64__w'
+          r'\tom_secrets_app.exe';
+      expect((await at('windows', packaged).state()).endsWithApp, isTrue);
+      expect(
+        (await at(
+          'windows',
+          r'C:\dev\tom_secrets_app.exe',
+        ).state()).endsWithApp,
+        isFalse,
+      );
+      expect(
+        (await at('macos', '/Applications/x').state()).endsWithApp,
+        isFalse,
+      );
+      expect((await at('windows', packaged).state()).installed, isFalse);
+    });
+  });
+
   test(
     'no service: NoService; starting without an executable says so',
     () async {

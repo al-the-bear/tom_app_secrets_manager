@@ -45,19 +45,26 @@ the app's, listed in [`tom_secrets_app`](../tom_secrets_app/README.md).
 
 - **Service host**: `TomSecretsDesktopServiceHost`: the runtime directory of
   this user's service; starting it (`tomSecretsStartService`, the service
-  executable from `TSM_SERVICE` or beside the app, `bootstrap.yaml` in the data
-  directory); attaching with the admin key kept in the OS keychain under tsm's
+  executable from `TSM_SERVICE`, else the one installed on its own for the
+  user, else beside the app, `bootstrap.yaml` in the data directory); attaching with the admin key kept in the OS keychain under tsm's
   handle (`tsm.admin.<start>`, service `tom-secrets-manager`, through
   `tom_core_storage`'s `TomDesktopSecretStore`), so the app and tsm share it;
   claiming with the master password. Before either, and before a claim is
   offered at all, it checks who answers (`serviceTrust`, protocol.md 6.0):
   the runtime directory and socket are the user's alone and the process
   answering is the user's and the service expected (beside the app, in its
-  `tsm/bin`, or `TSM_SERVICE`); else it answers
+  `tsm/bin`, installed on its own, or `TSM_SERVICE`); else it answers
   `TomSecretsServiceUntrusted` and sends nothing. A machine without
   `bootstrap.yaml` answers
   not set up, and its first run (`TomSecretsFirstRun`) writes into the data
   directory (`TSM_DATA_DIR`, else the platform's) and the OS keychain.
+
+- **Service installer**: `TomSecretsDesktopServiceInstaller`: the service
+  installed on its own for the user (Settings › This machine › "Run the
+  service on its own"), through the distribution's `tsm install` /
+  `tsm uninstall` with the app named (`--app`); `recordApp` adds the app to
+  the install record at its start; on Windows a packaged app says that the
+  service it starts ends with its package.
 - **AutoFill** (macOS): `TomSecretsMacAutofill` (`tomSecretsDesktopAutofill()`)
   over this package's channel `tom_secrets_desktop/autofill`: whether the
   build has the AutoFill provider and it is on in System Settings
@@ -173,8 +180,9 @@ runApp(TomSecretsApp(host: host));
 - `TSM_DATA_DIR`: the data directory (`bootstrap.yaml`, `app-preferences.json`,
   `app.port`); default the platform's
 - `TSM_RUNTIME_DIR`: the runtime directory where the running service is found
-- `TSM_SERVICE`: the service executable to start, instead of the one beside the
-  app
+- `TSM_SERVICE`: the service executable to start, instead of the one installed
+  on its own or beside the app
+- `TSM_INSTALL_DIR`: the folder of the service installed on its own
 
 The admin key is kept in the OS keychain under the service name
 `tom-secrets-manager`, where `tsm` finds it too.

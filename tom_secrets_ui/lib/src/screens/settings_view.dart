@@ -11,6 +11,9 @@
 ///   link; and command-line approvals (DP-19), switchable only here.
 /// - **This machine's app**: screen capture (DP-33), start at login (DP-30),
 ///   stopping the service.
+/// - **Run the service on its own** (tsm_d12): the service installed for
+///   this user and started at login, so it keeps running when the app quits,
+///   is ended or is updated; installed, updated and removed here.
 /// - **Shared**, in the primary vault: the dimensions with their priority and
 ///   the files per environment (`tsm.config`, BP-43).
 ///
@@ -43,6 +46,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../host_bridge.dart' show TomSecretsHostPreferenceKeys;
 import '../ports/desktop_ports.dart';
+import '../ports/service_host.dart';
 import '../state/clients.dart';
 import '../state/health.dart';
 import '../state/auto_type.dart';
@@ -588,6 +592,11 @@ class _SettingsState extends State<TomSecretsSettingsView> {
           value: report.cliApprovals,
           onChanged: (on) => unawaited(_setCli(on)),
         ),
+        if (context.read<TomSecretsHost>().serviceInstaller
+            case final installer?) ...[
+          const Divider(),
+          _ServiceInstallTile(installer: installer),
+        ],
       ],
     );
   }
@@ -1431,5 +1440,147 @@ Future<void> _dropEveryRegistry(TomSecretsIntegrations i) async {
   await i.uninstall(TomSecretsIntegration.docker);
   if (registries.isNotEmpty) {
     await i.install(TomSecretsIntegration.docker, dockerRegistries: registries);
+  }
+}
+
+/// Settings › This machine › "Run the service on its own" (tsm_d12).
+class _ServiceInstallTile extends StatefulWidget {
+  const _ServiceInstallTile({required this.installer});
+
+  final TomSecretsServiceInstaller installer;
+
+  @override
+  State<_ServiceInstallTile> createState() => _ServiceInstallTileState();
+}
+
+class _ServiceInstallTileState extends State<_ServiceInstallTile> {
+  TomSecretsServiceInstallState? _state;
+  bool _busy = false;
+  String? _message;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(
+      widget.installer.state().then((s) {
+        if (mounted) setState(() => _state = s);
+      }),
+    );
+  }
+
+  Future<void> _do(
+    Future<TomSecretsServiceInstallState> Function() action,
+    String done,
+  ) async {
+    setState(() => _busy = true);
+    try {
+      final s = await action();
+      if (mounted) {
+        setState(() {
+          _state = s;
+          _message = done;
+          _failed = false;
+        });
+      }
+    } on TomSecretsServiceInstallException catch (e) {
+      if (mounted) {
+        setState(() {
+          _message = e.message;
+          _failed = true;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = _state;
+    final theme = Theme.of(context);
+    final muted = TextStyle(color: theme.hintColor);
+    if (state == null) return const SizedBox.shrink();
+    final installed = state.installed;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Run the service on its own', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          installed
+              ? 'Installed for you in ${state.directory}'
+                    '${state.version == null ? '' : ' (${state.version})'}. '
+                    'It starts at login and keeps running when the app '
+                    'quits, is ended or is updated; the app starts it when '
+                    'it does not run.'
+              : 'The service runs from the app\'s own folder. Installed on '
+                    'its own, it starts at login and keeps running when the '
+                    'app quits, is ended or is updated.',
+          key: const Key('tsm-settings-service-install-state'),
+          style: muted,
+        ),
+        if (state.endsWithApp)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'On Windows the service started from the app ends with the '
+              'app\'s package: when the app is ended or updated, programs '
+              'get no secrets until it is started again.',
+              key: const Key('tsm-settings-service-ends-with-app'),
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.tonal(
+              key: const Key('tsm-settings-service-install'),
+              onPressed: _busy
+                  ? null
+                  : () => unawaited(
+                      _do(
+                        widget.installer.install,
+                        installed
+                            ? 'Updated from this app. The service running '
+                                  'now goes on until it is stopped; the '
+                                  'installed one starts at the next login or '
+                                  'start.'
+                            : 'Installed. The service running now goes on '
+                                  'until it is stopped; the installed one '
+                                  'starts at the next login or start.',
+                      ),
+                    ),
+              child: Text(installed ? 'Update from this app' : 'Install'),
+            ),
+            if (installed)
+              OutlinedButton(
+                key: const Key('tsm-settings-service-uninstall'),
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(
+                        _do(
+                          widget.installer.uninstall,
+                          'Removed. The app starts the service from its own '
+                          'folder again.',
+                        ),
+                      ),
+                child: const Text('Remove'),
+              ),
+          ],
+        ),
+        if (_message != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              _message!,
+              key: const Key('tsm-settings-service-install-message'),
+              style: _failed ? TextStyle(color: theme.colorScheme.error) : null,
+            ),
+          ),
+      ],
+    );
   }
 }

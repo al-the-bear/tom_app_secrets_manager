@@ -144,7 +144,8 @@ carries the browser extension's Safari build (`tom_secrets_browser/extension`,
 | `--hidden` | start in the tray without showing the window (the login item passes it) |
 | `TSM_DATA_DIR` | the data directory (default `~/Library/Application Support/TomSecretsManager`, `%LOCALAPPDATA%\TomSecretsManager`, `~/.local/share/tom-secrets-manager`) |
 | `TSM_RUNTIME_DIR` | where the running service is found |
-| `TSM_SERVICE` | the service executable to start, instead of the one beside the app |
+| `TSM_SERVICE` | the service executable to start, instead of the one installed on its own or beside the app |
+| `TSM_INSTALL_DIR` | the folder of the service installed on its own (Settings › "Run the service on its own", `tsm install`) |
 | `TSM_LOGIN_ITEM=off` | a development run does not register its build as a login item, and removes such a registration made before |
 
 Everything else is set in the app: its Settings screen (see the

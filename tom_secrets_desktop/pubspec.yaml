@@ -21,7 +21,7 @@ dependencies:
     path: ../tom_secrets_ui
   # The admin client, the runtime directory, the starter with its admin-key
   # handover, the data directory and the keychain names (shared with tsm).
-  tom_secrets_client: ^0.2.26
+  tom_secrets_client: ^0.2.27
   # The First run (TomSecretsFirstRun) the desktop hands the wizard, writing
   # into this device's data directory and keychain.
   tom_secrets_core: ^0.2.39
