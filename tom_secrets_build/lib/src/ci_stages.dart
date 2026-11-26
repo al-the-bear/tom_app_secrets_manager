@@ -27,11 +27,20 @@ const List<String> secretsCiStages = [
   'release',
   'mobile',
   'relay',
+  'system',
 ];
 
 /// The stages `:all` leaves out: the releases and the relay's image are
-/// built when one is made.
-const Set<String> secretsCiStagesNotInAll = {'release', 'mobile', 'relay'};
+/// built when one is made; the system install's check needs Docker.
+const Set<String> secretsCiStagesNotInAll = {
+  'release',
+  'mobile',
+  'relay',
+  'system',
+};
+
+/// The image the system install is checked in: Debian with the Dart SDK.
+const String secretsSystemCheckImage = 'dart:stable';
 
 /// One-line descriptions, shared by `--help` and the README.
 const Map<String, String> secretsCiStageDescriptions = {
@@ -103,8 +112,17 @@ const Map<String, String> secretsCiStageDescriptions = {
       'the relay server\'s container image (not part of :all): docker build '
       'of tom_secrets_relay (its Dockerfile: the AOT bundle on scratch), '
       'tagged tom_secrets_relay:<version>; needs a running Docker',
+  'system':
+      'the Linux system install checked as root in a throwaway container '
+      '(not part of :all; tool/system_install_check.sh in the image '
+      '$secretsSystemCheckImage): the service and tsm built from the working '
+      'tree, `tsm install --system`, three demo users (their identity keys '
+      'out of their reach, the group dropped, LD_PRELOAD ignored, a key '
+      'from before the install signing the new one), uninstall; needs a '
+      'running Docker',
   'all':
-      'every stage above but :release, :mobile and :relay, in that order, '
+      'every stage above but :release, :mobile, :relay and :system, in that '
+      'order, '
       'continuing past a red',
 };
 
@@ -576,6 +594,8 @@ class SecretsCiStages {
         await _mobile(run);
       case 'relay':
         await _relayImage(run);
+      case 'system':
+        await _systemInstall(run);
       default:
         throw ArgumentError.value(stage, 'stage', 'not a stage');
     }
@@ -643,6 +663,27 @@ extension on SecretsCiStages {
   /// The relay server's container image, tagged with its version (part-relay,
   /// DP-67): `docker build` of the package, whose Dockerfile builds the AOT
   /// bundle and puts it on `scratch`.
+  /// The system install's check in a throwaway container (as root there,
+  /// never on this machine).
+  Future<void> _systemInstall(CiRun run) async {
+    const stage = 'system';
+    await run.step(stage, 'container', 'system.container.log', [
+      CiCommand('docker', [
+        'run',
+        '--rm',
+        '-v',
+        '${workspace.managerRoot}:/mnt/manager:ro',
+        '-v',
+        '${workspace.clientsRoot}:/mnt/clients:ro',
+        '-v',
+        '${p.join(workspace.buildPackageDir, 'tool')}:/mnt/tool:ro',
+        secretsSystemCheckImage,
+        'bash',
+        '/mnt/tool/system_install_check.sh',
+      ], workingDirectory: workspace.buildPackageDir),
+    ]);
+  }
+
   Future<void> _relayImage(CiRun run) async {
     const stage = 'relay';
     final relay = p.join(workspace.repoRoot, 'tom_secrets_relay');

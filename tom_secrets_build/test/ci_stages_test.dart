@@ -30,6 +30,7 @@ void main() {
       expect(resolve(['release']), ['release'], reason: 'only when named');
       expect(resolve(['mobile']), ['mobile'], reason: 'only when named');
       expect(resolve(['relay']), ['relay'], reason: 'only when named');
+      expect(resolve(['system']), ['system'], reason: 'only when named');
       expect(resolve(['licences', 'analyze', 'licences']), [
         'licences',
         'analyze',

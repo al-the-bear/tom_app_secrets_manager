@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- `tom_secrets_service` 0.27.0: the service's identity key in the macOS
+  keychain (its signature alone), with DPAPI on Windows, or a Linux system
+  install's directory.
 - The service's identity key (protocol.md 6.1): the gate screens show a
   service the app has not met with its identity words and "The words are
   the same: trust it" (no password field), and a service whose key changed

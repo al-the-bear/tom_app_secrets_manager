@@ -2,6 +2,11 @@
 
 ## 0.1.2
 
+- The service keeps its identity key where the system keeps your other
+  programs out: on macOS in a keychain item that trusts the service alone
+  (an update asks once), on Windows protected with DPAPI; on a shared Linux
+  server an administrator installs it for every user
+  (`tom_secrets_service` 0.27.0).
 - The app talks only to the secrets service whose identity key it pinned
   (when it started it, by pairing, or after you compared its words), and
   the master password of a claim is encrypted to that service. A service

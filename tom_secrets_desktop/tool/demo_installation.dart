@@ -98,6 +98,8 @@ Future<void> main(List<String> args) async {
   File('${dir.path}/data/bootstrap.yaml').writeAsStringSync(
     'primary: file:${dir.path}/primary.kdbx\n'
     'device_key: keyfile\n'
+    // The identity key in its file: no keychain item for a demo.
+    'identity_key: file\n'
     'runtime_dir: ${dir.path}/run\n'
     'host: demo-host\n'
     '${app == null ? '' : 'admin_executables:\n  - $app\n'}',

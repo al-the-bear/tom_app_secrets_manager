@@ -54,7 +54,8 @@ reasons:
 2. Install the Flutter SDK (it brings Dart). For the stages that need them:
    Node.js 20 or later with npm, Python 3 with `jsonschema`, Go, Rust with
    `cargo` and `clippy`, a JDK 16 or later, CMake 3.16 or later with a C
-   compiler; Docker for `:relay`; the Android SDK for `:mobile`.
+   compiler; Docker for `:relay` and `:system`; the Android SDK for
+   `:mobile`.
 3. Run it from `tom_app_secrets_manager/tom_secrets_build`:
 
    ```sh
@@ -97,6 +98,7 @@ flowchart LR
     release[":release"]:::step
     mobile[":mobile"]:::step
     relay[":relay"]:::step
+    system[":system"]:::step
   end
   analyze --&gt; test --&gt; integration --&gt; licences
   licences --&gt; conformance --&gt; standalone --&gt; docs
@@ -116,6 +118,7 @@ flowchart LR
 | `:release` | the release of the platform it runs on | to make a release |
 | `:mobile` | the Android app's signed APK | to release the mobile app |
 | `:relay` | the relay server's container image | to deploy the relay |
+| `:system` | the Linux system install, checked as root in a container | after a change to the system install or the service's start |
 
 Several stages can be named at once (`./ci.sh :standalone :docs`); they run
 in the order given. `./ci.sh :all` takes a while; while working, run the

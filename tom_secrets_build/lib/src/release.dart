@@ -439,6 +439,8 @@ Future<bool> secretsSmokeRelease({
   final env = {
     'TSM_DATA_DIR': p.join(installation, 'data'),
     'TSM_RUNTIME_DIR': p.join(installation, 'run'),
+    // tsm's pins of the demo service stay with the demo installation.
+    'TSM_CONFIG_DIR': p.join(installation, 'config'),
   };
   Future<ProcessResult> run(List<String> args, {String? stdinText}) async {
     final process = await Process.start(tsm, args, environment: env);

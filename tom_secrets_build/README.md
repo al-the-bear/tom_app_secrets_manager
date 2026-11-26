@@ -123,6 +123,8 @@ Log and step names are paths relative to the folder that holds all three.
 - `:release`: not part of `:all`: the release for this platform, below.
 - `:mobile`: not part of `:all`: the mobile app's Android release, below.
 - `:relay`: not part of `:all`: the relay server's container image, below.
+- `:system`: not part of `:all`: the Linux system install checked in a
+  container, below.
 
 The packages are found, never listed: every directory with a `pubspec.yaml`
 (an npm package: a `package.json` with its `package-lock.json`; a Cargo
@@ -301,6 +303,25 @@ version is `tom_secrets_mobile`'s) and listed in that folder's `SHA256SUMS`.
 It is installed directly on the phone (DP-204). The iOS app is not a release
 file: it is built from Xcode onto the device under the user's free personal
 team (DP-130).
+
+## The system install's check
+
+`./ci.sh :system` checks `tsm install --system` (the service installed for
+every user of a Linux server, set-group-ID to `tsm-identity`) as root in a
+throwaway container, never on this machine. A running Docker is needed.
+`tool/system_install_check.sh` runs in `dart:stable` with the two
+repositories mounted read-only. It builds the service and `tsm` from the
+working tree, installs them, and checks with three demo users:
+
+- the files' owners and modes;
+- that a user's identity key is out of that user's reach and another's;
+- that the service runs as the user with the group dropped, its memory and
+  environment closed to the user, `LD_PRELOAD` ignored;
+- that the environment does not move its runtime directory;
+- that a key from before the install signs the new one;
+- uninstall and `--purge`.
+
+It prints a PASS or FAIL line per check (`system.container.log`).
 
 ## The relay image
 
