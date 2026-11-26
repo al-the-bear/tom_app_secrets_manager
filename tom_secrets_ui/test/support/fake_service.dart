@@ -147,6 +147,21 @@ final class FakeService implements TomSecretsAdminChannel {
   /// The service's lock mode letter (`status`).
   String lockMode = 'a';
 
+  /// The quick unlock (protocol.md 6.4), as plain values in this fake: the
+  /// switch, the PIN sealed (here: kept), the token, the attempts left.
+  bool quickPinOn = false;
+  String? quickPin;
+  List<int>? quickToken;
+  int quickAttempts = 5;
+
+  /// Simulates a service restart: what the memory held is gone, the switch
+  /// stays.
+  void restartQuick() {
+    quickPin = null;
+    quickToken = null;
+    quickAttempts = 5;
+  }
+
   /// Whether a save GitHub cannot take waits in memory
   /// (`statusReport.keepsUnwritten`, the offline cache off).
   bool keepsUnwritten = false;
@@ -369,6 +384,13 @@ final class FakeService implements TomSecretsAdminChannel {
           'lockMode': lockMode,
           'protocol': 1,
           'service': {'version': '0.1.0', 'start': 1763100000000},
+          'quickUnlock': {
+            // The switch is in the device settings: read while unlocked.
+            'pin': !locked && quickPinOn,
+            'pinArmed': quickPin != null,
+            'token': quickToken != null,
+            'attemptsLeft': quickAttempts,
+          },
           'identity': {'words': identityWords, 'fingerprint': '5c1e' * 16},
           'stores': [
             if (!locked)
@@ -413,7 +435,15 @@ final class FakeService implements TomSecretsAdminChannel {
         return {'op': 'ok'};
       case 'lock':
         locked = true;
+        if (args['completely'] == true) restartQuick();
         emit({'op': 'locked'});
+        return {'op': 'ok'};
+      case 'quickUnlock.remove':
+        if (args['pin'] == true) {
+          quickPin = null;
+          quickPinOn = false;
+        }
+        if (args['token'] == true) quickToken = null;
         return {'op': 'ok'};
       case 'vaultKeys':
         _unlocked();
@@ -1390,6 +1420,74 @@ final class FakeService implements TomSecretsAdminChannel {
 
   void _unlocked() {
     if (locked) throw TomSecretsAdminException('locked', 'locked');
+  }
+
+  @override
+  Future<Map<String, Object?>> requestSealed(
+    String op, {
+    Map<String, Object?> fields = const {},
+    Map<String, List<int>> sealed = const {},
+    List<String> open = const [],
+  }) async {
+    requests.add({
+      'op': op,
+      ...fields,
+      for (final k in sealed.keys) k: '(sealed)',
+    });
+    TomSecretsAdminException denied(String reason, [int? left]) =>
+        TomSecretsAdminException(
+          'denied',
+          reason,
+          details: {'reason': reason, 'attemptsLeft': ?left},
+        );
+    switch (op) {
+      case 'quickUnlock.set':
+        _unlocked();
+        final pin = utf8.decode(sealed['pin']!);
+        if (pin.length < 6) {
+          throw TomSecretsAdminException(
+            'malformed',
+            'a PIN has at least 6 characters',
+            details: {'reason': 'pin'},
+          );
+        }
+        quickPin = pin;
+        quickPinOn = true;
+        quickAttempts = 5;
+        return {'op': 'ok'};
+      case 'quickUnlock.token':
+        _unlocked();
+        quickToken = List<int>.generate(32, (i) => i + 1);
+        return {'op': 'quickToken', 'token': Uint8List.fromList(quickToken!)};
+      case 'unlock' when sealed.containsKey('pin'):
+        if (quickPin == null) throw denied('no_quick_unlock');
+        if (utf8.decode(sealed['pin']!) != quickPin) {
+          quickAttempts--;
+          if (quickAttempts <= 0) {
+            restartQuick();
+            throw denied('pin_wiped', 0);
+          }
+          throw denied('bad_pin', quickAttempts);
+        }
+        quickAttempts = 5;
+        locked = false;
+        emit({'op': 'unlocked'});
+        return {'op': 'ok'};
+      case 'unlock' when sealed.containsKey('quick'):
+        final token = quickToken;
+        if (token == null) throw denied('no_quick_unlock');
+        final given = sealed['quick']!;
+        if (given.length != token.length ||
+            [
+              for (var i = 0; i < token.length; i++) token[i] == given[i],
+            ].contains(false)) {
+          throw denied('bad_token');
+        }
+        locked = false;
+        emit({'op': 'unlocked'});
+        return {'op': 'ok'};
+    }
+    throw TomSecretsAdminException('unsupported', 'no sealed $op here');
   }
 
   @override

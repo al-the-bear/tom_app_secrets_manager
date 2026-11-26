@@ -96,7 +96,8 @@ window) on its first start; switch that off under
 
 Closing the window keeps the app in the tray (the menu bar on macOS). The
 tray menu has "Open", "Quick access" (while unlocked), "Lock" or "Unlock…",
-"Lock completely (forget the … unlock)" while the OS unlock holds a session,
+"Lock completely (the master password next)" while a PIN or the OS unlock
+would undo the lock,
 the number of approvals waiting, "Quit the app (the service keeps running)"
 and "Stop the service".
 
@@ -175,6 +176,9 @@ The app reminds you when these keys are due for rotation.
   primary lists.
 - **"Lock"**: "When idle" after a number of "Minutes", or "Never on its
   own".
+- **"After a lock"**: "Unlock with Touch ID after a lock" (macOS and
+  Windows) and "Use a PIN after a lock"; the PIN is asked when the vaults
+  open.
 - **"Advanced"**: "Where the device settings' key is kept" (the keychain
   where there is one, else the vault; the keychain; the primary vault; a key
   file beside the settings).
@@ -234,8 +238,14 @@ come from the other machine.
 **To unlock:**
 
 1. Open the app: it shows **"Unlock"** while the service is locked.
-2. Give the master password (and the key file, if the primary has one).
+2. Give the master password (and the key file, if the primary has one), or
+   the PIN, or use Touch ID or Windows Hello (below).
 3. Choose "Unlock".
+
+After a restart of the service the master password is asked **once**: that
+keeps it in your memory. From then on the PIN and Touch ID or Windows Hello
+undo every lock, until "Lock completely", 5 wrong PINs or 7 days after the
+last unlock with the master password.
 
 When a program is waiting for the secrets, the screen says "A program on
 this machine waits for the unlock", and a notification "Unlock the secrets"
@@ -267,28 +277,59 @@ Other screens you may meet before unlocking:
 A vault with a password of its own shows "has a password of its own" in the
 vault browser; "Open…" asks for it.
 
+### Unlocking with a PIN
+
+A PIN undoes an idle or screen lock without the master password, on macOS,
+Windows and Linux.
+
+**To set a PIN:** tick **"Use a PIN next time"** when you unlock with the
+master password, then choose the PIN on the screen that follows; or choose
+"Set a PIN" under Settings › Unlock. A PIN has at least 6 characters;
+letters are allowed.
+
+**To unlock with it:** the Unlock screen asks for the PIN; "Use the master
+password" switches to the password. After a wrong PIN the screen says how
+many attempts are left.
+
+What the PIN survives:
+
+- **Survives:** every idle and screen lock, and "Lock" in the tray.
+- **Ends:** a restart of the service (a reboot, an update), "Lock
+  completely" in the tray, 5 wrong PINs in a row, and 7 days after the last
+  unlock with the master password. Then the master password is asked once,
+  and right after it **"Your PIN"**, to unlock with it again: no PIN is kept
+  anywhere, so the service needs it once more.
+
+The PIN and the keys it opens live in the service's memory only. The
+device settings keep only the switch that the PIN is on.
+
+**To change or remove the PIN:** Settings › Unlock, "Change the PIN" or
+"Remove the PIN".
+
 ### Unlocking with Touch ID or Windows Hello
 
-On macOS and Windows the app can keep the unlock of the primary vault under
-the operating system's own check, and open the vaults with it instead of
-the master password:
+On macOS and Windows, Touch ID or Windows Hello (face, fingerprint or the
+Hello PIN) can undo a lock the same way:
 
-- **For this session:** choose "(c) idle or screen lock" as the service's
-  lock mode in [Settings](#settings). The first unlock with the master
-  password is kept; from then on the service locks when you are idle or
-  lock the screen, and "Unlock with Touch ID" (or "Windows Hello") opens it
-  again. It ends when the service stops or you choose "Lock completely" in
-  the tray menu; then only the master password unlocks.
+- **After a lock:** **"Unlock with Touch ID after a lock"** (or "Windows
+  Hello") is on by default; the Unlock screen and the First run offer it,
+  Settings › Unlock switches it. After the first unlock with the master
+  password, "Unlock with Touch ID" opens every later lock, whatever the lock
+  mode. It lasts as long as the PIN: a restart, "Lock completely", 5 wrong
+  PINs or the 7-day limit end it. The app keeps only a token for the
+  service behind Touch ID, never a key.
 - **Saved:** tick "Remember the master password with Touch ID" when you
   unlock, or switch it on in Settings. The unlock then survives restarts of
-  the service and the app. A saved unlock opens the vault even when you
-  have forgotten the password, so on this machine you could set a new one;
-  switch it off where that is not wanted.
+  the service and the app. **It skips the one master-password unlock after
+  a restart** that keeps the password in your memory, so you may forget it;
+  both the checkbox and the switch say so. A saved unlock also opens the
+  vault when you have forgotten the password, so on this machine you could
+  set a new one; switch it off where that is not wanted.
 
-What is kept is the vault's composite key (the key the master password and
-key file make) and its repository key, never the password itself. When
-there is one, the app asks for the check as soon as the unlock screen
-appears; cancel it to type the master password instead.
+What a saved unlock keeps is the vault's composite key (the key the master
+password and key file make) and its repository key, never the password
+itself. When there is one, the app asks for the check as soon as the unlock
+screen appears; cancel it to use the PIN or the master password instead.
 
 The master password always works. The app asks for it once, and keeps the
 unlock again afterwards, when:
@@ -304,7 +345,7 @@ ID is the weaker, gate-only form: it guards the unlock, but the unlock is
 kept in the login keychain, where a program running as you can read it
 without Touch ID. Settings say so. With Windows Hello the key exists only
 after Hello has signed, so nothing without Hello opens it. **Linux has no
-OS unlock**: the master password is the only way to unlock there.
+OS unlock**: the master password and the PIN unlock there.
 
 ## The main window
 
@@ -1454,10 +1495,10 @@ is kept in, is in the
 - "Serve every file the primary vault names", or only the ones you pick;
 - "Default environment";
 - "The service locks": "(b) when idle" after "Idle minutes before it locks",
-  "(a) never", or on macOS and Windows "(c) idle or screen lock" with Touch
-  ID or Windows Hello ([Unlocking with Touch ID or Windows
-  Hello](#unlocking-with-touch-id-or-windows-hello)); "Remember the master
-  password with Touch ID"; "Lock when the system sleeps"; and "Longest
+  "(a) never", or on macOS and Windows "(c) idle or screen lock" (the PIN
+  and Touch ID or Windows Hello undo every lock: [Unlocking with a
+  PIN](#unlocking-with-a-pin)); "Remember the master password with Touch
+  ID", with its warning; "Lock when the system sleeps"; and "Longest
   unlocked time, hours (0: no limit)";
 - "Seconds a request waits for an approval";
 - "Minutes an approval code is valid";
@@ -1497,6 +1538,15 @@ ended in Task Manager or updated), and the section says so.
 
 The same from the command line: `tsm install` and `tsm uninstall` (the
 `tsm` user guide).
+
+**Unlock** (the PIN in the service's memory; the device settings keep only
+the switch that it is on): the PIN's state ("The PIN is on: 5 attempts left,
+until …", or that it is typed once more since a restart), "Set a PIN",
+"Change the PIN", "Type the PIN", "Remove the PIN"; "Unlock with Touch ID
+after a lock" (macOS and Windows); and what each way survives: idle and
+screen locks yes, a restart, "Lock completely", 5 wrong PINs and 7 days
+after the master password no (see [Unlocking with a
+PIN](#unlocking-with-a-pin)).
 
 **This app** (kept in its preferences): "Keep the window out of screenshots
 and screen sharing" (Linux cannot), "Check passwords against known

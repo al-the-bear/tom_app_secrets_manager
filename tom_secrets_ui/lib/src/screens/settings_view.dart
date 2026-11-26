@@ -9,6 +9,9 @@
 ///   mode with its timeouts, the approval timeout and the code's validity,
 ///   the pull interval, the offline cache, the reminder period, the approval
 ///   link; and command-line approvals (DP-19), switchable only here.
+/// - **Unlock** (the quick unlock, protocol.md 6.4): the PIN (set, change,
+///   remove, the attempts left), the biometric after a lock, and what each
+///   survives.
 /// - **This machine's app**: screen capture (DP-33), start at login (DP-30),
 ///   stopping the service.
 /// - **Run the service on its own** (tsm_d12): the service installed for
@@ -57,7 +60,9 @@ import '../state/service_connection.dart';
 import '../state/session_state.dart';
 import '../state/windows_passkeys.dart';
 import '../widgets/style.dart';
-import 'gate_screens.dart' show tomSecretsDescribeAdminError;
+import 'gate_screens.dart'
+    show tomSecretsDescribeAdminError, tomSecretsRememberWarning;
+import 'pin_fields.dart' show tomSecretsPinSurvives, tomSecretsSetPinDialog;
 
 /// The Settings screen.
 class TomSecretsSettingsView extends StatefulWidget {
@@ -349,6 +354,7 @@ class _SettingsState extends State<TomSecretsSettingsView> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _device(context, session),
+                const TomSecretsUnlockSettings(),
                 _app(context, host),
                 if (host.keyboard != null || host.hotkeys != null)
                   const _AutoTypeSettings(),
@@ -470,7 +476,7 @@ class _SettingsState extends State<TomSecretsSettingsView> {
                     ButtonSegment(
                       value: 'osUnlock',
                       enabled: os.offered || mode == 'osUnlock',
-                      label: Text('(c) idle or screen lock, ${os.label}'),
+                      label: const Text('(c) idle or screen lock'),
                     ),
                 ],
                 selected: {mode},
@@ -635,9 +641,8 @@ class _SettingsState extends State<TomSecretsSettingsView> {
           ),
         if (mode == 'osUnlock')
           Text(
-            'In mode (c) the first unlock with the master password is kept '
-            'under ${os.label} until the service stops or you lock '
-            'completely (the tray).',
+            'Mode (c) also locks at the screen lock; ${os.label} or the PIN '
+            'undo it (Unlock, below).',
             style: muted,
           ),
         SwitchListTile(
@@ -648,10 +653,9 @@ class _SettingsState extends State<TomSecretsSettingsView> {
             'Remember the master password of ${os.primary ?? 'the primary'} '
             'with ${os.label}',
           ),
-          subtitle: const Text(
-            'On this machine only, and it unlocks after restarts too. It '
-            'opens the vault even when the password is forgotten, so on this '
-            'machine a new one could be set.',
+          subtitle: Text(
+            tomSecretsRememberWarning(os.label),
+            key: const Key('tsm-settings-remember-warning'),
           ),
           value: os.saved,
           onChanged: os.offered && !os.busy
@@ -1579,6 +1583,159 @@ class _ServiceInstallTileState extends State<_ServiceInstallTile> {
               key: const Key('tsm-settings-service-install-message'),
               style: _failed ? TextStyle(color: theme.colorScheme.error) : null,
             ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Settings › Unlock: the quick unlock's PIN and biometric (protocol.md
+/// 6.4) and what each survives.
+class TomSecretsUnlockSettings extends StatefulWidget {
+  /// The section (the desktop's and the phone's Settings); [showBiometric]
+  /// off where the host's own setting holds the biometric (the phone keeps
+  /// the master password behind it, part-mobile).
+  const TomSecretsUnlockSettings({super.key, this.showBiometric = true});
+
+  /// Whether the biometric after a lock is switched here.
+  final bool showBiometric;
+
+  @override
+  State<TomSecretsUnlockSettings> createState() => _UnlockSectionState();
+}
+
+class _UnlockSectionState extends State<TomSecretsUnlockSettings> {
+  String? _message;
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action, String done) async {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await action();
+      if (mounted) setState(() => _message = done);
+    } on TomSecretsAdminException catch (e) {
+      if (mounted) setState(() => _message = tomSecretsDescribeAdminError(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setPin(String done) async {
+    final set = await tomSecretsSetPinDialog(context);
+    if (set && mounted) setState(() => _message = done);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.watch<TomSecretsServiceConnection>();
+    final os = context.watch<TomSecretsOsUnlock>();
+    final quick = c.quickUnlock;
+    final muted = TextStyle(color: Theme.of(context).hintColor);
+    final until = quick.until?.toLocal();
+    final String pinState;
+    if (!quick.pinOn) {
+      pinState = 'No PIN: only the master password undoes a lock.';
+    } else if (quick.pinToRearm) {
+      pinState =
+          'The PIN is on, and is typed once more since the service '
+          'restarted (or you locked completely).';
+    } else {
+      pinState =
+          'The PIN is on: ${quick.attemptsLeft} attempts left'
+          '${until == null ? '' : ', until ${until.year}-'
+                    '${until.month.toString().padLeft(2, '0')}-'
+                    '${until.day.toString().padLeft(2, '0')} '
+                    '${until.hour.toString().padLeft(2, '0')}:'
+                    '${until.minute.toString().padLeft(2, '0')}'}.';
+    }
+    return TomSecretsSection(
+      title: 'Unlock',
+      icon: Icons.pin_rounded,
+      children: [
+        Text(
+          'Kept in memory only (the service\'s; on a phone the app\'s); the '
+          'settings keep just the switch that the PIN is on.',
+          style: muted,
+        ),
+        const SizedBox(height: 8),
+        Text(pinState, key: const Key('tsm-settings-pin-state')),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (!quick.pinOn)
+              FilledButton.tonal(
+                key: const Key('tsm-settings-pin-set'),
+                onPressed: _busy || c.locked
+                    ? null
+                    : () => unawaited(_setPin('The PIN is set.')),
+                child: const Text('Set a PIN'),
+              ),
+            if (quick.pinToRearm)
+              FilledButton.tonal(
+                key: const Key('tsm-settings-pin-rearm'),
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(_setPin('The PIN unlocks again.')),
+                child: const Text('Type the PIN'),
+              ),
+            if (quick.pinOn && !quick.pinToRearm)
+              OutlinedButton(
+                key: const Key('tsm-settings-pin-change'),
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(_setPin('The PIN is changed.')),
+                child: const Text('Change the PIN'),
+              ),
+            if (quick.pinOn)
+              OutlinedButton(
+                key: const Key('tsm-settings-pin-remove'),
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(
+                        _run(c.removeQuickPin, 'The PIN is removed.'),
+                      ),
+                child: const Text('Remove the PIN'),
+              ),
+          ],
+        ),
+        if (os.host != null && widget.showBiometric)
+          SwitchListTile(
+            key: const Key('tsm-settings-quick-biometric'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text('Unlock with ${os.label} after a lock'),
+            subtitle: Text(
+              os.offered
+                  ? '${os.label} releases the keys the service holds sealed in '
+                        'its memory: nothing of the master password is kept '
+                        'for it.'
+                  : '${os.label} is not set up here or cannot be used now.',
+            ),
+            value: os.quickOn,
+            onChanged: os.offered && !os.busy && !_busy
+                ? (on) => unawaited(os.setQuickOn(on))
+                : null,
+          ),
+        Text(
+          '$tomSecretsPinSurvives ${os.host == null
+              ? 'This machine has no '
+                    'biometric unlock (Linux): the PIN is the quick '
+                    'unlock.'
+              : widget.showBiometric
+              ? '${os.label} after a lock lasts the same.'
+              : ''}',
+          key: const Key('tsm-settings-unlock-survives'),
+          style: muted,
+        ),
+        if (_message != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(_message!, key: const Key('tsm-settings-pin-message')),
           ),
       ],
     );

@@ -36,6 +36,18 @@ abstract interface class TomSecretsAdminChannel {
   /// throws the admin library's `TomSecretsAdminException`.
   Future<void> unlockWithBundle(String vault, TomSecretsUnlockBundle bundle);
 
+  /// Sends [op] with [fields] and the secrets [sealed] (the quick unlock's
+  /// PIN and token, protocol.md 6.4), sealed under this connection's bundle
+  /// key where it crosses a socket; the answer's fields named in [open]
+  /// come back as bytes (the caller wipes them). Throws the admin library's
+  /// `TomSecretsAdminException`.
+  Future<Map<String, Object?>> requestSealed(
+    String op, {
+    Map<String, Object?> fields = const {},
+    Map<String, List<int>> sealed = const {},
+    List<String> open = const [],
+  });
+
   /// Closes the connection.
   Future<void> close();
 }

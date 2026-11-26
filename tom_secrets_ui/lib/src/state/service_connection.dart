@@ -443,10 +443,98 @@ class TomSecretsServiceConnection extends ChangeNotifier {
     await refreshStatus();
   }
 
-  /// Locks the service: every secret leaves its memory.
-  Future<void> lock() async {
-    await request('lock');
+  /// Locks the service: every secret leaves its memory. With [completely]
+  /// the quick unlock ends too (protocol.md 6.4): only the master password
+  /// unlocks then.
+  Future<void> lock({bool completely = false}) async {
+    await request('lock', {if (completely) 'completely': true});
     _setLocked(true);
+  }
+
+  TomSecretsPinStep? _pinStep;
+
+  /// The PIN step the gate shows after an unlock with the master password,
+  /// before the vaults ("Your PIN, to unlock with it again", or a new PIN
+  /// when the user chose "Use a PIN next time"), or null.
+  TomSecretsPinStep? get pinStep => _pinStep;
+
+  /// Shows [step] after the unlock (null: none).
+  void askPin(TomSecretsPinStep? step) {
+    if (_pinStep == step) return;
+    _pinStep = step;
+    notifyListeners();
+  }
+
+  /// The quick unlock as the service reports it (protocol.md 6.4).
+  TomSecretsQuickUnlockState get quickUnlock =>
+      TomSecretsQuickUnlockState.fromWire(_report['quickUnlock']);
+
+  /// Sends [op] with [sealed] secrets over the attached connection
+  /// ([TomSecretsAdminChannel.requestSealed]).
+  Future<Map<String, Object?>> requestSealed(
+    String op, {
+    Map<String, Object?> fields = const {},
+    Map<String, List<int>> sealed = const {},
+    List<String> open = const [],
+  }) {
+    final channel = _channel;
+    if (channel == null || _phase != TomSecretsConnectionPhase.attached) {
+      return Future.error(
+        TomSecretsAdminException('not_running', 'not attached to the service'),
+      );
+    }
+    return channel.requestSealed(
+      op,
+      fields: fields,
+      sealed: sealed,
+      open: open,
+    );
+  }
+
+  /// Unlocks with the quick-unlock [pin] (`unlock {pin}`). Throws
+  /// `TomSecretsAdminException` (`denied`: `bad_pin` with `attemptsLeft`,
+  /// `pin_wiped`, `quick_expired`, `no_quick_unlock`, `rekeyed`).
+  Future<void> unlockWithPin(String pin) async {
+    await requestSealed('unlock', sealed: {'pin': utf8.encode(pin)});
+    _locked = false;
+    _unlockNeeded = false;
+    notifyListeners();
+    await refreshStatus();
+  }
+
+  /// Unlocks with the biometric's [token] (`unlock {quick}`).
+  Future<void> unlockWithQuickToken(List<int> token) async {
+    await requestSealed('unlock', sealed: {'quick': token});
+    _locked = false;
+    _unlockNeeded = false;
+    notifyListeners();
+    await refreshStatus();
+  }
+
+  /// Sets (or changes) the quick-unlock [pin] (`quickUnlock.set`).
+  Future<void> setQuickPin(String pin) async {
+    await requestSealed('quickUnlock.set', sealed: {'pin': utf8.encode(pin)});
+    await refreshStatus();
+  }
+
+  /// Removes the PIN; the switch goes off.
+  Future<void> removeQuickPin() async {
+    await request('quickUnlock.remove', {'pin': true});
+    await refreshStatus();
+  }
+
+  /// A new token for the biometric (`quickUnlock.token`; the caller wipes
+  /// it).
+  Future<Uint8List> newQuickToken() async {
+    final answer = await requestSealed('quickUnlock.token', open: ['token']);
+    await refreshStatus();
+    return answer['token']! as Uint8List;
+  }
+
+  /// Forgets the biometric's token in the service.
+  Future<void> removeQuickToken() async {
+    await request('quickUnlock.remove', {'token': true});
+    await refreshStatus();
   }
 
   /// Stops the service (locks first); a separate command from quitting the
@@ -926,4 +1014,64 @@ final class TomSecretsApprovalPrompt {
     final cut = path.lastIndexOf(RegExp(r'[/\\]'));
     return cut > 0 ? path.substring(0, cut) : (cwd ?? path);
   }
+}
+
+/// The quick unlock as `status` reports it (protocol.md 6.4): never a key
+/// or a PIN.
+@immutable
+final class TomSecretsQuickUnlockState {
+  /// A state.
+  const TomSecretsQuickUnlockState({
+    this.pinOn = false,
+    this.pinArmed = false,
+    this.tokenArmed = false,
+    this.attemptsLeft = 5,
+    this.until,
+  });
+
+  /// From `statusReport.quickUnlock` (none: everything off).
+  factory TomSecretsQuickUnlockState.fromWire(Object? wire) {
+    if (wire is! Map) return const TomSecretsQuickUnlockState();
+    return TomSecretsQuickUnlockState(
+      pinOn: wire['pin'] == true,
+      pinArmed: wire['pinArmed'] == true,
+      tokenArmed: wire['token'] == true,
+      attemptsLeft: wire['attemptsLeft'] is int
+          ? wire['attemptsLeft']! as int
+          : 5,
+      until: wire['until'] is String
+          ? DateTime.tryParse(wire['until']! as String)
+          : null,
+    );
+  }
+
+  /// Whether quick unlock with a PIN is on (the device settings' switch).
+  final bool pinOn;
+
+  /// Whether a PIN unlocks now (keys sealed under it in the service).
+  final bool pinArmed;
+
+  /// Whether the biometric's token unlocks now.
+  final bool tokenArmed;
+
+  /// The wrong PINs still allowed.
+  final int attemptsLeft;
+
+  /// When the quick unlock ends (7 days after the last master-password
+  /// unlock), or null.
+  final DateTime? until;
+
+  /// The PIN is on but needs to be typed once more since the last restart
+  /// or "Lock completely" ("Your PIN, to unlock with it again").
+  bool get pinToRearm => pinOn && !pinArmed;
+}
+
+/// What the PIN step after an unlock asks for.
+enum TomSecretsPinStep {
+  /// A new PIN ("Use a PIN next time").
+  choose,
+
+  /// The PIN again after a restart or "Lock completely": no PIN is kept
+  /// anywhere, so the service needs it once to seal the keys under it.
+  rearm,
 }

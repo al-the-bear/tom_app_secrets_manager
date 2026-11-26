@@ -154,11 +154,11 @@ class _SettingsState extends State<TomSecretsMobileSettingsView> {
           subtitle: Text(
             !os.offered
                 ? '${os.label} is not set up on this device.'
-                : os.gateOnly
-                ? 'The master password is kept in the keychain behind '
-                      '${os.label}.'
-                : 'The master password is kept under a key only '
-                      '${os.label} releases.',
+                : '${os.gateOnly ? 'The master password is kept in the keychain behind ${os.label}.' : 'The master password is kept under a key only ${os.label} releases.'} '
+                      'It unlocks after the app was closed too, so you seldom '
+                      'type the master password and may forget it: type it '
+                      'now and then.',
+            key: const Key('tsm-mobile-setting-biometric-warning'),
           ),
           value: os.offered && _settings.biometric,
           onChanged: !os.offered || os.busy
@@ -333,6 +333,13 @@ class _SettingsState extends State<TomSecretsMobileSettingsView> {
               if (sure == true) await forget();
             },
           ),
+        const Divider(),
+        // The quick-unlock PIN, held in the engine's memory (part-app,
+        // Unlocking).
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: TomSecretsUnlockSettings(showBiometric: false),
+        ),
       ],
     );
   }

@@ -56,6 +56,10 @@ abstract final class TomSecretsMobileKeys {
   /// `off` when the user turned the biometric unlock off (default on).
   static const biometric = 'mobile.biometric';
 
+  /// `on` while quick unlock with a PIN is on: the only thing kept about the
+  /// PIN (the keys it seals live in the engine's memory only).
+  static const quickUnlockPin = 'mobile.quickUnlockPin';
+
   /// The GitHub tokens' expiries the pairing delivered, JSON
   /// (`owner/repository` → ISO 8601).
   static const tokenExpires = 'mobile.tokenExpires';
@@ -100,6 +104,14 @@ final class TomSecretsMobileSettings {
   /// Turns the biometric unlock on or off.
   Future<void> setBiometric(bool on) =>
       preferences.write(TomSecretsMobileKeys.biometric, on ? null : 'off');
+
+  /// Whether quick unlock with a PIN is on.
+  bool get quickUnlockPin =>
+      preferences.read(TomSecretsMobileKeys.quickUnlockPin) == 'on';
+
+  /// Turns the PIN's switch on or off.
+  Future<void> setQuickUnlockPin(bool on) =>
+      preferences.write(TomSecretsMobileKeys.quickUnlockPin, on ? 'on' : null);
 
   /// The days before a GitHub token's expiry its reminders start (as the
   /// desktop's `keyExpiryWarningDays`).
@@ -153,7 +165,12 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     this.kdfMemoryLimit = defaultKdfMemoryLimit,
     this.unlockRetryEvery = const Duration(seconds: 15),
     this.unlockRetryFor = const Duration(minutes: 10),
+    TomSecretsPinKdf quickUnlockKdf = const TomSecretsPinKdf(),
   }) : settings = TomSecretsMobileSettings(preferences),
+       quickUnlock = TomSecretsQuickUnlock(
+         kdf: quickUnlockKdf,
+         now: clock ?? DateTime.now,
+       ),
        documentRegistry = TomSecretsDocumentRegistry(preferences),
        _clock = clock ?? DateTime.now {
     _github = TomSecretsGitHubOpener(
@@ -263,6 +280,21 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
 
   /// Whether the vaults are closed.
   bool get isLocked => !_vaults.isUnlocked;
+
+  /// The quick unlock (protocol.md 6.4): the primary's keys sealed in this
+  /// process's memory under the PIN. The phone's biometric keeps the
+  /// master password itself, surviving the app's end (part-mobile; the
+  /// user's choice in tsm_d13), with a warning on its switch.
+  final TomSecretsQuickUnlock quickUnlock;
+
+  /// After an unlock with the master password (or the kept one): the quick
+  /// unlock's age limit counts from now.
+  void _notePasswordUnlock() {
+    final encoded = _vaults.encodedPrimaryKeys();
+    if (encoded == null) return;
+    quickUnlock.passwordUnlocked(encoded);
+    encoded.fillRange(0, encoded.length, 0);
+  }
 
   /// The open stores the Android Autofill service answers from (DP-175),
   /// or null while locked.
@@ -386,6 +418,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
           () => TomSecretsHeldKeys.ofBundle(bundle),
           bundle: true,
         );
+        _notePasswordUnlock();
       });
 
   /// Unlocks with [keys]; refused for no network, tries again by itself
@@ -678,7 +711,18 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
   }
 
   /// Closes every vault: nothing of them stays on the device.
-  void lock() {
+  void lock({bool completely = false}) {
+    // "Lock completely" ends the quick unlock; another lock keeps it unless
+    // the keys sealed are no longer the primary's (re-keyed).
+    if (completely) {
+      quickUnlock.wipe();
+    } else {
+      final encoded = _vaults.encodedPrimaryKeys();
+      if (encoded != null) {
+        if (!quickUnlock.matches(encoded)) quickUnlock.wipe();
+        encoded.fillRange(0, encoded.length, 0);
+      }
+    }
     // The vault set's lock drops the saves that wait.
     // Keys a background refresh took up are dropped; the next unlock takes
     // them from the keychain's next keys.
@@ -918,6 +962,9 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     'lockMode': 'b',
     'protocol': 1,
     'service': {'version': 'mobile', 'start': start},
+    'quickUnlock': quickUnlock.toStatus(
+      pinOn: !isLocked && settings.quickUnlockPin,
+    ),
     'stores': [for (final s in _vaults.status) _stateOf(s)],
     'expiring': _expiring(),
     'admins': 1,
@@ -962,6 +1009,7 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         await _serial(() async {
           if (!isLocked) return;
           await _unlockOrRetry(keys);
+          _notePasswordUnlock();
         });
         return {'op': 'ok'};
       case 'unlockStore':
@@ -992,7 +1040,14 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
         }
         return {'op': 'ok'};
       case 'lock':
-        lock();
+        lock(completely: args['completely'] == true);
+        return {'op': 'ok'};
+      case 'quickUnlock.remove':
+        if (args['pin'] == true) {
+          quickUnlock.removePin();
+          await settings.setQuickUnlockPin(false);
+        }
+        if (args['token'] == true) quickUnlock.removeToken();
         return {'op': 'ok'};
       case 'vaultKeys':
         _unlocked();
@@ -1245,6 +1300,93 @@ final class TomSecretsMobileEngine implements TomSecretsAdminChannel {
     } on TomSecretsSaveException catch (e) {
       _refuse(e.kind, e.message, {'reason': ?e.reason});
     }
+  }
+
+  /// The quick unlock's messages (protocol.md 6.4), in this process: the
+  /// PIN and the token cross no socket, so nothing is sealed.
+  @override
+  Future<Map<String, Object?>> requestSealed(
+    String op, {
+    Map<String, Object?> fields = const {},
+    Map<String, List<int>> sealed = const {},
+    List<String> open = const [],
+  }) async {
+    if (_closed) _refuse('closed', 'the engine is closed');
+    switch (op) {
+      case 'quickUnlock.set':
+        _unlocked();
+        final pin = utf8.decode(sealed['pin'] ?? const []);
+        final encoded = _vaults.encodedPrimaryKeys()!;
+        try {
+          await quickUnlock.setPin(pin, encoded);
+        } on ArgumentError catch (e) {
+          _refuse('malformed', '${e.message}', {'reason': 'pin'});
+        } on StateError catch (e) {
+          _refuse('denied', e.message, {'reason': 'password_first'});
+        } finally {
+          encoded.fillRange(0, encoded.length, 0);
+        }
+        await settings.setQuickUnlockPin(true);
+        return {'op': 'ok'};
+      case 'quickUnlock.token':
+        _unlocked();
+        final encoded = _vaults.encodedPrimaryKeys()!;
+        try {
+          return {
+            'op': 'quickToken',
+            'token': await quickUnlock.newToken(encoded),
+          };
+        } on StateError catch (e) {
+          _refuse('denied', e.message, {'reason': 'password_first'});
+        } finally {
+          encoded.fillRange(0, encoded.length, 0);
+        }
+      case 'unlock'
+          when sealed.containsKey('pin') || sealed.containsKey('quick'):
+        final pin = sealed.containsKey('pin');
+        final Uint8List keys;
+        try {
+          keys = pin
+              ? await quickUnlock.openWithPin(utf8.decode(sealed['pin']!))
+              : await quickUnlock.openWithToken(sealed['quick']!);
+        } on TomSecretsQuickUnlockException catch (e) {
+          _refuse(
+            'denied',
+            switch (e.refusal) {
+              TomSecretsQuickRefusal.badPin => 'the PIN is wrong',
+              TomSecretsQuickRefusal.wiped =>
+                'too many wrong PINs: unlock with the master password',
+              TomSecretsQuickRefusal.expired =>
+                'the quick unlock ended: unlock with the master password',
+              TomSecretsQuickRefusal.badToken => 'the token does not open',
+              TomSecretsQuickRefusal.none =>
+                'no quick unlock: unlock with the master password',
+            },
+            {'reason': e.refusal.reason, 'attemptsLeft': ?e.attemptsLeft},
+          );
+        }
+        try {
+          await _serial(() async {
+            if (!isLocked) return;
+            await _unlockOrRetry(() => TomSecretsHeldKeys.decode(keys));
+          });
+        } on TomSecretsAdminException catch (e) {
+          if (e.details['reason'] == 'bad_password') {
+            quickUnlock.wipe();
+            _refuse(
+              'denied',
+              'the vault was re-keyed: unlock with the master password',
+              {'reason': 'rekeyed'},
+            );
+          }
+          rethrow;
+        } finally {
+          // A retry for the network keeps them until it opens or gives up.
+          if (_retry == null) keys.fillRange(0, keys.length, 0);
+        }
+        return {'op': 'ok'};
+    }
+    _refuse('unsupported', 'no sealed $op here');
   }
 
   @override

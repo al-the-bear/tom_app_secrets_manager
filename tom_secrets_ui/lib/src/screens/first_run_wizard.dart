@@ -17,6 +17,7 @@ import 'package:tom_secrets_core/tom_secrets_core.dart';
 
 import '../ports/desktop_ports.dart';
 import '../state/first_run_model.dart';
+import '../state/os_unlock.dart';
 import '../state/service_connection.dart';
 import '../widgets/emergency_sheet_offer.dart';
 import '../widgets/style.dart';
@@ -209,12 +210,29 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
     );
   }
 
+  /// "Use a PIN after the first unlock" (step 3).
+  bool _pinAfter = false;
+
+  /// Opens the vaults: the biometric after a lock kept (when chosen), the
+  /// PIN asked for (when chosen), then the shell.
+  Future<void> _finish(TomSecretsServiceConnection c) async {
+    if (c.phase == TomSecretsConnectionPhase.attached && !c.locked) {
+      try {
+        await context.read<TomSecretsOsUnlock>().keep();
+      } on Object {
+        // The master password unlocks; Settings keeps it later.
+      }
+      if (_pinAfter) c.askPin(TomSecretsPinStep.choose);
+    }
+    c.endFirstRun();
+  }
+
   Widget _buttons() {
     final c = context.read<TomSecretsServiceConnection>();
     if (m.step == TomSecretsFirstRunStep.done) {
       return FilledButton.icon(
         key: const Key('tsm-fr-finish'),
-        onPressed: c.endFirstRun,
+        onPressed: () => unawaited(_finish(c)),
         icon: const Icon(Icons.arrow_forward),
         label: Text(
           c.phase == TomSecretsConnectionPhase.attached
@@ -966,6 +984,36 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
 
   // ---- Step 3 ----
 
+  /// After a lock: the biometric (where the platform has one) and a PIN
+  /// (part-app, Unlocking).
+  List<Widget> _quickUnlockChoices() {
+    final os = context.watch<TomSecretsOsUnlock>();
+    return [
+      Text('After a lock', style: Theme.of(context).textTheme.titleSmall),
+      if (os.offered && os.offersQuick)
+        CheckboxListTile(
+          key: const Key('tsm-fr-quick-biometric'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          value: os.quickOn,
+          onChanged: (v) => unawaited(os.chooseQuick(v ?? false)),
+          title: Text('Unlock with ${os.label} after a lock'),
+        ),
+      CheckboxListTile(
+        key: const Key('tsm-fr-pin'),
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        value: _pinAfter,
+        onChanged: (v) => setState(() => _pinAfter = v ?? false),
+        title: const Text('Use a PIN after a lock'),
+        subtitle: const Text(
+          'Asked when the vaults open. After a restart the master password '
+          'is typed once, then the PIN again.',
+        ),
+      ),
+    ];
+  }
+
   Widget _machineStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -1048,6 +1096,7 @@ class _WizardState extends State<TomSecretsFirstRunWizard> {
         ],
       ),
       const SizedBox(height: 8),
+      ..._quickUnlockChoices(),
       ExpansionTile(
         key: const Key('tsm-fr-advanced'),
         tilePadding: EdgeInsets.zero,

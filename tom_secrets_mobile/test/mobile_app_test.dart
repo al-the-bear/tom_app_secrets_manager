@@ -269,7 +269,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
     final health = find.byKey(const Key('tsm-mobile-health'));
-    await tester.ensureVisible(health);
+    // The settings list builds lazily: scroll back up to the row.
+    await tester.dragUntilVisible(
+      health,
+      find.byKey(const Key('tsm-mobile-settings')),
+      const Offset(0, 100),
+    );
     await tester.pumpAndSettle();
     await tester.tap(health);
     await tester.pumpAndSettle();
@@ -381,6 +386,9 @@ void main() {
       find.byKey(const Key('tsm-mobile-forget')),
       100,
     );
+    // Clear of the bottom bar before the tap.
+    await tester.ensureVisible(find.byKey(const Key('tsm-mobile-forget')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tsm-mobile-forget')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Set up again'));
@@ -611,6 +619,9 @@ void main() {
       find.byKey(const Key('tsm-mobile-add-file-vault')),
       100,
     );
+    // Clear of the bottom bar before the tap.
+    await tester.ensureVisible(find.byKey(const Key('tsm-mobile-add-file-vault')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tsm-mobile-add-file-vault')));
     await tester.pumpAndSettle();
     expect(

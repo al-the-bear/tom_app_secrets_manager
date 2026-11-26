@@ -48,6 +48,14 @@ final class TomSecretsAdminClientChannel implements TomSecretsAdminChannel {
       client.unlockWithBundle(vault, bundle);
 
   @override
+  Future<Map<String, Object?>> requestSealed(
+    String op, {
+    Map<String, Object?> fields = const {},
+    Map<String, List<int>> sealed = const {},
+    List<String> open = const [],
+  }) => client.requestSealed(op, fields: fields, sealed: sealed, open: open);
+
+  @override
   Future<void> close() => client.close();
 }
 

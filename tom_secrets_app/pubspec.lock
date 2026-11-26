@@ -1001,18 +1001,18 @@ packages:
     dependency: "direct main"
     description:
       name: tom_secrets_client
-      sha256: fc57aef19706fcf3353a2b7778fa2698c93aedab5119893de4ef8178f614f1a8
+      sha256: "7797b4f9a8b81a25c69a2cc6100e675c791a0a8f8c60157d3c83557a61750eeb"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.27"
+    version: "0.2.28"
   tom_secrets_core:
     dependency: transitive
     description:
       name: tom_secrets_core
-      sha256: "83f42b70bf46e46101c3f7fa40e7a6e3ebd6652f409595b0fc6485c0b4fdc4f0"
+      sha256: "764a5b4847c83350b9985e3b9bf09edbb613e96d146704b118d3e125118efaf8"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.39"
+    version: "0.2.40"
   tom_secrets_desktop:
     dependency: "direct main"
     description:

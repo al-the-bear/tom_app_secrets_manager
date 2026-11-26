@@ -5,16 +5,20 @@
 /// the primary kept in the host's gated store (Touch ID, Windows Hello), and
 /// the service unlocked with it.
 ///
-/// - **What is kept:** the primary's composite key and its repository key
-///   (DP-72), read from the service's `vaultKeys` after an unlock, never the
-///   password text. One master password opens every vault through the
-///   primary, so only the primary's bundle is kept.
-/// - **Two lifetimes:** a *session* item in lock mode (c), written at the
-///   first unlock with the password and dropped when the service stops, at
-///   "Lock completely", or when the service has started again since (its
-///   start time is in the item); a *saved* item when the user opts in
-///   (BP-37), kept until turned off, the vault is re-keyed or the enrolment
-///   changes.
+/// - **After a lock (the quick unlock, protocol.md 6.4):** a *session*
+///   item holds the token the service sealed the primary's keys under in
+///   its memory (`quickUnlock.token`), never a key. Written at the first
+///   unlock with the master password (in every lock mode, unless the user
+///   turned it off: [TomSecretsOsUnlockKeys.quick]); the biometric releases
+///   it and `unlock {quick}` undoes an idle or screen lock. It is dropped
+///   when the service stops or has started again since (its start time is
+///   in the item), at "Lock completely", and whenever the service no longer
+///   holds the token (5 wrong PINs, the 7-day limit, a re-keyed vault).
+/// - **After restarts ("Remember the master password", BP-37):** a *saved*
+///   item holds the primary's composite key and its repository key (DP-72),
+///   read from the service's `vaultKeys`, never the password text. Kept
+///   until turned off, the vault is re-keyed or the enrolment changes; it
+///   skips the one master-password unlock after a restart.
 /// - **Fallback, always:** the master password. A bundle the service no
 ///   longer takes (the vault was re-keyed) and an item the OS no longer
 ///   releases (a new fingerprint) are forgotten, and the next unlock with
@@ -37,6 +41,10 @@ import 'service_connection.dart';
 abstract final class TomSecretsOsUnlockKeys {
   /// The items kept: JSON `{store: {lifetime, start}}`.
   static const items = 'osUnlock.items';
+
+  /// `off` when the user turned the biometric after a lock off (default
+  /// on).
+  static const quick = 'osUnlock.quick';
 }
 
 /// One kept item as the device's preferences record it.
@@ -176,7 +184,8 @@ class TomSecretsOsUnlock extends ChangeNotifier {
     final item = store == null ? null : items[store];
     if (item == null) return null;
     if (item.lifetime == TomGatedLifetime.session &&
-        item.start != connection.serviceStart) {
+        (item.start != connection.serviceStart ||
+            !connection.quickUnlock.tokenArmed)) {
       return null;
     }
     return item;
@@ -185,15 +194,49 @@ class TomSecretsOsUnlock extends ChangeNotifier {
   /// Whether the primary's master password is saved (BP-37).
   bool get saved => items[primary]?.lifetime == TomGatedLifetime.saved;
 
+  /// Whether the biometric undoes a lock after the first unlock with the
+  /// master password (the quick unlock's token kept behind it).
+  bool get quickOn =>
+      offersQuick && preferences.read(TomSecretsOsUnlockKeys.quick) != 'off';
+
+  /// Whether the biometric after a lock is offered here: the desktop. A host
+  /// that keeps the master password behind the biometric itself (the
+  /// phone, [TomSecretsOsUnlockHost.keepSaved]) unlocks with that.
+  bool get offersQuick => host != null && host!.keepSaved == null;
+
+  /// Records the choice of the biometric after a lock (the Unlock screen,
+  /// the First run): kept at the next unlock with the master password.
+  Future<void> chooseQuick(bool on) async {
+    await preferences.write(TomSecretsOsUnlockKeys.quick, on ? null : 'off');
+    notifyListeners();
+  }
+
+  /// Turns the biometric after a lock on (keeps a token now, while
+  /// unlocked) or off (forgets it here and in the service).
+  Future<void> setQuickOn(bool on) async {
+    await preferences.write(TomSecretsOsUnlockKeys.quick, on ? null : 'off');
+    if (on) {
+      await keep();
+      return;
+    }
+    await forgetSession();
+    try {
+      await connection.removeQuickToken();
+    } on Object {
+      // Locked or gone: the service's token ends with it anyway.
+    }
+    notifyListeners();
+  }
+
   /// Whether a session item is kept.
   bool get hasSession =>
       items.values.any((i) => i.lifetime == TomGatedLifetime.session);
 
-  /// After the service was unlocked (with the password, or when lock mode
-  /// (c) was chosen): keeps the primary's bundle when it is to be kept
-  /// (lock mode (c): a session item; [remember] or saved before: a saved
-  /// one) and no usable item is kept yet. A failure leaves the password as
-  /// the unlock, with [message] saying why.
+  /// After the service was unlocked with the master password: keeps what
+  /// is to be kept and is not kept yet. [remember] or saved before: a saved
+  /// item (the bundle); else, with [quickOn], a session item (the quick
+  /// unlock's token). A failure leaves the password as the unlock, with
+  /// [message] saying why.
   Future<void> keep({bool remember = false}) async {
     await refresh();
     final store = connection.stores.keys.firstOrNull;
@@ -205,13 +248,15 @@ class TomSecretsOsUnlock extends ChangeNotifier {
             (host?.keepSaved?.call() ?? false) ||
             current?.lifetime == TomGatedLifetime.saved
         ? TomGatedLifetime.saved
-        : connection.lockMode == 'c'
+        : quickOn
         ? TomGatedLifetime.session
         : null;
     if (lifetime == null) return;
+    if (current != null && current.lifetime == TomGatedLifetime.saved) return;
     if (current != null &&
-        (current.lifetime == lifetime ||
-            current.lifetime == TomGatedLifetime.saved)) {
+        current.lifetime == lifetime &&
+        current.start == connection.serviceStart &&
+        connection.quickUnlock.tokenArmed) {
       return;
     }
     await _write(store, lifetime);
@@ -224,6 +269,34 @@ class TomSecretsOsUnlock extends ChangeNotifier {
     TomSecretsUnlockBundle? bundle;
     Uint8List? plain;
     try {
+      if (lifetime == TomGatedLifetime.session) {
+        // The quick unlock: a token the service sealed the keys under in its
+        // memory; no key leaves the service.
+        plain = await connection.newQuickToken();
+        final start = connection.serviceStart;
+        await gated.write(
+          handleOf(store),
+          jsonEncode({
+            'v': 2,
+            'store': store,
+            'lifetime': lifetime.name,
+            'start': ?start,
+            'token': base64.encode(plain),
+          }),
+          lifetime: lifetime,
+          reason: keepReason,
+        );
+        await _record({
+          ...items,
+          store: TomSecretsOsUnlockItem(
+            store: store,
+            lifetime: lifetime,
+            start: start,
+          ),
+        });
+        _message = null;
+        return;
+      }
       final set = await connection.request('vaultKeys', {
         'stores': [store],
       });
@@ -325,6 +398,15 @@ class TomSecretsOsUnlock extends ChangeNotifier {
         return false;
       }
       final json = (jsonDecode(text) as Map).cast<String, Object?>();
+      if (json['token'] is String) {
+        final token = base64.decode(json['token']! as String);
+        try {
+          await connection.unlockWithQuickToken(token);
+        } finally {
+          token.fillRange(0, token.length, 0);
+        }
+        return true;
+      }
       final plain = base64.decode(json['bundle']! as String);
       try {
         bundle = TomSecretsUnlockBundle.decode(plain);
@@ -334,6 +416,20 @@ class TomSecretsOsUnlock extends ChangeNotifier {
       await connection.unlockWithBundle(item.store, bundle);
       return true;
     } on TomSecretsAdminException catch (e) {
+      final reason = e.details['reason'];
+      if (e.kind == 'denied' &&
+          (reason == 'no_quick_unlock' ||
+              reason == 'quick_expired' ||
+              reason == 'bad_token')) {
+        // The service no longer holds the token (5 wrong PINs, the 7-day
+        // limit, "Lock completely"): the master password, then it is kept
+        // again.
+        await forget(item.store);
+        _message =
+            'The quick unlock ended: type the master password; $label works '
+            'again after it.';
+        return false;
+      }
       if (e.kind == 'denied' || e.kind == 'not_found') {
         // Re-keyed (perhaps on another machine): the composite key no longer
         // opens the vault.
@@ -399,10 +495,11 @@ class TomSecretsOsUnlock extends ChangeNotifier {
     }
   }
 
-  /// Forgets the session items and locks the service: nothing but the
-  /// master password (or a saved item) unlocks it then.
+  /// Forgets the session items and locks the service completely (the
+  /// quick unlock ends too): nothing but the master password (or a saved
+  /// item) unlocks it then.
   Future<void> lockCompletely() async {
     await forgetSession();
-    await connection.lock();
+    await connection.lock(completely: true);
   }
 }

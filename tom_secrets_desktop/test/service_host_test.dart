@@ -23,7 +23,11 @@ import 'package:tom_secrets_client/admin.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 import 'package:tom_secrets_desktop/tom_secrets_desktop.dart';
 import 'package:tom_secrets_service/tom_secrets_service.dart'
-    show TomSecretsBootstrap, TomSecretsService, TomSecretsServiceConfig;
+    show
+        TomSecretsBootstrap,
+        TomSecretsPinKdf,
+        TomSecretsService,
+        TomSecretsServiceConfig;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart';
 
 const _password = 'primary-demo-pw';
@@ -125,6 +129,7 @@ void main() {
             : Uint8List.fromList(adminKey),
         host: 'demo-host',
         authDelay: (n) => Duration(milliseconds: 10 * n),
+        quickUnlockKdf: const TomSecretsPinKdf(memoryKiB: 256, iterations: 1),
       ),
     );
     addTearDown(service.stop);
@@ -507,6 +512,51 @@ void main() {
       ]);
     },
   );
+
+  test('the quick unlock through the desktop channel: the PIN and the '
+      'biometric\'s token, sealed under the bundle key, undo a lock; "Lock '
+      'completely" ends them', () async {
+    final key = tomSecretsRandomBytes();
+    final service = await launch(key);
+    await keychain.write(
+      tomSecretsAdminKeyHandle(service.startedAt),
+      base64.encode(key),
+    );
+    final attached = await host.attach();
+    final channel = (attached as TomSecretsAttached).channel;
+    addTearDown(channel.close);
+    await channel.request('unlock', {'password': _password});
+    await channel.requestSealed(
+      'quickUnlock.set',
+      sealed: {'pin': utf8.encode('tiger7')},
+    );
+    final token =
+        (await channel.requestSealed(
+              'quickUnlock.token',
+              open: ['token'],
+            ))['token']!
+            as Uint8List;
+    await channel.request('lock');
+    await channel.requestSealed(
+      'unlock',
+      sealed: {'pin': utf8.encode('tiger7')},
+    );
+    expect(service.isLocked, isFalse);
+    await channel.request('lock');
+    await channel.requestSealed('unlock', sealed: {'quick': token});
+    expect(service.isLocked, isFalse);
+    await channel.request('lock', {'completely': true});
+    await expectLater(
+      channel.requestSealed('unlock', sealed: {'pin': utf8.encode('tiger7')}),
+      throwsA(
+        isA<TomSecretsAdminException>().having(
+          (e) => e.details['reason'],
+          'reason',
+          'no_quick_unlock',
+        ),
+      ),
+    );
+  });
 
   test(
     'attached with the key tsm keeps; the editing path works over it',

@@ -1051,8 +1051,9 @@ void main() {
       expect(find.byKey(const Key('tsm-mobile-settings')), findsOneWidget);
       await snap(tester, 'settings', 'top');
 
+      // The end of the list: the quick unlock's PIN.
       await tester.scrollUntilVisible(
-        find.byKey(const Key('tsm-mobile-forget')),
+        find.byKey(const Key('tsm-settings-unlock-survives')),
         200,
         scrollable: find.byType(Scrollable).last,
       );
@@ -1061,6 +1062,12 @@ void main() {
 
       // The service turned on in the system's settings: the section says
       // what it fills.
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('tsm-mobile-autofill-on')),
+        -200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('tsm-mobile-autofill-on')));
       await wait(tester);
       expect(find.byKey(const Key('tsm-mobile-autofill-on')), findsNothing);

@@ -264,11 +264,15 @@ final class TomSecretsHostBridge {
               'Lock',
               onSelected: () => unawaited(c.lock().catchError((Object _) {})),
             ),
-          if (attached && (osUnlock?.hasSession ?? false))
+          if (attached &&
+              ((osUnlock?.hasSession ?? false) ||
+                  c.quickUnlock.pinArmed ||
+                  c.quickUnlock.tokenArmed))
             TomSecretsTrayItem(
-              'Lock completely (forget the ${osUnlock!.label} unlock)',
+              'Lock completely (the master password next)',
               onSelected: () => unawaited(
-                osUnlock!.lockCompletely().catchError((Object _) {}),
+                (osUnlock?.lockCompletely() ?? c.lock(completely: true))
+                    .catchError((Object _) {}),
               ),
             ),
           if (attached && c.locked && window != null)

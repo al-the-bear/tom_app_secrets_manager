@@ -17,6 +17,7 @@ import 'host_bridge.dart';
 import 'ports/desktop_ports.dart';
 import 'screens/first_run_wizard.dart';
 import 'screens/gate_screens.dart';
+import 'screens/pin_fields.dart';
 import 'screens/main_shell.dart';
 import 'state/auto_type.dart';
 import 'state/autofill.dart';
@@ -165,6 +166,8 @@ class _Gate extends StatelessWidget {
       TomSecretsConnectionPhase.attached =>
         c.locked
             ? TomSecretsUnlockScreen(keyFiles: keyFiles)
+            : c.pinStep != null
+            ? const TomSecretsPinStepScreen()
             : (context.read<TomSecretsHost>().shell?.call(context, clipboard) ??
                   TomSecretsMainShell(clipboard: clipboard)),
       TomSecretsConnectionPhase.claimNeeded => TomSecretsClaimScreen(

@@ -31,6 +31,7 @@ export 'src/screens/quick_access.dart';
 export 'src/screens/renew_token_dialog.dart';
 export 'src/screens/rotate_dialog.dart';
 export 'src/screens/gate_screens.dart';
+export 'src/screens/pin_fields.dart';
 export 'src/screens/health_view.dart';
 export 'src/screens/import_view.dart';
 export 'src/screens/keys_view.dart';

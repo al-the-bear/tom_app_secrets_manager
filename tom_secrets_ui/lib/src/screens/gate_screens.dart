@@ -337,9 +337,16 @@ class TomSecretsUnlockScreen extends StatefulWidget {
 
 class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
   final TomKeyStepController _key = TomKeyStepController();
+  final TextEditingController _pin = TextEditingController();
   String? _error;
   bool _busy = false;
   bool _remember = false;
+
+  /// "Use the master password" while a PIN would unlock.
+  bool _usePassword = false;
+
+  /// "Use a PIN next time".
+  bool _pinNext = false;
 
   @override
   void initState() {
@@ -380,15 +387,51 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
     });
     try {
       final os = context.read<TomSecretsOsUnlock>();
-      await context.read<TomSecretsServiceConnection>().unlock(
-        password,
-        keyFile: material.keyFileBytes,
-      );
+      final c = context.read<TomSecretsServiceConnection>();
+      // Asked before the unlock: the gate shows the PIN step at once.
+      if (_pinNext) c.askPin(TomSecretsPinStep.choose);
+      try {
+        await c.unlock(password, keyFile: material.keyFileBytes);
+      } on Object {
+        c.askPin(null);
+        rethrow;
+      }
       _key.passphrase.clear();
-      // Lock mode (c) or "remember": the bundle goes into the gated store.
+      // The biometric after a lock (the quick unlock's token) or
+      // "remember" (the bundle) goes into the gated store.
       await os.keep(remember: _remember);
+      // After a restart the PIN is typed once more: no PIN is kept.
+      if (!_pinNext && c.quickUnlock.pinToRearm) {
+        c.askPin(TomSecretsPinStep.rearm);
+      }
     } on TomSecretsAdminException catch (e) {
       if (mounted) setState(() => _error = tomSecretsDescribeAdminError(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _unlockWithPin() async {
+    final pin = _pin.text;
+    if (pin.isEmpty || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final c = context.read<TomSecretsServiceConnection>();
+    try {
+      await c.unlockWithPin(pin);
+      _pin.clear();
+    } on TomSecretsAdminException catch (e) {
+      _pin.clear();
+      if (mounted) {
+        setState(() {
+          _error = tomSecretsDescribeAdminError(e);
+          // Nothing left for the PIN to open: the master password.
+          if (e.details['reason'] != 'bad_pin') _usePassword = true;
+        });
+      }
+      unawaited(c.refreshStatus().catchError((Object _) {}));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -397,6 +440,7 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
   @override
   void dispose() {
     _key.dispose();
+    _pin.dispose();
     super.dispose();
   }
 
@@ -405,6 +449,9 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
     final c = context.watch<TomSecretsServiceConnection>();
     final os = context.watch<TomSecretsOsUnlock>();
     final kept = os.offered && os.usable != null;
+    final quick = c.quickUnlock;
+    final withPin = quick.pinArmed && !_usePassword;
+    if (withPin) return _pinCard(c, os, kept);
     return TomSecretsGateCard(
       title: 'Unlock',
       children: [
@@ -450,6 +497,31 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
           autofocus: !kept,
           onSubmitted: _unlock,
         ),
+        if (!quick.pinOn)
+          CheckboxListTile(
+            key: const Key('tsm-unlock-pin-next'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: _pinNext,
+            onChanged: (v) => setState(() => _pinNext = v ?? false),
+            title: const Text('Use a PIN next time'),
+            subtitle: const Text(
+              'After this unlock: a PIN undoes the next idle or screen lock.',
+            ),
+          ),
+        if (os.offered && os.offersQuick)
+          CheckboxListTile(
+            key: const Key('tsm-unlock-biometric'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: os.quickOn,
+            onChanged: (v) => unawaited(os.chooseQuick(v ?? false)),
+            title: Text('Unlock with ${os.label} after a lock'),
+            subtitle: const Text(
+              'Until the service restarts; nothing of the master password is '
+              'kept for it.',
+            ),
+          ),
         if (os.offered && !os.saved)
           CheckboxListTile(
             key: const Key('tsm-unlock-remember'),
@@ -459,12 +531,18 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
             onChanged: (v) => setState(() => _remember = v ?? false),
             title: Text('Remember the master password with ${os.label}'),
             subtitle: Text(
-              os.gateOnly
-                  ? 'The weaker, gate-only form here (see Settings). It also '
-                        'opens the vault when the password is forgotten.'
-                  : 'On this machine only. It also opens the vault when the '
-                        'password is forgotten.',
+              '${tomSecretsRememberWarning(os.label)}'
+              '${os.gateOnly ? ' The weaker, gate-only form here (see Settings).' : ''}',
+              key: const Key('tsm-unlock-remember-warning'),
             ),
+          ),
+        if (quick.pinArmed)
+          TextButton(
+            key: const Key('tsm-unlock-use-pin'),
+            onPressed: _busy
+                ? null
+                : () => setState(() => _usePassword = false),
+            child: const Text('Use the PIN'),
           ),
         if (_error != null) ...[
           const SizedBox(height: 8),
@@ -489,7 +567,107 @@ class _UnlockScreenState extends State<TomSecretsUnlockScreen> {
       ],
     );
   }
+
+  /// The quick unlock: the biometric, the PIN, or "Use the master
+  /// password".
+  Widget _pinCard(
+    TomSecretsServiceConnection c,
+    TomSecretsOsUnlock os,
+    bool kept,
+  ) {
+    final quick = c.quickUnlock;
+    return TomSecretsGateCard(
+      title: 'Unlock',
+      children: [
+        if (kept) ...[
+          FilledButton.icon(
+            key: const Key('tsm-unlock-os'),
+            onPressed: _busy ? null : _osUnlock,
+            icon: const Icon(Icons.fingerprint_rounded),
+            label: Text('Unlock with ${os.label}'),
+          ),
+          const SizedBox(height: 12),
+          const Text('or with the PIN:', textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+        ],
+        if (os.message != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              os.message!,
+              key: const Key('tsm-unlock-os-message'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        if (c.unlockNeeded)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              'A program on this machine waits for the unlock.',
+              key: Key('tsm-unlock-needed'),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        TextField(
+          key: const Key('tsm-unlock-pin'),
+          controller: _pin,
+          obscureText: true,
+          autofocus: !kept,
+          enableSuggestions: false,
+          autocorrect: false,
+          decoration: const InputDecoration(labelText: 'PIN'),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => unawaited(_unlockWithPin()),
+        ),
+        if (quick.attemptsLeft < 5)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              '${quick.attemptsLeft} attempts left before the master password '
+              'is needed.',
+              key: const Key('tsm-unlock-pin-attempts'),
+            ),
+          ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            key: const Key('tsm-unlock-error'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 16),
+        FilledButton(
+          key: const Key('tsm-unlock-with-pin'),
+          onPressed: _busy || _pin.text.isEmpty
+              ? null
+              : () => unawaited(_unlockWithPin()),
+          child: const Text('Unlock'),
+        ),
+        TextButton(
+          key: const Key('tsm-unlock-use-password'),
+          onPressed: _busy
+              ? null
+              : () => setState(() {
+                  _usePassword = true;
+                  _error = null;
+                }),
+          child: const Text('Use the master password'),
+        ),
+        ?context.read<TomSecretsHost>().unlockFooter?.call(context),
+      ],
+    );
+  }
 }
+
+/// What "Remember the master password" costs (BP-37), on its checkbox and
+/// its switch in Settings.
+String tomSecretsRememberWarning(String label) =>
+    'It unlocks after a restart without the master password, which skips '
+    'the one master-password unlock after a restart that keeps the password '
+    'in your memory: you may forget it. On this machine only; $label also '
+    'opens the vault when the password is forgotten.';
 
 /// Asks for the password (and key file) of [store], a file with a password
 /// of its own (BP-8), and opens it.
@@ -603,6 +781,21 @@ String tomSecretsDescribeAdminError(TomSecretsAdminException e) => switch ((
   e.details['reason'],
 )) {
   ('denied', 'bad_password') => 'Wrong master password or key file.',
+  ('denied', 'bad_pin') =>
+    'Wrong PIN: ${e.details['attemptsLeft'] ?? 'few'} attempts left before '
+        'the master password is needed.',
+  ('denied', 'pin_wiped') =>
+    'Too many wrong PINs: type the master password. The PIN works again '
+        'after it.',
+  ('denied', 'quick_expired') =>
+    'The quick unlock ended (7 days after the master password): type the '
+        'master password.',
+  ('denied', 'no_quick_unlock') =>
+    'The PIN does not unlock now (the service restarted, or you locked '
+        'completely): type the master password.',
+  ('denied', 'rekeyed') => 'The master password changed: type the new one.',
+  ('malformed', 'pin') => e.message,
+  ('denied', 'password_first') => 'Unlock with the master password first.',
   ('denied', 'wrong_executable') =>
     'The service accepts no admin from this app here: it must be '
         'installed beside the service, or named in its bootstrap.',

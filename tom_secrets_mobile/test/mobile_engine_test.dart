@@ -20,7 +20,7 @@ import 'package:tom_github_api/testing.dart';
 import 'package:tom_secrets_core/tom_secrets_core.dart';
 import 'package:tom_secrets_mobile/tom_secrets_mobile.dart';
 import 'package:tom_secrets_service/tom_secrets_service.dart'
-    show TomSecretsAdminException, TomSecretsUnlockBundle;
+    show TomSecretsAdminException, TomSecretsPinKdf, TomSecretsUnlockBundle;
 import 'package:tom_secrets_ui/tom_secrets_ui.dart'
     show
         TomSecretsMemoryPreferences,
@@ -54,6 +54,7 @@ void main() {
         preferences: TomSecretsMemoryPreferences(),
         httpClient: client ?? server.client,
         githubBaseUrl: FakeGitHubServer.baseUrl,
+        quickUnlockKdf: const TomSecretsPinKdf(memoryKiB: 256, iterations: 1),
       );
 
   setUp(() async {
@@ -96,6 +97,49 @@ void main() {
       },
       {'primary': 'current', 'team': 'current', 'fleet': 'current'},
     );
+  });
+
+  test('the quick-unlock PIN: set after the master password, it opens the '
+      'next lock (the vaults fetched again); 5 wrong PINs wipe it; "Lock '
+      'completely" ends it; only the switch is kept', () async {
+    Future<void> pin(String p) =>
+        engine.requestSealed('unlock', sealed: {'pin': utf8.encode(p)});
+    await engine.request('unlock', {'password': demoPassword});
+    await engine.requestSealed(
+      'quickUnlock.set',
+      sealed: {'pin': utf8.encode('tiger7')},
+    );
+    expect(engine.settings.quickUnlockPin, isTrue);
+    engine.lock();
+    expect((await engine.request('status'))['quickUnlock'], {
+      'pin': false,
+      'pinArmed': true,
+      'token': false,
+      'attemptsLeft': 5,
+      'until': isA<String>(),
+    });
+    await pin('tiger7');
+    expect(engine.isLocked, isFalse);
+    engine.lock();
+    for (var i = 0; i < 4; i++) {
+      await expectLater(pin('wrong1'), throwsA(refused('denied', 'bad_pin')));
+    }
+    await expectLater(pin('wrong1'), throwsA(refused('denied', 'pin_wiped')));
+    await expectLater(
+      pin('tiger7'),
+      throwsA(refused('denied', 'no_quick_unlock')),
+    );
+    await engine.request('unlock', {'password': demoPassword});
+    await engine.requestSealed(
+      'quickUnlock.set',
+      sealed: {'pin': utf8.encode('tiger7')},
+    );
+    await engine.request('lock', {'completely': true});
+    await expectLater(
+      pin('tiger7'),
+      throwsA(refused('denied', 'no_quick_unlock')),
+    );
+    expect(engine.settings.quickUnlockPin, isTrue, reason: 'the switch stays');
   });
 
   test('an edit is written to GitHub at once; another device\'s change is '

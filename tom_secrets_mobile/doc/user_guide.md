@@ -169,6 +169,14 @@ fingerprint prompt appears at once on the unlock screen. Confirm it.
 A changed fingerprint or face enrolment, or a master password changed on
 another device, makes the phone ask for the password again.
 
+**With a PIN:** under Settings › Unlock, "Set a PIN" (at least 6
+characters, letters allowed), or tick "Use a PIN next time" when you unlock
+with the master password. The Unlock screen then asks for the PIN when the
+fingerprint or face is not at hand; "Use the master password" switches. The
+PIN lives in the app's memory only: closing the app, "Lock completely", 5
+wrong PINs and 7 days after the last master-password unlock end it, and the
+next unlock with the master password asks for "Your PIN" once more.
+
 **To lock:** choose the lock button at the top. The phone also locks:
 
 - after it was in the background longer than the lock timeout (30 seconds
@@ -486,8 +494,11 @@ deleted on their own.
 ![Settings](images/settings-top-light.png)
 
 - **"Unlock with Face ID"** (or Touch ID, your fingerprint): on by default.
-  Turned off, the key kept behind it is forgotten and every unlock asks for
-  the master password.
+  It keeps the master password's key behind the check, so it unlocks after
+  the app was closed too; you then seldom type the master password and may
+  forget it, so the switch warns you to type it now and then. Turned off,
+  the key kept behind it is forgotten and every unlock asks for the master
+  password (or the PIN, after a lock).
 - **"Look for changes on GitHub every"**: 5, 15, 30 or 60 minutes.
 - **"Lock in the background after"**: at once, 30 seconds, 1 or 5 minutes.
 - **"Clear the clipboard after"**: 15, 30, 60 or 120 seconds.
@@ -504,6 +515,8 @@ deleted on their own.
 - **"Kept on this device"**: what stays on the phone (the keys and the
   GitHub token, in the keychain).
 - **"Set this device up again"**: locks and goes back to the setup screen.
+- **"Unlock"**: the PIN ("Set a PIN", "Change the PIN", "Remove the PIN",
+  the attempts left) and what it survives.
 
 ![Settings, further down](images/settings-bottom-light.png)
 

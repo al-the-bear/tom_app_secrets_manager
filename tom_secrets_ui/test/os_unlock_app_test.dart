@@ -124,23 +124,45 @@ void main() {
     expect(find.text('Recovery codes'), findsWidgets);
   });
 
-  testWidgets('lock mode (c): a session item of this start; the screen lock '
-      'locks the service and Touch ID opens it; "Lock completely" forgets the '
-      'session', (tester) async {
+  testWidgets('the biometric after an idle lock (lock mode (b)): a session '
+      'item holds the service\'s token, never a key; Touch ID opens the '
+      'next lock', (tester) async {
+    service.lockMode = 'b';
+    await start(tester);
+    await typePassword(tester);
+    expect(gated.lifetimeOf(handle()), TomGatedLifetime.session);
+    final item =
+        jsonDecode((await gated.read(handle(), reason: 'test'))!) as Map;
+    expect(item.containsKey('bundle'), isFalse, reason: 'no key kept');
+    expect(base64.decode(item['token'] as String), service.quickToken);
+    final recorded =
+        jsonDecode(preferences.read(TomSecretsOsUnlockKeys.items)!) as Map;
+    expect((recorded.values.single as Map)['start'], 1763100000000);
+    gated.prompts.clear();
+
+    await lockService(tester);
+    expect(gated.prompts, [TomSecretsOsUnlock.unlockReason]);
+    expect(service.locked, isFalse, reason: 'opened with the token');
+    expect(service.bundles, isEmpty);
+    expect(
+      service.requests.where((r) => r['op'] == 'unlock').last['quick'],
+      '(sealed)',
+    );
+  });
+
+  testWidgets('lock mode (c): the screen lock locks the service and Touch ID '
+      'opens it; "Lock completely" forgets the session and ends the quick '
+      'unlock in the service', (tester) async {
     service.lockMode = 'c';
     await start(tester);
     await typePassword(tester);
     expect(gated.lifetimeOf(handle()), TomGatedLifetime.session);
-    final recorded =
-        jsonDecode(preferences.read(TomSecretsOsUnlockKeys.items)!) as Map;
-    expect((recorded.values.single as Map)['start'], 1763100000000);
 
     session.controller.add(TomSecretsSessionEvent.screenLocked);
     await wait(tester, 2);
     expect(service.requests.map((r) => r['op']), contains('lock'));
     await wait(tester, 6);
     expect(service.locked, isFalse, reason: 'opened with the session item');
-    expect(service.bundles, hasLength(1));
 
     final os = Provider.of<TomSecretsOsUnlock>(
       tester.element(find.byType(TomSecretsMainShell)),
@@ -149,8 +171,43 @@ void main() {
     await tester.runAsync(os.lockCompletely);
     await wait(tester, 4);
     expect(gated.handles, isEmpty);
+    expect(service.quickToken, isNull);
+    expect(service.requests.last, containsPair('completely', true));
     expect(find.byKey(const Key('tsm-unlock-os')), findsNothing);
     expect(service.locked, isTrue);
+  });
+
+  testWidgets('the biometric after a lock turned off on the Unlock screen: '
+      'nothing is kept', (tester) async {
+    await start(tester);
+    await tester.tap(find.byKey(const Key('tsm-unlock-biometric')));
+    await tester.pump();
+    await typePassword(tester);
+    expect(gated.handles, isEmpty);
+    expect(service.quickToken, isNull);
+  });
+
+  testWidgets('a token the service no longer holds (5 wrong PINs, the age '
+      'limit) is not offered; the master password, then it is kept again', (
+    tester,
+  ) async {
+    await start(tester);
+    await typePassword(tester);
+    service.quickToken = null;
+    await lockService(tester);
+    expect(find.byKey(const Key('tsm-unlock-os')), findsNothing);
+    expect(service.locked, isTrue);
+    await typePassword(tester);
+    expect(service.quickToken, isNotNull);
+    expect(gated.handles, [handle()]);
+  });
+
+  testWidgets('Linux (no OS unlock): no biometric is offered, the PIN is', (
+    tester,
+  ) async {
+    await start(tester, osUnlock: false);
+    expect(find.byKey(const Key('tsm-unlock-biometric')), findsNothing);
+    expect(find.byKey(const Key('tsm-unlock-pin-next')), findsOneWidget);
   });
 
   testWidgets('a session item of an older service start is dropped, not '
@@ -217,7 +274,7 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     await wait(tester, 4);
-    expect(find.textContaining('(c) idle or screen lock, Touch ID'), findsOne);
+    expect(find.textContaining('(c) idle or screen lock'), findsOne);
     expect(
       find.byKey(const Key('tsm-settings-os-unlock-gate-only')),
       findsOneWidget,
